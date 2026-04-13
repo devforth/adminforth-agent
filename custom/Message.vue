@@ -1,8 +1,9 @@
 <template>
   <div 
-    class="max-w-[600px] flex p-6 m-2 rounded-xl border"
+    class="max-w-[600px] flex px-4 m-2 rounded-xl border"
     :class="props.role === 'user' ? 'bg-gray-100 self-end' : 'bg-blue-100 self-start'"
   >
+
     <IncremarkContent
       :content="content" 
       :is-finished="isFinished" 
@@ -30,11 +31,14 @@
     content.value = props.message
   })
 
-  async function handleAIStream(stream: any) {
-    for await (const chunk of stream) {
-      content.value += chunk
-    }
-    isFinished.value = true
-  }
+  watch(() => props.message, (newMessage) => {
+    content.value = newMessage
+  })
 
 </script>
+
+<style lang="scss">
+  .incremark-paragraph {
+    margin: 8px 0;
+  }
+</style>

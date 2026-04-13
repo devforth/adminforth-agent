@@ -26,7 +26,7 @@
     <div class="flex-1 flex flex-col overflow-hidden">
       <ConversationArea 
         class="flex-1 overflow-auto" 
-        :messages="testMessages"
+        :messages="chat.messages"
       />
 
       <div class="border-t bg-white p-4">
@@ -65,9 +65,15 @@ import { DefaultChatTransport, type UIMessage } from 'ai';
 import { Chat } from "@ai-sdk/vue";
 import { callAdminForthApi } from '@/utils';
 
+const props = defineProps<{
+  meta: {
+    pluginInstanceId: string;
+  }
+}>();
+
 const chat = new Chat({
   transport: new DefaultChatTransport({
-    api: `${import.meta.env.VITE_ADMINFORTH_PUBLIC_PATH || ''}/adminapi/v1`,
+    api: `${import.meta.env.VITE_ADMINFORTH_PUBLIC_PATH || ''}/adminapi/v1/agent/response`,
     credentials: 'include',
     prepareSendMessagesRequest({ messages }: any) {
       const message = "aboba";
@@ -76,11 +82,17 @@ const chat = new Chat({
       };
 
       return {
-        headers: {},
+        headers: {
+          Accept: 'text/event-stream',
+          'x-vercel-ai-ui-message-stream': 'v1',
+        },
         body
       };
     }
-  })
+  }),
+  onError(error: unknown) {
+    console.error("Chat error:", error);
+  },
 });
 
 
@@ -114,6 +126,9 @@ function sendMessage() {
   }
 
   console.log('sendMessage placeholder', trimmedUserMessage.value);
+  chat.sendMessage({
+    text: trimmedUserMessage.value,
+  });
   userMessageInput.value = '';
 }
 

@@ -7,7 +7,7 @@
       <Message
         v-for="part in message.parts"
         :key="part.type"
-        :message="part.message"
+        :message="part.text"
         :role="message.role"
         type="info"
         state="active"

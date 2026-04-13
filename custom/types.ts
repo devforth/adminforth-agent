@@ -1,6 +1,6 @@
 export interface IPart {
   type: string;
-  message: string;
+  text: string;
   state: 'started' | 'thinking' | 'processing' | 'done';
 }
 
