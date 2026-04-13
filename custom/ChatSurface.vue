@@ -76,7 +76,7 @@ const chat = new Chat({
     api: `${import.meta.env.VITE_ADMINFORTH_PUBLIC_PATH || ''}/adminapi/v1/agent/response`,
     credentials: 'include',
     prepareSendMessagesRequest({ messages }: any) {
-      const message = "aboba";
+      const message = lastMessage.value;
       const body = {
         message,
       };
@@ -101,6 +101,7 @@ const chatSurface = useTemplateRef('chatSurface');
 const textInput = useTemplateRef('textInput');
 const userMessageInput = ref('');
 const trimmedUserMessage = computed(() => userMessageInput.value.trim());
+const lastMessage = ref('');
 
 onClickOutside(chatSurface, () => isChatOpen.value = false);
 
@@ -126,6 +127,7 @@ function sendMessage() {
   }
 
   console.log('sendMessage placeholder', trimmedUserMessage.value);
+  lastMessage.value = trimmedUserMessage.value;
   chat.sendMessage({
     text: trimmedUserMessage.value,
   });
@@ -143,7 +145,7 @@ const testMessages: IMessage[] = [
       {
         type: 'text',
         state: 'done',
-        message: `# Project Title: Markdown Template
+        text: `# Project Title: Markdown Template
 ---
 
 ## 1. Introduction
@@ -190,7 +192,7 @@ To initialize the script, use the following command:
       {
         type: 'text',
         state: 'done',
-        message: `
+        text: `
 This is a user message. You can also include **markdown** in user messages, and it will be rendered appropriately. For example, you can have:
 
 - Bullet points
