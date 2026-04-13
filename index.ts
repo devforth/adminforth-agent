@@ -14,8 +14,22 @@ export default class  extends AdminForthPlugin {
 
   async modifyResourceConfig(adminforth: IAdminForth, resourceConfig: AdminForthResource) {
     super.modifyResourceConfig(adminforth, resourceConfig);
-  
     // simply modify resourceConfig or adminforth.config. You can get access to plugin options via this.options;
+    // if (!this.adminforth.config.customization) {
+    //   this.adminforth.config.customization = {};
+    // }
+    // if (!this.adminforth.config.customization.globalInjections) {
+    //   this.adminforth.config.customization.globalInjections = [];
+    // }
+    if (!this.adminforth.config.customization.globalInjections.header) {
+      this.adminforth.config.customization.globalInjections.header = [];
+    }
+    this.adminforth.config.customization.globalInjections.header.push({
+      file: this.componentPath("ChatSurface.vue"),
+      meta: {
+        pluginInstanceId: this.pluginInstanceId,
+      }
+    });
   }
   
   validateConfigAfterDiscover(adminforth: IAdminForth, resourceConfig: AdminForthResource) {
