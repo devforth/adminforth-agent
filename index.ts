@@ -1,5 +1,5 @@
 import { AdminForthPlugin } from "adminforth";
-import type { IAdminForth, IHttpServer, AdminForthResourcePages, AdminForthResourceColumn, AdminForthDataTypes, AdminForthResource } from "adminforth";
+import type { IAdminForth, IHttpServer, AdminForthResource } from "adminforth";
 import type { PluginOptions } from './types.js';
 import { randomUUID } from 'crypto';
 
@@ -40,7 +40,7 @@ This is a standard paragraph. Use this space to describe the purpose of your doc
 When working with scientific data, use LaTeX for clarity:
 
 **Standard Deviation:**
-$$\sigma = \sqrt{\rac{1}{N} \sum_{i=1}^{N} (x_i - \mu)^2}$$
+$$\\sigma = \\sqrt{\\frac{1}{N} \\sum_{i=1}^{N} (x_i - \\mu)^2}$$
 
 **Inline variables:** Ensure the variable $x$ is defined before the function is called.
 
@@ -50,6 +50,22 @@ $$\sigma = \sqrt{\rac{1}{N} \sum_{i=1}^{N} (x_i - \mu)^2}$$
 * [Markdown Guide](https://www.markdownguide.org)
 * [LaTeX Reference](https://en.wikibooks.org/wiki/LaTeX/Mathematics)
 * [GitHub Markdown Documentation](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax)
+
+## 6. Ukraine Population Trend (1991 - 2023)
+
+The graph below visualizes the estimated population change in Ukraine since its independence. This chart uses the xychart-beta format to display the population in millions over key selected years.
+
+> **Note:** The data points below are approximations (based on World Bank, State Statistics Service of Ukraine, and UN estimates) intended to illustrate the general *trend* and significant shifts.
+
+~~~mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#0057B7', 'edgeLabelBackground':'#FFD700', 'tertiaryColor': '#fff'}}}%%
+xychart-beta
+    title "Ukraine Estimated Population (1991 - 2023)"
+    x-axis [1991, 1995, 2000, 2005, 2010, 2013, 2014, 2021, 2022, 2023]
+    y-axis "Population (Millions)" 25 --> 55
+    bar [51.9, 51.3, 49.2, 47.1, 45.9, 45.4, 42.9, 41.1, 38.0, 37.0]
+    line [51.9, 51.3, 49.2, 47.1, 45.9, 45.4, 42.9, 41.1, 38.0, 37.0]
+~~~
 `
 
 export default class  extends AdminForthPlugin {

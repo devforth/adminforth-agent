@@ -15,18 +15,19 @@
     <div class="flex items-center justify-between">
       <IconBarsOutline 
         class="m-2 w-8 h-8 p-1 text-gray-600 cursor-pointer hover:text-gray-800 hover:scale-110 hover:bg-gray-100 rounded transition-colors duration-200" 
-        @click="closeChat" 
+        @click="isSessionHistoryOpen = !isSessionHistoryOpen" 
       />
       <IconCloseOutline 
         class="m-2 p-1 w-8 h-8 text-gray-600 cursor-pointer hover:text-gray-800 hover:scale-110 hover:bg-gray-100 rounded transition-colors duration-200" 
         @click="closeChat" 
       />
     </div>
-
     <div class="relative flex-1 flex flex-col overflow-hidden">
       <ConversationArea 
         class="flex-1 overflow-auto" 
         :messages="chat.messages"
+        :isSessionHistoryOpen="isSessionHistoryOpen"
+        @update:isSessionHistoryOpen="isSessionHistoryOpen = $event"
       />
 
       <div class="border-t bg-white p-4">
@@ -104,8 +105,9 @@ const lastMessage = ref('');
 const isResponseInProgress = computed( () => {
   return chat.status === 'streaming';
 })
+const isSessionHistoryOpen = ref(false);
 
-onClickOutside(chatSurface, () => isChatOpen.value = false);
+onClickOutside(chatSurface, () => closeChat());
 
 onMounted(() => {
   textInput.value.focus();
@@ -113,6 +115,7 @@ onMounted(() => {
 
 function closeChat() {
   isChatOpen.value = false;
+  isSessionHistoryOpen.value = false;
 }
 
 function openChat() {

@@ -6,6 +6,16 @@
       :disabled="!showScrollToBottomButton"
     />
   </button>
+  <SessionsHistory 
+    :class="isSessionHistoryOpen ? 'translate-x-0' : '-translate-x-full'"
+  />
+  <div 
+    v-if="isSessionHistoryOpen"
+    @click="$emit('update:isSessionHistoryOpen', false)"
+    class="absolute bg-black/10 backdrop-blur-md z-10 h-full w-full"
+  >
+
+  </div>
   <AutoScrollContainer 
     enabled 
     class="flex flex-col overflow-y-auto border-t"
@@ -35,8 +45,9 @@
 import Message from './Message.vue';
 import type { IMessage } from './types';
 import { AutoScrollContainer } from '@incremark/vue'
-import { useTemplateRef, ref, onMounted } from 'vue';
+import { useTemplateRef, ref, onMounted, computed } from 'vue';
 import { IconArrowDownOutline } from '@iconify-prerendered/vue-flowbite';
+import SessionsHistory from './SessionsHistory.vue';
 
 const scrollContainer = useTemplateRef('scrollContainer');
 const showScrollToBottomButton = ref(false);
@@ -45,17 +56,22 @@ const innerScrollContainerRef = ref(null);
 onMounted(() => {
   innerScrollContainerRef.value = scrollContainer.value.container;
 
-  console.log('scrollContainer', innerScrollContainerRef.value);
   innerScrollContainerRef.value.addEventListener('scroll', () => {
     const isScrolledUp = scrollContainer.value?.isUserScrolledUp();
     showScrollToBottomButton.value = !!isScrolledUp;
   });
 });
 
-
 const props = defineProps<{
   messages: IMessage[]
+  isSessionHistoryOpen: boolean
 }>();
+
+defineEmits<{
+  'update:isSessionHistoryOpen': [boolean]
+}>();
+
+
 
 
 </script>
