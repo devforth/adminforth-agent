@@ -10,3 +10,13 @@ export interface IMessage {
   metadata: any,
   parts: IPart[];
 }
+
+export interface IAgentSession {
+  sessionId: string;
+  messages: IMessage[];
+}
+
+export interface ISessionsListItem {
+  sessionId: string;
+  title: string;
+}

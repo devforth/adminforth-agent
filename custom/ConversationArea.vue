@@ -16,7 +16,7 @@
   >
 
   </div>
-  <AutoScrollContainer 
+  <AutoScrollContainer
     enabled 
     class="flex flex-col overflow-y-auto border-t"
     ref="scrollContainer"
@@ -36,6 +36,12 @@
       >
 
       </Message>
+    </div>
+    <div 
+      v-if="props.messages.length === 0"
+      class="flex-1 flex items-center justify-center text-gray-400 tracking-widest text-xl font-medium"
+    >
+      Start the conversation
     </div>
   </AutoScrollContainer>
 </template>

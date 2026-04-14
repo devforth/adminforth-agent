@@ -1,24 +1,36 @@
 <template>
-
-  <IconChatBubbleLeft20Solid 
-    class="w-5 h-5 text-gray-600 cursor-pointer hover:text-gray-800 hover:scale-110 transition-colors duration-200" 
+  <div 
+    class="relative w-6 h-6 cursor-pointer
+      text-lightNavbarIcons hover:text-lightNavbarIcons/80 
+      dark:text-darkNavbarIcons hover:text-darkNavbarIcons/80
+      hover:scale-110 transition-colors duration-200"       
     @click="openChat"
-  />
+  >
+    <IconChatBubbleLeft20Solid 
+      class="w-6 h-6" 
+    />
+    <div class="absolute w-4 h-4 bg-lightNavbar dark:bg-darkNavbar rounded-full -top-1 -right-2">
+      <IconSparklesSolid 
+        class="w-4 h-4"
+      />
+    </div>
+  </div>
   
   <div 
     ref="chatSurface"
     class="fixed bg-white h-screen top-0 right-0 border sm:w-[600px] w-screen 
           transition-transform duration-200 ease-in-out 
-          flex flex-col shadow-2xl"
-    :class="isChatOpen ? 'translate-x-0' : 'translate-x-full'"
+          flex flex-col "
+    :class="isChatOpen ? 'translate-x-0 shadow-2xl' : 'translate-x-full'"
   >
     <div class="flex items-center justify-between">
       <IconBarsOutline 
-        class="m-2 w-8 h-8 p-1 text-gray-600 cursor-pointer hover:text-gray-800 hover:scale-110 hover:bg-gray-100 rounded transition-colors duration-200" 
+        class="m-2 w-8 h-8 p-1 text-lightNavbarIcons cursor-pointer hover:text-lightNavbarIcons/80 hover:scale-110 hover:bg-lightNavbarIcons/20 rounded transition-colors duration-200" 
         @click="isSessionHistoryOpen = !isSessionHistoryOpen" 
       />
+
       <IconCloseOutline 
-        class="m-2 p-1 w-8 h-8 text-gray-600 cursor-pointer hover:text-gray-800 hover:scale-110 hover:bg-gray-100 rounded transition-colors duration-200" 
+        class="m-2 p-1 w-8 h-8 text-lightNavbarIcons cursor-pointer hover:text-lightNavbarIcons/80 hover:scale-110 hover:bg-lightNavbarIcons/20 rounded transition-colors duration-200" 
         @click="closeChat" 
       />
     </div>
@@ -56,7 +68,7 @@
 </template>
 
 <script setup lang="ts">
-import { IconChatBubbleLeft20Solid } from '@iconify-prerendered/vue-heroicons';
+import { IconChatBubbleLeft20Solid, IconSparklesSolid } from '@iconify-prerendered/vue-heroicons';
 import { IconCloseOutline, IconBarsOutline, IconArrowUpOutline } from '@iconify-prerendered/vue-flowbite';
 import { computed, ref, useTemplateRef, onMounted, nextTick } from 'vue';
 import { onClickOutside } from '@vueuse/core'
@@ -64,6 +76,7 @@ import ConversationArea from './ConversationArea.vue';
 import type { IMessage } from './types';
 import { DefaultChatTransport, type UIMessage } from 'ai';
 import { Chat } from "@ai-sdk/vue";
+import { useAgentStore } from './useAgentStore';
 
 const props = defineProps<{
   meta: {
@@ -106,11 +119,13 @@ const isResponseInProgress = computed( () => {
   return chat.status === 'streaming';
 })
 const isSessionHistoryOpen = ref(false);
+const agentStore = useAgentStore();
 
 onClickOutside(chatSurface, () => closeChat());
 
-onMounted(() => {
+onMounted(async () => {
   textInput.value.focus();
+  await agentStore.fetchSessionsList();
 });
 
 function closeChat() {
@@ -131,97 +146,11 @@ function sendMessage() {
     return;
   }
 
-  console.log('sendMessage placeholder', trimmedUserMessage.value);
   lastMessage.value = trimmedUserMessage.value;
   chat.sendMessage({
     text: trimmedUserMessage.value,
   });
   userMessageInput.value = '';
 }
-
-
-
-const testMessages: IMessage[] = [
-  {
-    id: '1',
-    role: 'user',
-    metadata: {},
-    parts: [
-      {
-        type: 'text',
-        state: 'done',
-        text: `# Project Title: Markdown Template
----
-
-## 1. Introduction
-This is a standard paragraph. Use this space to describe the purpose of your document. You can use **bold text** for emphasis or *italics* for subtle highlights.
-
-> **Pro-Tip:** Use blockquotes to call out specific warnings or important notes.
-
----IMessage
-
-## 2. Features & Requirements
-### Key Features
-* **Adaptive:** Works in most editors.
-* **Lightweight:** No heavy file size.
-* **Portable:** Easy to convert to PDF or HTML.
-
-### Task List
-- [x] Define project scope
-- [x] Design layout
-- [ ] Finalize documentation
-- [ ] Export to production
-
----
-
-## 3. Technical Specifications
-
-### Data Table
-| ID | Parameter | Value | Status |
-| :--- | :--- | :--- | :--- |
-| 001 | Latency | < 20ms | Green |
-| 002 | Throughput | 500 gb/s | Yellow |
-| 003 | Error Rate | 0.01% | Green |
-
-## 4. Mathematics & Formulas
-When working with scientific data, use LaTeX for clarity:
-
-**Standard Deviation:**
-$$\sigma = \sqrt{\rac{1}{N} \sum_{i=1}^{N} (x_i - \mu)^2}$$
-
-**Inline variables:** Ensure the variable $x$ is defined before the function is called.
-
----
-
-## 5. Resources
-* [Markdown Guide](https://www.markdownguide.org)
-* [LaTeX Reference](https://en.wikibooks.org/wiki/LaTeX/Mathematics)
-* [GitHub Markdown Documentation](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax)
-`
-      }
-    ]
-  },
-  {
-    id: '2',
-    role: 'assistant',
-    metadata: {},
-    parts: [
-      {
-        type: 'text',
-        state: 'done',
-        text: `
-This is a user message. You can also include **markdown** in user messages, and it will be rendered appropriately. For example, you can have:
-
-- Bullet points
-- **Bold text**
-- *Italic text*
-- [Links](https://www.example.com)
-
-Feel free to test out different markdown features in your messages!
-        `
-      }
-    ]
-  }
-];
 
 </script>

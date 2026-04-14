@@ -3,7 +3,7 @@ import type { IAdminForth, IHttpServer, AdminForthResource } from "adminforth";
 import type { PluginOptions } from './types.js';
 import { randomUUID } from 'crypto';
 
-const STUB_MODE=true;
+const STUB_MODE=false;
 const text = `# Project Title: Markdown Template
 ---
 
@@ -66,7 +66,91 @@ xychart-beta
     bar [51.9, 51.3, 49.2, 47.1, 45.9, 45.4, 42.9, 41.1, 38.0, 37.0]
     line [51.9, 51.3, 49.2, 47.1, 45.9, 45.4, 42.9, 41.1, 38.0, 37.0]
 ~~~
-`
+
+## 7. Configuration Example
+
+This section provides a standard JSON configuration template often used for API setups or application settings.
+
+~~~json
+{
+  "project_name": "Population_Analysis",
+  "version": "1.0.0",
+  "settings": {
+    "data_source": "official_statistics",
+    "update_frequency": "yearly",
+    "enable_visualization": true,
+    "theme": {
+      "primary_color": "#0057B7",
+      "secondary_color": "#FFD700"
+    }
+  },
+  "endpoints": [
+    {
+      "name": "population_data",
+      "url": "/api/v1/population",
+      "method": "GET"
+    }
+  ]
+}
+~~~
+
+## 8. JavaScript Implementation
+
+This block demonstrates a simple function to calculate the percentage change in population, which can be used to process data arrays like the ones in the previous section.
+
+~~~javascript
+/**
+ * Calculates the percentage change between two population values.
+ * @param {number} initial - The starting population.
+ * @param {number} final - The ending population.
+ * @returns {string} - Formatted percentage change.
+ */
+function calculatePopulationChange(initial, final) {
+    if (initial === 0) return "0%";
+    
+    const change = ((final - initial) / initial) * 100;
+  return \`\${change.toFixed(2)}%\`;
+}
+
+// Example usage with data points from 1991 to 2023
+const pop1991 = 51.9;
+const pop2023 = 37.0;
+
+const result = calculatePopulationChange(pop1991, pop2023);
+console.log(\`The total population change from 1991 to 2023 is: \${result}\`);
+~~~
+
+
+## 9. Python Data Analysis Implementation
+
+This block demonstrates how to use the pandas library to calculate the annual growth rate (or decline) based on the population data provided earlier.
+
+~~~python
+import pandas as pd
+
+# Data: Population in millions for selected years
+data = {
+    'Year': [1991, 1995, 2000, 2005, 2010, 2013, 2014, 2021, 2022, 2023],
+    'Population': [51.9, 51.3, 49.2, 47.1, 45.9, 45.4, 42.9, 41.1, 38.0, 37.0]
+}
+
+df = pd.DataFrame(data)
+
+# Calculate the difference between consecutive years
+df['Change_Millions'] = df['Population'].diff()
+
+# Calculate percentage change
+df['Pct_Change'] = df['Population'].pct_change() * 100
+
+print("Population Trends Analysis:")
+print(df[['Year', 'Population', 'Pct_Change']])
+
+# Example: Get the average annual percentage change
+avg_decline = df['Pct_Change'].mean()
+print(f"\nAverage annual percentage change: {avg_decline:.2f}%")
+
+~~~
+`;
 
 export default class  extends AdminForthPlugin {
   options: PluginOptions;
@@ -105,7 +189,6 @@ export default class  extends AdminForthPlugin {
       handler: async ({body, _raw_express_res }) => {
         const res = _raw_express_res;
         const messageId = randomUUID();
-        const textId = randomUUID();
         const prompt = body.message;
         res.writeHead(200, {
           'Content-Type': 'text/event-stream',
@@ -118,11 +201,41 @@ export default class  extends AdminForthPlugin {
           res.write(`data: ${JSON.stringify(obj)}\n\n`);
         };
 
-        const endStream = () => {
+        let activeBlock: { type: 'text' | 'reasoning'; id: string } | null = null;
+
+        const endActiveBlock = () => {
+          if (!activeBlock) {
+            return;
+          }
+
           send({
-            type: 'text-end',
-            id: textId,
+            type: `${activeBlock.type}-end`,
+            id: activeBlock.id,
           });
+
+          activeBlock = null;
+        };
+
+        const startBlock = (type: 'text' | 'reasoning') => {
+          if (activeBlock?.type === type) {
+            return activeBlock.id;
+          }
+
+          endActiveBlock();
+
+          const id = randomUUID();
+          activeBlock = { type, id };
+
+          send({
+            type: `${type}-start`,
+            id,
+          });
+
+          return id;
+        };
+
+        const endStream = () => {
+          endActiveBlock();
 
           send({
             type: 'finish',
@@ -135,28 +248,30 @@ export default class  extends AdminForthPlugin {
           type: 'start',
           messageId,
         });
-
-        send({
-          type: 'text-start',
-          id: textId,
-        });
         if (!STUB_MODE) {
-          const response = await this.options.adapter.complete(prompt, this.options.maxTokens || 1000, undefined, "low", (chunk, event) => {
+          const response = await this.options.adapter.complete(
+            prompt, 
+            this.options.maxTokens || 1000, 
+            undefined, 
+            this.options.reasoning || "low", 
+            (chunk, event) => {
               if (event.type === 'reasoning') {
+                const reasoningId = startBlock('reasoning');
                 send({
-                  type: 'reasoning',
-                  id: textId,
+                  type: 'reasoning-delta',
+                  id: reasoningId,
                   delta: chunk,
-                  reasoningEvent: event,
                 });
               } else {
+                const textId = startBlock('text');
                 send({
                   type: 'text-delta',
                   id: textId,
                   delta: chunk,
                 });
-              } 
-          });
+              }
+            }
+          );
           if (response.error) {
             console.error('Error from adapter:', response.error);
           }
@@ -167,6 +282,7 @@ export default class  extends AdminForthPlugin {
           await new Promise((resolve) => {
             const interval = setInterval(() => {
               if (index < words.length) {
+                const textId = startBlock('text');
                 send({
                   type: 'text-delta',
                   id: textId,
@@ -179,7 +295,7 @@ export default class  extends AdminForthPlugin {
                 endStream();
                 resolve(null);
               }
-            }, 60);
+            }, 10);
           });
         }
       }

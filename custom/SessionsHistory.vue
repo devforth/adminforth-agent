@@ -5,11 +5,18 @@
     "
   >
     <h3 :class="h3Style">{{ $t('Chat history') }}</h3>
-    <Button @click="defineEmites('newSession')" class="w-[360px] mx-4 my-2 mb-4 rounded-3xl">
+    <Button @click="agentStore.createNewSession" class="w-[360px] mx-4 my-2 mb-4 rounded-3xl">
       <IconPlusOutline class="w-5 h-5" />
       {{ $t('New chat') }}
     </Button>
     <div class="w-full border-b"/>
+
+    <div v-for="session in agentStore.sessionList" :key="session.sessionId" 
+      class="w-full px-4 py-2 cursor-pointer hover:bg-gray-100 transition-colors duration-200 ease-in-out"
+      @click="agentStore.setActiveSession(session.sessionId)"
+    >
+      {{ session.title || session.sessionId }}
+    </div>
   </div>
 </template>
 
@@ -17,12 +24,10 @@
 <script setup lang="ts">
 import { Button } from '@/afcl'
 import { IconPlusOutline } from '@iconify-prerendered/vue-flowbite';
+import { useAgentStore } from './useAgentStore';
+
+const agentStore = useAgentStore();
 
 const h3Style = "text-gray-800 font-medium text-xl tracking-widest mt-4"
 
-const defineEmites = defineEmits<{
-  (e: 'openSession', sessionId: string): void,
-  (e: 'deleteSession', sessionId: string): void,
-  (e: 'newSession'): void,
-}>()
 </script>

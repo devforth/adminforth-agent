@@ -13,4 +13,10 @@ export interface PluginOptions extends PluginsCommonOptions {
    * Default is 1000
    */
   maxTokens?: number;
+
+  /**
+   * Response generation level.
+   * Default is low
+   */
+  reasoning?: "none" | "minimal" | "low" | "medium" | "high" | "xhigh";
 }
