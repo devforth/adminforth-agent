@@ -7,7 +7,7 @@
   
   <div 
     ref="chatSurface"
-    class="fixed bg-white h-screen top-0 right-0 border w-[800px] 
+    class="fixed bg-white h-screen top-0 right-0 border sm:w-[600px] w-screen 
           transition-transform duration-200 ease-in-out 
           flex flex-col shadow-2xl"
     :class="isChatOpen ? 'translate-x-0' : 'translate-x-full'"
@@ -23,7 +23,7 @@
       />
     </div>
 
-    <div class="flex-1 flex flex-col overflow-hidden">
+    <div class="relative flex-1 flex flex-col overflow-hidden">
       <ConversationArea 
         class="flex-1 overflow-auto" 
         :messages="chat.messages"
@@ -39,13 +39,14 @@
             @keydown.enter.exact.prevent="sendMessage"
           />
 
-          <Button
-            :disabled="!trimmedUserMessage"
+          <button
+            class="bg-lightPrimary text-white w-10 h-10 rounded-lg flex items-center justify-center cursor-pointer hover:bg-lightPrimary/80 disabled:bg-lightPrimary/50"
+            :disabled="!trimmedUserMessage || isResponseInProgress"
             aria-label="Send message"
             @click="sendMessage"
           >
-            <IconArrowUpOutline class="h-5 w-5" />
-          </Button>
+            <IconArrowUpOutline class="h-6 w-6" />
+          </button>
         </div>
       </div>
     </div>
@@ -60,10 +61,8 @@ import { computed, ref, useTemplateRef, onMounted, nextTick } from 'vue';
 import { onClickOutside } from '@vueuse/core'
 import ConversationArea from './ConversationArea.vue';
 import type { IMessage } from './types';
-import { Button } from '@/afcl'
 import { DefaultChatTransport, type UIMessage } from 'ai';
 import { Chat } from "@ai-sdk/vue";
-import { callAdminForthApi } from '@/utils';
 
 const props = defineProps<{
   meta: {
@@ -102,6 +101,9 @@ const textInput = useTemplateRef('textInput');
 const userMessageInput = ref('');
 const trimmedUserMessage = computed(() => userMessageInput.value.trim());
 const lastMessage = ref('');
+const isResponseInProgress = computed( () => {
+  return chat.status === 'streaming';
+})
 
 onClickOutside(chatSurface, () => isChatOpen.value = false);
 
@@ -122,7 +124,7 @@ function openChat() {
 
 
 function sendMessage() {
-  if (!trimmedUserMessage.value) {
+  if (!trimmedUserMessage.value || isResponseInProgress.value) {
     return;
   }
 
@@ -178,9 +180,21 @@ This is a standard paragraph. Use this space to describe the purpose of your doc
 | 002 | Throughput | 500 gb/s | Yellow |
 | 003 | Error Rate | 0.01% | Green |
 
-### Code Implementation
-To initialize the script, use the following command:
-      `
+## 4. Mathematics & Formulas
+When working with scientific data, use LaTeX for clarity:
+
+**Standard Deviation:**
+$$\sigma = \sqrt{\rac{1}{N} \sum_{i=1}^{N} (x_i - \mu)^2}$$
+
+**Inline variables:** Ensure the variable $x$ is defined before the function is called.
+
+---
+
+## 5. Resources
+* [Markdown Guide](https://www.markdownguide.org)
+* [LaTeX Reference](https://en.wikibooks.org/wiki/LaTeX/Mathematics)
+* [GitHub Markdown Documentation](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax)
+`
       }
     ]
   },
