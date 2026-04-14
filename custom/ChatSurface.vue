@@ -18,19 +18,23 @@
   
   <div 
     ref="chatSurface"
-    class="fixed bg-white h-screen top-0 right-0 border sm:w-[600px] w-screen 
+    class="fixed bg-lightSidebar dark:bg-darkSidebar h-screen top-0 right-0 border border-gray-200 dark:border-gray-700 sm:w-[600px] w-screen 
           transition-transform duration-200 ease-in-out 
           flex flex-col "
     :class="isChatOpen ? 'translate-x-0 shadow-2xl' : 'translate-x-full'"
   >
     <div class="flex items-center justify-between">
       <IconBarsOutline 
-        class="m-2 w-8 h-8 p-1 text-lightNavbarIcons cursor-pointer hover:text-lightNavbarIcons/80 hover:scale-110 hover:bg-lightNavbarIcons/20 rounded transition-colors duration-200" 
+        class="m-2 w-8 h-8 p-1 cursor-pointer hover:scale-110 rounded transition-colors duration-200
+          text-lightNavbarIcons hover:text-lightNavbarIcons/80 hover:bg-lightNavbarIcons/20 
+          dark:text-darkNavbarIcons hover:text-darkNavbarIcons/80 hover:bg-darkNavbarIcons/20 " 
         @click="isSessionHistoryOpen = !isSessionHistoryOpen" 
       />
 
       <IconCloseOutline 
-        class="m-2 p-1 w-8 h-8 text-lightNavbarIcons cursor-pointer hover:text-lightNavbarIcons/80 hover:scale-110 hover:bg-lightNavbarIcons/20 rounded transition-colors duration-200" 
+        class="m-2 w-8 h-8 p-1 cursor-pointer hover:scale-110 rounded transition-colors duration-200
+          text-lightNavbarIcons hover:text-lightNavbarIcons/80 hover:bg-lightNavbarIcons/20 
+          dark:text-darkNavbarIcons hover:text-darkNavbarIcons/80 hover:bg-darkNavbarIcons/20 " 
         @click="closeChat" 
       />
     </div>
@@ -42,18 +46,18 @@
         @update:isSessionHistoryOpen="isSessionHistoryOpen = $event"
       />
 
-      <div class="border-t bg-white p-4">
-        <div class="flex items-end gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 shadow-sm transition-colors focus-within:border-gray-400 focus-within:bg-white">
+      <div class="border-t border-gray-200 dark:border-gray-700 bg-lightSidebar dark:bg-darkSidebar p-4">
+        <div class="flex items-end gap-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3 shadow-sm transition-colors focus-within:border-gray-400 focus-within:bg-white dark:focus-within:bg-gray-700">
           <textarea
             v-model="userMessageInput"
             ref="textInput"
-            class="min-h-24 flex-1 resize-none bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
+            class="min-h-24 flex-1 resize-none bg-transparent text-sm text-gray-900 dark:text-gray-100 outline-none placeholder:text-gray-400 dark:placeholder:text-gray-500"
             placeholder="Type a message..."
             @keydown.enter.exact.prevent="sendMessage"
           />
 
           <button
-            class="bg-lightPrimary text-white w-10 h-10 rounded-lg flex items-center justify-center cursor-pointer hover:bg-lightPrimary/80 disabled:bg-lightPrimary/50"
+            class="bg-lightPrimary dark:bg-darkPrimary text-white w-10 h-10 rounded-lg flex items-center justify-center cursor-pointer hover:bg-lightPrimary/80 dark:bg-darkPrimary/80 dark:hover:bg-darkPrimary/80 disabled:bg-lightPrimary/50 dark:disabled:darkPrimary dark:disabled:bg-darkPrimary/50"
             :disabled="!trimmedUserMessage || isResponseInProgress"
             aria-label="Send message"
             @click="sendMessage"

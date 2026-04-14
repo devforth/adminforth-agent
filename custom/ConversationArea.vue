@@ -1,7 +1,7 @@
 <template>
   <button @click="scrollContainer.scrollToBottom()">
     <IconArrowDownOutline 
-      class="absolute bottom-[165px] right-6 bg-lightPrimary text-white p-1 w-10 h-10 rounded-full transition-opacity duration-100 ease-in" 
+      class="absolute bottom-[165px] right-6 bg-lightPrimary dark:bg-darkPrimary text-white p-1 w-10 h-10 rounded-full transition-opacity duration-100 ease-in" 
       :class="showScrollToBottomButton ? 'opacity-100' : 'opacity-0 pointer-events-none'"
       :disabled="!showScrollToBottomButton"
     />
@@ -18,7 +18,7 @@
   </div>
   <AutoScrollContainer
     enabled 
-    class="flex flex-col overflow-y-auto border-t"
+    class="flex flex-col overflow-y-auto border-t border-gray-200 dark:border-gray-700"
     ref="scrollContainer"
     behavior="smooth"
   >
