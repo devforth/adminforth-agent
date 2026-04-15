@@ -5,11 +5,11 @@
   >
 
     <IncremarkContent
+      ref="incremarkRef"
       class="max-w-[460px]"
       v-if="content && props.type === 'text'"
       :content="content" 
       :is-finished="isFinished" 
-      :components="components"
     />
     <!-- reasoning/thinking -->
     <div 
@@ -18,15 +18,15 @@
     >
       <div class="flex items-center gap-1 hover:underline cursor-pointer hover:text-gray-700" @click="isThoughtsExpanded = !isThoughtsExpanded">
         {{ isStateStreaming ? 'Thinking' : 'Thoughts' }}
+        <IconAngleDownOutline 
+          :class="isThoughtsExpanded ? 'rotate-180' : 'rotate-0'"
+          class="transition-transform duration-200"
+        />
         <template v-if="isStateStreaming">
           <span class="bounce-dot1 rounded-full w-2 h-2 bg-lightPrimary"></span>
           <span class="bounce-dot2 rounded-full w-2 h-2 bg-lightPrimary"></span>
           <span class="bounce-dot3 rounded-full w-2 h-2 bg-lightPrimary"></span>
         </template>
-        <IconAngleDownOutline 
-          :class="isThoughtsExpanded ? 'rotate-180' : 'rotate-0'"
-          class="transition-transform duration-200"
-        />
       </div>
       <transition name="expand">
         <p v-show="isThoughtsExpanded" class="overflow-hidden">
@@ -42,11 +42,18 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, nextTick, watch, ref, onMounted } from 'vue';
-  import { IncremarkContent, AutoScrollContainer } from '@incremark/vue'
-  import '@incremark/theme/styles.css'
-  import 'katex/dist/katex.min.css'
+  import { computed, defineAsyncComponent, watch, ref, onMounted } from 'vue';
   import { IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
+  import { highlightRenderedIncremarkHtml } from './incremark_code_renderers/incremarkCodeHighlight';
+	import { createIncremarkParser, type IncremarkParserOptions } from '@incremark/core';
+  import { renderIncremarkAst } from './incremark_code_renderers/incremarkRenderer';
+  
+  const IncremarkContent = defineAsyncComponent(() => import('@incremark/vue').then(module => module.IncremarkContent))
+
+  onMounted(async () => {
+    await import('katex/dist/katex.min.css')
+    content.value = props.message
+  })
 
   const props = defineProps<{
     type: string,
@@ -58,10 +65,9 @@
   const content = ref('')
   const isFinished = ref(false)
   const isThoughtsExpanded = ref(false)
+  const processedHtml = ref('')
+	let renderRequestId = 0;
 
-  onMounted(() => {
-    content.value = props.message
-  })
 
   const isTypeReasoning = computed(() => props.type === 'reasoning')
   const isStateStreaming = computed(() => props.state === 'streaming')
@@ -75,6 +81,30 @@
       isFinished.value = true
     }
   })
+
+  const parser = createIncremarkParser({
+		gfm: true,
+		math: { tex: true },
+		containers: true,
+		htmlTree: true
+	} satisfies IncremarkParserOptions);
+
+  async function refreshMarkup() {
+		const requestId = ++renderRequestId;
+		const baseHtml = renderIncremarkAst(parser.getAst());
+		processedHtml.value = baseHtml;
+
+		const highlightedHtml = await highlightRenderedIncremarkHtml(baseHtml);
+		if (requestId === renderRequestId) {
+			processedHtml.value = highlightedHtml;
+		}
+    console.log('processedHtml.value', processedHtml.value)
+	}
+
+  // watch(content, async (val: string) => {
+  //   parser.append(val);
+  //   refreshMarkup();
+  // })
 
 </script>
 

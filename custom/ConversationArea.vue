@@ -50,23 +50,29 @@
 <script setup lang="ts">
 import Message from './Message.vue';
 import type { IMessage } from './types';
-import { AutoScrollContainer } from '@incremark/vue'
-import { useTemplateRef, ref, onMounted, computed } from 'vue';
+import { useTemplateRef, ref, defineAsyncComponent, onMounted, watch } from 'vue';
 import { IconArrowDownOutline } from '@iconify-prerendered/vue-flowbite';
 import SessionsHistory from './SessionsHistory.vue';
 
 const scrollContainer = useTemplateRef('scrollContainer');
 const showScrollToBottomButton = ref(false);
 const innerScrollContainerRef = ref(null);
+const AutoScrollContainer = defineAsyncComponent(() => import('@incremark/vue').then(module => module.AutoScrollContainer))
 
-onMounted(() => {
-  innerScrollContainerRef.value = scrollContainer.value.container;
-
-  innerScrollContainerRef.value.addEventListener('scroll', () => {
-    const isScrolledUp = scrollContainer.value?.isUserScrolledUp();
-    showScrollToBottomButton.value = !!isScrolledUp;
-  });
+onMounted(async () => {
+  await import('@incremark/theme/styles.css')
 });
+
+watch(scrollContainer, () => {
+  if (scrollContainer.value) {
+    innerScrollContainerRef.value = scrollContainer.value.container;
+
+    innerScrollContainerRef.value.addEventListener('scroll', () => {
+      const isScrolledUp = scrollContainer.value?.isUserScrolledUp();
+      showScrollToBottomButton.value = !!isScrolledUp;
+    });
+  }
+})
 
 const props = defineProps<{
   messages: IMessage[]

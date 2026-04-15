@@ -40,6 +40,7 @@
     </div>
     <div class="relative flex-1 flex flex-col overflow-hidden">
       <ConversationArea 
+        v-if="isChatOpen"
         class="flex-1 overflow-auto" 
         :messages="chat.messages"
         :isSessionHistoryOpen="isSessionHistoryOpen"
