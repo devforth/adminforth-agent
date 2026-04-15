@@ -13,10 +13,13 @@ export interface IMessage {
 
 export interface IAgentSession {
   sessionId: string;
+  title: string;
+  timestamp: string;
   messages: IMessage[];
 }
 
 export interface ISessionsListItem {
   sessionId: string;
   title: string;
+  timestamp: string;
 }
