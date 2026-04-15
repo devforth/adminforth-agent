@@ -5,11 +5,12 @@
   >
 
     <IncremarkContent
-      ref="incremarkRef"
       class="max-w-[460px]"
       v-if="content && props.type === 'text'"
       :content="content" 
       :is-finished="isFinished" 
+      :components="incremarkComponents"
+      :incremark-options="incremarkOptions"
     />
     <!-- reasoning/thinking -->
     <div 
@@ -42,17 +43,25 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, defineAsyncComponent, watch, ref, onMounted } from 'vue';
+  import { computed, defineAsyncComponent, onMounted, ref } from 'vue';
   import { IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
-  import { highlightRenderedIncremarkHtml } from './incremark_code_renderers/incremarkCodeHighlight';
-	import { createIncremarkParser, type IncremarkParserOptions } from '@incremark/core';
-  import { renderIncremarkAst } from './incremark_code_renderers/incremarkRenderer';
   
   const IncremarkContent = defineAsyncComponent(() => import('@incremark/vue').then(module => module.IncremarkContent))
+  const ShikiCodeBlock = defineAsyncComponent(() => import('./incremark_code_renderers/IncremarkShikiCodeBlock.vue'))
+
+  const incremarkComponents = {
+    code: ShikiCodeBlock,
+  };
+
+  const incremarkOptions = {
+		gfm: true,
+		math: { tex: true },
+		containers: true,
+		htmlTree: true,
+	};
 
   onMounted(async () => {
-    await import('katex/dist/katex.min.css')
-    content.value = props.message
+    void import('katex/dist/katex.min.css')
   })
 
   const props = defineProps<{
@@ -62,49 +71,12 @@
     role: 'user' | 'assistant'
   }>();
   
-  const content = ref('')
-  const isFinished = ref(false)
+  const content = computed(() => props.message)
+  const isFinished = computed(() => props.state === 'done')
   const isThoughtsExpanded = ref(false)
-  const processedHtml = ref('')
-	let renderRequestId = 0;
-
 
   const isTypeReasoning = computed(() => props.type === 'reasoning')
   const isStateStreaming = computed(() => props.state === 'streaming')
-
-  watch(() => props.message, (newMessage: string) => {
-    content.value = newMessage
-  })
-
-  watch(() => props.state, (newState: string) => {
-    if (newState === 'done') {
-      isFinished.value = true
-    }
-  })
-
-  const parser = createIncremarkParser({
-		gfm: true,
-		math: { tex: true },
-		containers: true,
-		htmlTree: true
-	} satisfies IncremarkParserOptions);
-
-  async function refreshMarkup() {
-		const requestId = ++renderRequestId;
-		const baseHtml = renderIncremarkAst(parser.getAst());
-		processedHtml.value = baseHtml;
-
-		const highlightedHtml = await highlightRenderedIncremarkHtml(baseHtml);
-		if (requestId === renderRequestId) {
-			processedHtml.value = highlightedHtml;
-		}
-    console.log('processedHtml.value', processedHtml.value)
-	}
-
-  // watch(content, async (val: string) => {
-  //   parser.append(val);
-  //   refreshMarkup();
-  // })
 
 </script>
 

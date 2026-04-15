@@ -128,6 +128,7 @@ interface HighlighterState {
 	loadedThemes: Set<SupportedShikiTheme>;
 }
 
+const MAX_HIGHLIGHT_CACHE_ENTRIES = 200;
 const highlightedHtmlCache = new Map<string, string>();
 const unsupportedLanguageCache = new Set<string>();
 
@@ -201,8 +202,25 @@ async function highlightCodeToHtml(
 		theme: shikiTheme
 	});
 
-	highlightedHtmlCache.set(cacheKey, highlightedHtml);
+	setHighlightedHtmlCache(cacheKey, highlightedHtml);
 	return highlightedHtml;
+}
+
+function setHighlightedHtmlCache(cacheKey: string, highlightedHtml: string): void {
+	if (highlightedHtmlCache.has(cacheKey)) {
+		highlightedHtmlCache.delete(cacheKey);
+	}
+
+	highlightedHtmlCache.set(cacheKey, highlightedHtml);
+
+	if (highlightedHtmlCache.size <= MAX_HIGHLIGHT_CACHE_ENTRIES) {
+		return;
+	}
+
+	const oldestCacheKey = highlightedHtmlCache.keys().next().value;
+	if (oldestCacheKey) {
+		highlightedHtmlCache.delete(oldestCacheKey);
+	}
 }
 
 async function getHighlighter(): Promise<HighlighterState> {
