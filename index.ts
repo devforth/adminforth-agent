@@ -2,6 +2,8 @@ import { AdminForthPlugin } from "adminforth";
 import type { IAdminForth, IHttpServer, AdminForthResource } from "adminforth";
 import type { PluginOptions } from './types.js';
 import { randomUUID } from 'crypto';
+import { Filters, Sorts } from 'adminforth';
+import { compose } from "stream";
 
 const STUB_MODE=false;
 const text = `# Project Title: Markdown Template
@@ -172,6 +174,13 @@ export default class  extends AdminForthPlugin {
         pluginInstanceId: this.pluginInstanceId,
       }
     });
+
+    if (!this.pluginOptions.completionAdapter) {
+      throw new Error("CompletionAdapter is required for AdminForthAgentPlugin");
+    }
+    if (!this.pluginOptions.sessionResource) {
+      throw new Error("sessionResource is required for AdminForthAgentPlugin");
+    }
   }
   
   validateConfigAfterDiscover(adminforth: IAdminForth, resourceConfig: AdminForthResource) {
@@ -249,7 +258,7 @@ export default class  extends AdminForthPlugin {
           messageId,
         });
         if (!STUB_MODE) {
-          const response = await this.options.adapter.complete(
+          const response = await this.options.completionAdapter.complete(
             prompt, 
             this.options.maxTokens || 1000, 
             undefined, 
@@ -298,6 +307,105 @@ export default class  extends AdminForthPlugin {
             }, 10);
           });
         }
+      }
+    });
+    server.endpoint({
+      method: 'POST',
+      path: `/agent/get-sessions`,
+      handler: async ({body, adminUser }) => {
+        const userId = adminUser.pk;
+        const sessions = await this.adminforth.resource(this.pluginOptions.sessionResource.resource_id).list(
+          [Filters.EQ(this.pluginOptions.sessionResource.asker_id_field, userId)]
+        );
+        const sessionsToReturn = [];
+        for (const session of sessions) {
+         sessionsToReturn.push({
+          sessionId: session[this.pluginOptions.sessionResource.id_field],
+          title: session[this.pluginOptions.sessionResource.title_field],
+          timestamp: session[this.pluginOptions.sessionResource.created_at_field],
+         })
+        }
+        return {
+          sessions: sessionsToReturn
+        };
+      }
+    });
+    server.endpoint({
+      method: 'POST',
+      path: `/agent/get-session-info`,
+      handler: async ({body, adminUser }) => {
+        const userId = adminUser.pk;
+        const sessionId = body.sessionId;
+        const session = await this.adminforth.resource(this.pluginOptions.sessionResource.resource_id).get(
+          [Filters.EQ(this.pluginOptions.sessionResource.id_field, sessionId)]
+        );
+        if (!session) {
+          return {
+            error: 'Session not found'
+          };
+        }
+        if (session[this.pluginOptions.sessionResource.asker_id_field] !== userId) {
+          return {
+            error: 'Unauthorized'
+          };
+        }
+        const sessionToReturn = {
+          sessionId: session[this.pluginOptions.sessionResource.id_field],
+          title: session[this.pluginOptions.sessionResource.title_field],
+          timestamp: session[this.pluginOptions.sessionResource.created_at_field],
+          messages: []
+        }
+        return {
+          session: sessionToReturn
+        }
+      }
+    });
+    server.endpoint({
+      method: 'POST',
+      path: `/agent/create-session`,
+      handler: async ({body, adminUser }) => {
+        const triggerMessage = body.triggerMessage;
+        const userId = adminUser.pk;
+        const title = triggerMessage ? triggerMessage.slice(0, 50) : 'New Session';
+        const newSession = {
+          [this.pluginOptions.sessionResource.id_field]: randomUUID(),
+          [this.pluginOptions.sessionResource.title_field]: title,
+          [this.pluginOptions.sessionResource.asker_id_field]: userId,
+        };
+        await this.adminforth.resource(this.pluginOptions.sessionResource.resource_id).create(newSession);
+        return {
+          sessionId: newSession[this.pluginOptions.sessionResource.id_field],
+          title: newSession[this.pluginOptions.sessionResource.title_field],
+          timestamp: newSession[this.pluginOptions.sessionResource.created_at_field],
+          messages: []
+        };
+      }
+    });
+    server.endpoint({
+      method: 'POST',
+      path: `/agent/delete-session`,
+      handler: async ({body, adminUser }) => {
+        const sessionId = body.sessionId;
+        const userId = adminUser.pk;
+        const session = await this.adminforth.resource(this.pluginOptions.sessionResource.resource_id).get(
+          [Filters.EQ(this.pluginOptions.sessionResource.id_field, sessionId)]
+        );
+        if (!session) {
+          return {
+            error: 'Session not found'
+          };
+        }
+        if (session[this.pluginOptions.sessionResource.asker_id_field] !== userId) {
+          return {
+            error: 'Unauthorized'
+          };
+        }
+        await this.adminforth.resource(this.pluginOptions.sessionResource.resource_id).delete(
+          [Filters.EQ(this.pluginOptions.sessionResource.id_field, sessionId)]
+        );
+        return {
+          ok: true
+        };
       }
     });
   }
