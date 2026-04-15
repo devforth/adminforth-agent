@@ -25,7 +25,7 @@ export interface PluginOptions extends PluginsCommonOptions {
    * You can use any adapter that implements the CompletionAdapter interface, for example the OpenAIAdapter included in adminforth, 
    * or create your own that fetches responses from your custom backend.
    */
-  adapter: CompletionAdapter;
+  completionAdapter: CompletionAdapter;
 
   /**
    * Max tokens for the generation.

@@ -20,7 +20,7 @@
     ref="chatSurface"
     class="fixed bg-lightNavbar dark:bg-darkNavbar h-screen top-0 right-0 border border-gray-200 dark:border-gray-700 sm:w-[600px] w-screen 
           transition-transform duration-200 ease-in-out 
-          flex flex-col "
+          flex flex-col z-10"
     :class="isChatOpen ? 'translate-x-0 shadow-2xl' : 'translate-x-full'"
   >
     <div class="flex items-center justify-between">

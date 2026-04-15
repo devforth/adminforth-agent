@@ -172,6 +172,10 @@ export default class  extends AdminForthPlugin {
         pluginInstanceId: this.pluginInstanceId,
       }
     });
+
+    if (!this.pluginOptions.completionAdapter) {
+      throw new Error("CompletionAdapter is required for AdminForthAgentPlugin");
+    }
   }
   
   validateConfigAfterDiscover(adminforth: IAdminForth, resourceConfig: AdminForthResource) {
@@ -249,7 +253,7 @@ export default class  extends AdminForthPlugin {
           messageId,
         });
         if (!STUB_MODE) {
-          const response = await this.options.adapter.complete(
+          const response = await this.options.completionAdapter.complete(
             prompt, 
             this.options.maxTokens || 1000, 
             undefined, 
