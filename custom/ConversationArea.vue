@@ -7,11 +7,11 @@
     />
   </button>
   <SessionsHistory 
-    :class="isSessionHistoryOpen ? 'translate-x-0' : '-translate-x-full'"
+    :class="agentStore.isSessionHistoryOpen ? 'translate-x-0' : '-translate-x-full'"
   />
   <div 
-    v-if="isSessionHistoryOpen"
-    @click="$emit('update:isSessionHistoryOpen', false)"
+    v-if="agentStore.isSessionHistoryOpen"
+    @click="agentStore.setSessionHistoryOpen(false)"
     class="absolute bg-black/10 backdrop-blur-md z-10 h-full w-full"
   >
 
@@ -53,11 +53,13 @@ import type { IMessage } from './types';
 import { useTemplateRef, ref, defineAsyncComponent, onMounted, watch } from 'vue';
 import { IconArrowDownOutline } from '@iconify-prerendered/vue-flowbite';
 import SessionsHistory from './SessionsHistory.vue';
+import { useAgentStore } from './useAgentStore';
 
 const scrollContainer = useTemplateRef('scrollContainer');
 const showScrollToBottomButton = ref(false);
 const innerScrollContainerRef = ref(null);
 const AutoScrollContainer = defineAsyncComponent(() => import('@incremark/vue').then(module => module.AutoScrollContainer))
+const agentStore = useAgentStore();
 
 onMounted(async () => {
   await import('@incremark/theme/styles.css')
@@ -76,14 +78,6 @@ watch(scrollContainer, () => {
 
 const props = defineProps<{
   messages: IMessage[]
-  isSessionHistoryOpen: boolean
 }>();
-
-defineEmits<{
-  'update:isSessionHistoryOpen': [boolean]
-}>();
-
-
-
 
 </script>

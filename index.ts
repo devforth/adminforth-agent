@@ -366,7 +366,7 @@ export default class  extends AdminForthPlugin {
       handler: async ({body, adminUser }) => {
         const triggerMessage = body.triggerMessage;
         const userId = adminUser.pk;
-        const title = triggerMessage ? triggerMessage.slice(0, 50) : 'New Session';
+        const title = triggerMessage ? triggerMessage.slice(0, 40) + '...' : 'New Session';
         const newSession = {
           [this.pluginOptions.sessionResource.id_field]: randomUUID(),
           [this.pluginOptions.sessionResource.title_field]: title,
@@ -400,9 +400,7 @@ export default class  extends AdminForthPlugin {
             error: 'Unauthorized'
           };
         }
-        await this.adminforth.resource(this.pluginOptions.sessionResource.resource_id).delete(
-          [Filters.EQ(this.pluginOptions.sessionResource.id_field, sessionId)]
-        );
+        await this.adminforth.resource(this.pluginOptions.sessionResource.resource_id).delete(sessionId);
         return {
           ok: true
         };

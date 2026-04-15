@@ -7,7 +7,7 @@ export interface IPart {
 export interface IMessage {
   id: string;
   role: 'user' | 'assistant';
-  metadata: any,
+  metadata?: any,
   parts: IPart[];
 }
 

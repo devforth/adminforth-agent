@@ -4,7 +4,7 @@
       text-lightNavbarIcons hover:text-lightNavbarIcons/80 
       dark:text-darkNavbarIcons hover:text-darkNavbarIcons/80
       hover:scale-110 transition-colors duration-200"       
-    @click="openChat"
+    @click="agentStore.setIsChatOpen(true)"
   >
     <IconChatBubbleLeft20Solid 
       class="w-6 h-6" 
@@ -21,47 +21,45 @@
     class="fixed bg-lightNavbar dark:bg-darkNavbar h-screen top-0 right-0 border border-gray-200 dark:border-gray-700 sm:w-[600px] w-screen 
           transition-transform duration-200 ease-in-out 
           flex flex-col z-10"
-    :class="isChatOpen ? 'translate-x-0 shadow-2xl' : 'translate-x-full'"
+    :class="agentStore.isChatOpen ? 'translate-x-0 shadow-2xl' : 'translate-x-full'"
   >
     <div class="flex items-center justify-between">
       <IconBarsOutline 
         class="m-2 w-8 h-8 p-1 cursor-pointer hover:scale-110 rounded transition-colors duration-200
           text-lightNavbarIcons hover:text-lightNavbarIcons/80 hover:bg-lightNavbarIcons/20 
           dark:text-darkNavbarIcons hover:text-darkNavbarIcons/80 hover:bg-darkNavbarIcons/20 " 
-        @click="isSessionHistoryOpen = !isSessionHistoryOpen" 
+        @click="agentStore.setSessionHistoryOpen(!agentStore.isSessionHistoryOpen)" 
       />
 
       <IconCloseOutline 
         class="m-2 w-8 h-8 p-1 cursor-pointer hover:scale-110 rounded transition-colors duration-200
           text-lightNavbarIcons hover:text-lightNavbarIcons/80 hover:bg-lightNavbarIcons/20 
           dark:text-darkNavbarIcons hover:text-darkNavbarIcons/80 hover:bg-darkNavbarIcons/20 " 
-        @click="closeChat" 
+        @click="agentStore.setIsChatOpen(false)" 
       />
     </div>
     <div class="relative flex-1 flex flex-col overflow-hidden">
       <ConversationArea 
-        v-if="isChatOpen"
+        v-if="agentStore.isChatOpen"
         class="flex-1 overflow-auto" 
-        :messages="chat.messages"
-        :isSessionHistoryOpen="isSessionHistoryOpen"
-        @update:isSessionHistoryOpen="isSessionHistoryOpen = $event"
+        :messages="agentStore.chatMessages"
       />
 
       <div class="border-t border-gray-200 dark:border-gray-700 bg-lightNavbar dark:bg-darkNavbar p-4">
         <div class="flex items-end gap-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3 shadow-sm transition-colors focus-within:border-gray-400 focus-within:bg-white dark:focus-within:bg-gray-700">
           <textarea
-            v-model="userMessageInput"
+            v-model="agentStore.userMessageInput"
             ref="textInput"
             class="min-h-24 flex-1 resize-none bg-transparent text-sm text-gray-900 dark:text-gray-100 outline-none placeholder:text-gray-400 dark:placeholder:text-gray-500"
             placeholder="Type a message..."
-            @keydown.enter.exact.prevent="sendMessage"
+            @keydown.enter.exact.prevent="agentStore.sendMessage"
           />
 
           <button
             class="bg-lightPrimary dark:bg-darkPrimary text-white w-10 h-10 rounded-lg flex items-center justify-center cursor-pointer hover:bg-lightPrimary/80 dark:bg-darkPrimary/80 dark:hover:bg-darkPrimary/80 disabled:bg-lightPrimary/50 dark:disabled:darkPrimary dark:disabled:bg-darkPrimary/50"
-            :disabled="!trimmedUserMessage || isResponseInProgress"
+            :disabled="!agentStore.trimmedUserMessage || agentStore.isResponseInProgress"
             aria-label="Send message"
-            @click="sendMessage"
+            @click="agentStore.sendMessage"
           >
             <IconArrowUpOutline class="h-6 w-6" />
           </button>
@@ -75,12 +73,9 @@
 <script setup lang="ts">
 import { IconChatBubbleLeft20Solid, IconSparklesSolid } from '@iconify-prerendered/vue-heroicons';
 import { IconCloseOutline, IconBarsOutline, IconArrowUpOutline } from '@iconify-prerendered/vue-flowbite';
-import { computed, ref, useTemplateRef, onMounted, nextTick } from 'vue';
+import { useTemplateRef, onMounted } from 'vue';
 import { onClickOutside } from '@vueuse/core'
 import ConversationArea from './ConversationArea.vue';
-import type { IMessage } from './types';
-import { DefaultChatTransport, type UIMessage } from 'ai';
-import { Chat } from "@ai-sdk/vue";
 import { useAgentStore } from './useAgentStore';
 
 const props = defineProps<{
@@ -89,73 +84,16 @@ const props = defineProps<{
   }
 }>();
 
-const chat = new Chat({
-  transport: new DefaultChatTransport({
-    api: `${import.meta.env.VITE_ADMINFORTH_PUBLIC_PATH || ''}/adminapi/v1/agent/response`,
-    credentials: 'include',
-    prepareSendMessagesRequest({ messages }: any) {
-      const message = lastMessage.value;
-      const body = {
-        message,
-      };
-
-      return {
-        headers: {
-          Accept: 'text/event-stream',
-          'x-vercel-ai-ui-message-stream': 'v1',
-        },
-        body
-      };
-    }
-  }),
-  onError(error: unknown) {
-    console.error("Chat error:", error);
-  },
-});
-
-
-const isChatOpen = ref(false);
 const chatSurface = useTemplateRef('chatSurface');
 const textInput = useTemplateRef('textInput');
-const userMessageInput = ref('');
-const trimmedUserMessage = computed(() => userMessageInput.value.trim());
-const lastMessage = ref('');
-const isResponseInProgress = computed( () => {
-  return chat.status === 'streaming';
-})
-const isSessionHistoryOpen = ref(false);
 const agentStore = useAgentStore();
 
-onClickOutside(chatSurface, () => closeChat());
+onClickOutside(chatSurface, () => agentStore.setIsChatOpen(false));
 
 onMounted(async () => {
-  textInput.value.focus();
+  agentStore.regisrerTextInput(textInput.value);
+  textInput.value?.focus();
   await agentStore.fetchSessionsList();
 });
-
-function closeChat() {
-  isChatOpen.value = false;
-  isSessionHistoryOpen.value = false;
-}
-
-function openChat() {
-  isChatOpen.value = true;
-  nextTick(() => {
-    textInput.value.focus();
-  });
-}
-
-
-function sendMessage() {
-  if (!trimmedUserMessage.value || isResponseInProgress.value) {
-    return;
-  }
-
-  lastMessage.value = trimmedUserMessage.value;
-  chat.sendMessage({
-    text: trimmedUserMessage.value,
-  });
-  userMessageInput.value = '';
-}
 
 </script>
