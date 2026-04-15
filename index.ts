@@ -156,35 +156,56 @@ export default class  extends AdminForthPlugin {
             turnId,
           });
 
-          for await (const chunk of stream) {
-            if (!Array.isArray(chunk) || chunk.length < 2) {
-              continue;
-            }
-            const [step, content] = Object.entries(chunk)[0];
-            const nodeName = typeof content?.langgraph_node === 'string' ? content.langgraph_node : '';
-            if (nodeName && nodeName !== 'model') {
+          for await (const rawChunk of stream as AsyncIterable<[any, any]>) {
+            const [msgChunk, metadata] = rawChunk;
+
+            const nodeName =
+              typeof metadata?.langgraph_node === "string"
+                ? metadata.langgraph_node
+                : "";
+
+            if (nodeName && !["model", "model_request"].includes(nodeName)) {
               continue;
             }
 
-            // if (reasoning) {
-            //   const reasoningId = startBlock('reasoning');
-            //   send({
-            //     type: 'reasoning-delta',
-            //     id: reasoningId,
-            //     delta: reasoning,
-            //   });
-            // }
-            if (content?.text) {
+            const blocks = Array.isArray(msgChunk?.contentBlocks)
+              ? msgChunk.contentBlocks
+              : Array.isArray(msgChunk?.content)
+                ? msgChunk.content
+                : [];
+
+            const reasoningDelta = blocks
+              .filter((b: any) => b?.type === "reasoning")
+              .map((b: any) => String(b.reasoning ?? ""))
+              .join("");
+
+            const textDelta = blocks
+              .filter((b: any) => b?.type === "text")
+              .map((b: any) => String(b.text ?? ""))
+              .join("");
+
+            if (reasoningDelta) {
+              console.log("REASONING DELTA", { reasoningDelta });
+              const reasoningId = startBlock('reasoning');
+                send({
+                  type: 'reasoning-delta',
+                  id: reasoningId,
+                  delta: reasoningDelta,
+                });
+            }
+
+            if (textDelta) {
+              console.log("TEXT DELTA", { textDelta });
               const textId = startBlock('text');
               send({
                 type: 'text-delta',
                 id: textId,
-                delta: content.text,
+                delta: textDelta,
               });
             }
           }
         } catch (error) {
-          logger.error('Agent response streaming failed:', error);
+          logger.error(`Agent response streaming failed: ${error}`);
           const textId = startBlock('text');
           send({
             type: 'text-delta',
