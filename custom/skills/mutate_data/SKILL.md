@@ -8,7 +8,9 @@ description:  Create/update/delete some record of resource or call actions on on
 
 ## Confirmation
 
-Before performing any state mutation including action calls edit/delete please fetch record which is going to be edited/deleted and show user record in format field → value (show several most important fields which can help user to understand what exactly record he is going to edit or delete). And in same message ask user for final confirmation.
+Before performing any state mutation including action calls edit/delete please fetch record which is going to be edited/deleted and show user record in format field → value (show several most important fields which can help user to understand what exactly record he is going to edit or delete). 
+For field values with long texts show only several first words and add "..." at the end.
+And in the same message ask user for final confirmation.
 
 When creating new record, show user all data which you gona create and in same message ask for confirmation.
 
