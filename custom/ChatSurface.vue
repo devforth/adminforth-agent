@@ -1,6 +1,6 @@
 <template>
   <div 
-    class="relative w-6 h-6 cursor-pointer
+    class="relative w-6 h-6 cursor-pointer mr-6 mt-1
       text-lightNavbarIcons hover:text-lightNavbarIcons/80 
       dark:text-darkNavbarIcons hover:text-darkNavbarIcons/80
       hover:scale-110 transition-colors duration-200"       
@@ -18,7 +18,7 @@
   
   <div 
     ref="chatSurface"
-    class="fixed bg-lightSidebar dark:bg-darkSidebar h-screen top-0 right-0 border border-gray-200 dark:border-gray-700 sm:w-[600px] w-screen 
+    class="fixed bg-lightNavbar dark:bg-darkNavbar h-screen top-0 right-0 border border-gray-200 dark:border-gray-700 sm:w-[600px] w-screen 
           transition-transform duration-200 ease-in-out 
           flex flex-col "
     :class="isChatOpen ? 'translate-x-0 shadow-2xl' : 'translate-x-full'"
@@ -47,7 +47,7 @@
         @update:isSessionHistoryOpen="isSessionHistoryOpen = $event"
       />
 
-      <div class="border-t border-gray-200 dark:border-gray-700 bg-lightSidebar dark:bg-darkSidebar p-4">
+      <div class="border-t border-gray-200 dark:border-gray-700 bg-lightNavbar dark:bg-darkNavbar p-4">
         <div class="flex items-end gap-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3 shadow-sm transition-colors focus-within:border-gray-400 focus-within:bg-white dark:focus-within:bg-gray-700">
           <textarea
             v-model="userMessageInput"
