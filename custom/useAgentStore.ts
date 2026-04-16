@@ -26,7 +26,28 @@ export const useAgentStore = defineStore('agent', () => {
   const coreStore = useCoreStore();
   const appRoot = ref<HTMLElement | null>(null);
   const header = ref<HTMLElement | null>(null);
+  const chatWidth = ref(600);
+  function setLocalStorageItem(key: string, value: string) {
+    window.localStorage.setItem(`${coreStore.config.brandName || 'adminforth'}-${key}`, value);
+  }
+  function getLocalStorageItem(key: string) {
+    return window.localStorage.getItem(`${coreStore.config.brandName || 'adminforth'}-${key}`);
+  }
+  watch(isTeleportedToBody, (newVal) => {
+    setLocalStorageItem('isTeleportedToBody', newVal ? 'true' : 'false');
+  })
+  watch(isChatOpen, (newVal) => {
+    setLocalStorageItem('isChatOpen', newVal ? 'true' : 'false');
+  })
+  watch(chatWidth, (newVal) => {
+    setLocalStorageItem('chatWidth', newVal.toString());
+  })
   onMounted(() => {
+    chatWidth.value = parseInt(getLocalStorageItem('chatWidth') || '600', 10);
+    isTeleportedToBody.value = getLocalStorageItem('isTeleportedToBody') === 'true';
+    if (isTeleportedToBody.value) {
+      isChatOpen.value = getLocalStorageItem('isChatOpen') === 'true';
+    }
     if (coreStore.isMobile) {
       chatWidth.value = window.innerWidth;
     }
@@ -39,7 +60,6 @@ export const useAgentStore = defineStore('agent', () => {
       });
     }  
   })
-  const chatWidth = ref(600);
   function setChatWidth(width: number) {
     if (appRoot.value && header.value) {
       appRoot.value.style.transition = '';
