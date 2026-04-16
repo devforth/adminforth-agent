@@ -1,10 +1,10 @@
 <template>
   <div 
-    class="max-w-[500px] flex px-4 m-2 rounded-xl border border-gray-200 dark:border-gray-700"
+    class="max-w-[80%] flex px-4 m-2 rounded-xl border border-gray-200 dark:border-gray-700"
     :class="props.role === 'user' ? 'bg-lightListTableHeading dark:bg-darkListTableHeading self-end' : isTypeReasoning ? 'bg-transparent border-none self-start' : 'bg-blue-100 dark:bg-blue-700/10 self-start'"
   >
     <IncremarkContent
-      class="max-w-[460px] text-wrap break-words"
+      class="text-wrap break-words"
       v-if="content && props.type === 'text'"
       :content="content" 
       :is-finished="isFinished" 
