@@ -33,6 +33,7 @@
         :role="message.role"
         :type="part.type"
         :state="part.state"
+        @toggle-thoughts="(isExpanded) => clicks++"
       >
 
       </Message>
@@ -61,6 +62,14 @@ const showScrollToBottomButton = ref(false);
 const innerScrollContainerRef = ref(null);
 const AutoScrollContainer = defineAsyncComponent(() => import('@incremark/vue').then(module => module.AutoScrollContainer))
 const agentStore = useAgentStore();
+const clicks = ref(0);
+
+function recalculateScroll() {
+  if (scrollContainer.value) {
+    const isScrolledUp = scrollContainer.value.isUserScrolledUp();
+    showScrollToBottomButton.value = !!isScrolledUp;
+  }
+}
 
 onMounted(async () => {
   await import('@incremark/theme/styles.css')
@@ -71,10 +80,14 @@ watch(scrollContainer, () => {
     innerScrollContainerRef.value = scrollContainer.value.container;
 
     innerScrollContainerRef.value.addEventListener('scroll', () => {
-      const isScrolledUp = scrollContainer.value?.isUserScrolledUp();
-      showScrollToBottomButton.value = !!isScrolledUp;
+      recalculateScroll();
     });
   }
+})
+
+watch(clicks, () => {
+  recalculateScroll();
+
 })
 
 const getParts = (message: IMessage) => {

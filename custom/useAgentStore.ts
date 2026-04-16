@@ -164,6 +164,7 @@ export const useAgentStore = defineStore('agent', () => {
       messages: [],
     };
     sessions.value['pre-session'] = currentSession.value;
+    chat.messages = [];
   }
 
   async function deletePreSession() {
