@@ -22,19 +22,15 @@ function serializeSkillManifests(skillManifests: AgentSkillManifest[]) {
   }));
 }
 
-export async function createFetchSkillTool() {
-  const availableSkills = await listSkillManifests();
+export async function createFetchSkillTool(customComponentsDir: string) {
+  const availableSkills = await listSkillManifests(customComponentsDir);
   const availableSkillNames = availableSkills.map((skill) => skill.name);
-  const availableSkillNamesSummary =
-    availableSkillNames.length > 0
-      ? ` Available skills: ${availableSkillNames.join(", ")}.`
-      : "";
 
   return tool(
     async ({ skillName }) => {
       try {
-        logger.info(`Fetching skill markdown for skill: ${skillName}`);
-        const skillMarkdown = await loadSkillMarkdown(skillName);
+        logger.info(`Fetching ${skillName} skill`)
+        const skillMarkdown = await loadSkillMarkdown(skillName, customComponentsDir);
 
         if (!skillMarkdown) {
           return [
@@ -53,9 +49,11 @@ export async function createFetchSkillTool() {
     },
     {
       name: "fetch_skill",
-      description:
-        "Fetch the raw SKILL.md content for a custom AdminForth skill by name." +
-        availableSkillNamesSummary,
+      description: `Fetch the raw SKILL.md content for a custom AdminForth skill by name.${
+        availableSkillNames.length > 0
+          ? ` Available skills: ${availableSkillNames.join(", ")}.`
+          : ""
+      }`,
       schema: fetchSkillSchema,
     },
   );
