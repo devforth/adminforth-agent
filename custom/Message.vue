@@ -28,7 +28,7 @@
           <span class="bounce-dot3 rounded-full w-2 h-2 bg-lightPrimary"></span>
         </template>
       </div>
-      <transition name="expand">
+      <transition name="expand" class="max-h-36 overflow-y-auto">
         <p v-show="isThoughtsExpanded" class="overflow-hidden">
           {{ content }}
         </p>
@@ -129,7 +129,7 @@
 .expand-enter-to,
 .expand-leave-from {
   opacity: 1;
-  max-height: 700px;
+  max-height: 144px;
 }
 
 </style>
