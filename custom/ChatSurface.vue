@@ -45,25 +45,25 @@
         :messages="agentStore.chatMessages"
       />
 
-      <div class="border-t border-gray-200 dark:border-gray-700 bg-lightNavbar dark:bg-darkNavbar p-4">
-        <div class="flex items-end gap-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3 shadow-sm transition-colors focus-within:border-gray-400 focus-within:bg-white dark:focus-within:bg-gray-700">
-          <textarea
-            v-model="agentStore.userMessageInput"
-            ref="textInput"
-            class="min-h-24 flex-1 resize-none bg-transparent text-sm text-gray-900 dark:text-gray-100 outline-none placeholder:text-gray-400 dark:placeholder:text-gray-500"
-            placeholder="Type a message..."
-            @keydown.enter.exact.prevent="agentStore.sendMessage"
+      <div class="w-full mb-8 flex items-center justify-center px-2 bg-transparent relative">
+        <textarea
+          v-model="agentStore.userMessageInput"
+          ref="textInput"
+          @input="autoResize"
+          class="min-h-12 p-4 pr-12 w-full resize-none overflow-hidden border text-lightInputText dark:text-darkInputText rounded-md bg-transparent  text-sm bg-gray-50 dark:bg-gray-700 dark:border-gray-600 focus:outline-none"
+          placeholder="Type a message..."
+          @keydown.enter.exact.prevent="async () => {await agentStore.sendMessage(); autoResize();}"
+        />
+        <Button 
+          class="absolute right-4 bottom-2 !p-1"                    
+          @click="async () => {await agentStore.sendMessage(); autoResize();}" 
+          :disabled="!agentStore.trimmedUserMessage || agentStore.isResponseInProgress"
+        >
+          <IconArrowUpOutline 
+            class="w-8 h-8 p-1
+              text-white" 
           />
-
-          <button
-            class="bg-lightPrimary dark:bg-darkPrimary text-white w-10 h-10 rounded-lg flex items-center justify-center cursor-pointer hover:bg-lightPrimary/80 dark:bg-darkPrimary/80 dark:hover:bg-darkPrimary/80 disabled:bg-lightPrimary/50 dark:disabled:darkPrimary dark:disabled:bg-darkPrimary/50"
-            :disabled="!agentStore.trimmedUserMessage || agentStore.isResponseInProgress"
-            aria-label="Send message"
-            @click="agentStore.sendMessage"
-          >
-            <IconArrowUpOutline class="h-6 w-6" />
-          </button>
-        </div>
+        </Button>
       </div>
     </div>
   </div>
@@ -77,6 +77,7 @@ import { useTemplateRef, onMounted } from 'vue';
 import { onClickOutside } from '@vueuse/core'
 import ConversationArea from './ConversationArea.vue';
 import { useAgentStore } from './useAgentStore';
+import { Button } from '@/afcl';
 
 const props = defineProps<{
   meta: {
@@ -95,5 +96,21 @@ onMounted(async () => {
   textInput.value?.focus();
   await agentStore.fetchSessionsList();
 });
+
+function autoResize() {
+  const el = textInput.value
+  if (!el) return
+
+  el.style.height = 'auto'
+  //max-h-48
+  const maxHeight = 192
+  if (el.scrollHeight > maxHeight) {
+    el.style.height = maxHeight + 'px'
+    el.style.overflowY = 'auto'
+  } else {
+    el.style.height = el.scrollHeight + 'px'
+    el.style.overflowY = 'hidden'
+  }
+}
 
 </script>
