@@ -50,6 +50,7 @@ type CapturedEndpoint = EndpointWithSchemas & {
 
 type ToolHttpResponse = IAdminForthHttpResponse & {
   headers: Array<[string, string]>;
+  jsonPayload?: unknown;
   status: number;
   message?: string;
 };
@@ -71,69 +72,46 @@ export type ApiBasedTool = {
 
 function sanitizeForYaml(
   value: unknown,
-  path: string = '$',
-  seen: WeakMap<object, string> = new WeakMap(),
 ): unknown {
-  if (value === null || value === undefined) {
-    return value;
+  const traversalStack: object[] = [];
+  const serialized = JSON.stringify(value, function (this: unknown, _key: string, nestedValue: unknown) {
+    if (typeof nestedValue === 'function' || typeof nestedValue === 'symbol' || nestedValue === undefined) {
+      return undefined;
+    }
+
+    if (typeof nestedValue === 'bigint') {
+      return nestedValue.toString();
+    }
+
+    if (typeof nestedValue !== 'object' || nestedValue === null) {
+      return nestedValue;
+    }
+
+    if (nestedValue instanceof Map) {
+      return Object.fromEntries(nestedValue);
+    }
+
+    if (nestedValue instanceof Set) {
+      return Array.from(nestedValue.values());
+    }
+
+    while (traversalStack.length > 0 && traversalStack[traversalStack.length - 1] !== this) {
+      traversalStack.pop();
+    }
+
+    if (traversalStack.includes(nestedValue)) {
+      return undefined;
+    }
+
+    traversalStack.push(nestedValue);
+    return nestedValue;
+  });
+
+  if (serialized === undefined) {
+    return null;
   }
 
-  if (typeof value === 'function') {
-    const fn = value as Function;
-    return fn.name ? `[Function ${fn.name}]` : '[Function]';
-  }
-
-  if (typeof value === 'bigint') {
-    return value.toString();
-  }
-
-  if (typeof value === 'symbol') {
-    return value.toString();
-  }
-
-  if (typeof value !== 'object') {
-    return value;
-  }
-
-  if (value instanceof Date) {
-    return value.toISOString();
-  }
-
-  if (value instanceof RegExp) {
-    return value.toString();
-  }
-
-  if (value instanceof Map) {
-    return Array.from(value.entries()).map(([entryKey, entryValue], index) => ([
-      sanitizeForYaml(entryKey, `${path}.mapKey[${index}]`, seen),
-      sanitizeForYaml(entryValue, `${path}.mapValue[${index}]`, seen),
-    ]));
-  }
-
-  if (value instanceof Set) {
-    return Array.from(value.values()).map((item, index) => (
-      sanitizeForYaml(item, `${path}[${index}]`, seen)
-    ));
-  }
-
-  const objectValue = value as Record<string, unknown>;
-
-  if (seen.has(objectValue)) {
-    return `[Circular -> ${seen.get(objectValue)}]`;
-  }
-
-  seen.set(objectValue, path);
-
-  if (Array.isArray(objectValue)) {
-    return objectValue.map((item, index) => sanitizeForYaml(item, `${path}[${index}]`, seen));
-  }
-
-  const sanitized: Record<string, unknown> = {};
-  for (const [key, nestedValue] of Object.entries(objectValue)) {
-    sanitized[key] = sanitizeForYaml(nestedValue, `${path}.${key}`, seen);
-  }
-
-  return sanitized;
+  return JSON.parse(serialized);
 }
 
 export function serializeUnknownError(error: unknown): Record<string, unknown> {
@@ -258,6 +236,7 @@ function createRawExpressResponse(response: ToolHttpResponse) {
       return rawResponse;
     },
     json(payload: unknown) {
+      response.jsonPayload = payload;
       response.message = JSON.stringify(payload);
       return rawResponse;
     },
@@ -322,6 +301,10 @@ async function callCapturedEndpoint(params: {
 
   if (output !== undefined && output !== null) {
     return output;
+  }
+
+  if (response.jsonPayload !== undefined) {
+    return response.jsonPayload;
   }
 
   if (response.message !== undefined) {
