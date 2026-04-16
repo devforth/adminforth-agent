@@ -25,6 +25,7 @@
     :style="{ width: agentStore.chatWidth + 'px' }"
   > 
     <div 
+      v-if="!coreStore.isMobile"
       class="w-2 cursor-ew-resize absolute left-0 top-0 h-full z-20"
       @mousedown="startResize"
     ></div>
@@ -42,14 +43,14 @@
             @click="agentStore.setSessionHistoryOpen(!agentStore.isSessionHistoryOpen)" 
           />
           <IconOpenSidebarSolid 
-            v-if="!agentStore.isTeleportedToBody"
+            v-if="!agentStore.isTeleportedToBody && !coreStore.isMobile"
             class="m-2 w-8 h-8 p-1 cursor-pointer hover:scale-110 rounded transition-colors duration-200
               text-lightNavbarIcons hover:text-lightNavbarIcons/80 hover:bg-lightNavbarIcons/20 
               dark:text-darkNavbarIcons hover:text-darkNavbarIcons/80 hover:bg-darkNavbarIcons/20 " 
             @click="agentStore.setIsTeleportedToBody(true)" 
           />
           <IconCloseSidebarSolid 
-            v-else
+            v-else-if="!coreStore.isMobile"
             class="m-2 w-8 h-8 p-1 cursor-pointer hover:scale-110 rounded transition-colors duration-200
               text-lightNavbarIcons hover:text-lightNavbarIcons/80 bg-lightNavbarIcons/20 
               dark:bg-darkNavbarIcons/20 dark:text-darkNavbarIcons/80 hover:text-darkNavbarIcons/80 hover:bg-darkNavbarIcons/20 " 
@@ -106,6 +107,7 @@ import { onClickOutside } from '@vueuse/core'
 import ConversationArea from './ConversationArea.vue';
 import { useAgentStore } from './useAgentStore';
 import { Button } from '@/afcl';
+import { useCoreStore } from '@/stores/core';
 
 const props = defineProps<{
   meta: {
@@ -116,6 +118,7 @@ const props = defineProps<{
 const chatSurface = useTemplateRef('chatSurface');
 const textInput = useTemplateRef('textInput');
 const agentStore = useAgentStore();
+const coreStore = useCoreStore();
 
 const MAX_WIDTH = 800;
 const MIN_WIDTH = 382; //w-96

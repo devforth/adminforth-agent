@@ -5,6 +5,7 @@ import { callAdminForthApi } from '@/utils';
 import { useAdminforth } from '@/adminforth';
 import { Chat } from "@ai-sdk/vue";
 import { DefaultChatTransport } from 'ai';
+import { useCoreStore } from '@/stores/core';
 
 export const useAgentStore = defineStore('agent', () => {
   const activeSessionId = ref<string | null>(null);
@@ -22,9 +23,13 @@ export const useAgentStore = defineStore('agent', () => {
   const setIsTeleportedToBody = (isTeleported: boolean) => {
     isTeleportedToBody.value = isTeleported;
   }
+  const coreStore = useCoreStore();
   const appRoot = ref<HTMLElement | null>(null);
   const header = ref<HTMLElement | null>(null);
   onMounted(() => {
+    if (coreStore.isMobile) {
+      chatWidth.value = window.innerWidth;
+    }
     appRoot.value = document.getElementById('app');
     header.value = document.getElementById('af-header-nav');
     if (appRoot.value && header.value) {
