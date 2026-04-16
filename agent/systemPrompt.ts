@@ -4,6 +4,7 @@ import {
   listProjectSkillManifests,
   type AgentSkillManifest,
 } from "./skills/registry.js";
+import { ALWAYS_AVAILABLE_API_TOOL_NAMES } from "./tools/constants.js";
 
 export const DEFAULT_AGENT_SYSTEM_PROMPT = [
   "You are AI Assistant for Admin Panel.",
@@ -28,17 +29,22 @@ export async function buildAgentSystemPrompt(adminforth: IAdminForth) {
     listProjectSkillManifests(adminforth.config.customization.customComponentsDir),
     listBundledSkillManifests(),
   ]);
+  const alwaysAvailableTools = ALWAYS_AVAILABLE_API_TOOL_NAMES.join(", ");
   const sections = [
     DEFAULT_AGENT_SYSTEM_PROMPT,
+    `BASE_URL: ${adminforth.config.baseUrl}`,
     `List of resources:\n${formatResources(adminforth.config.resources)}`,
+    `You have always-available base tools: ${alwaysAvailableTools}.`,
     primarySkills.length > 0
-      ? `You have primary skills set:\n${formatSkills(primarySkills, "tool_name")}`
+      ? `You have primary skills set:\n${formatSkills(primarySkills, "skill_name")}`
       : "",
     "You have next default skills which you can fallback to if primary skill set does not provide a good skill:\n" +
       formatSkills(defaultSkills, "skill_name"),
-    "To read the full instructions of a default skill, call fetch_skill.",
+    "Before using any skill, call fetch_skill to load its full instructions.",
+    "You can use get_resource immediately to inspect resource structure and column names.",
+    "Only call fetch_tool_schema for tool names that are explicitly mentioned in a fetched skill and are not already available as base tools.",
+    "When fetch_tool_schema succeeds, that tool becomes available on the next step.",
     "Try to call as many tools as possible in parallel in one step.",
-    "When skill mentions use of another tool which is not initially defined you should call fetch_tool_schema.",
   ];
 
   return sections.filter(Boolean).join("\n\n");

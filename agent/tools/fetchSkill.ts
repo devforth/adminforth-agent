@@ -5,7 +5,6 @@ import {
   loadSkillMarkdown,
   type AgentSkillManifest,
 } from "../skills/registry.js";
-import { logger } from "adminforth";
 
 const fetchSkillSchema = z.object({
   skillName: z
@@ -29,7 +28,6 @@ export async function createFetchSkillTool(customComponentsDir: string) {
   return tool(
     async ({ skillName }) => {
       try {
-        logger.info(`Fetching ${skillName} skill`)
         const skillMarkdown = await loadSkillMarkdown(skillName, customComponentsDir);
 
         if (!skillMarkdown) {

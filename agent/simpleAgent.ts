@@ -4,6 +4,8 @@ import { MemorySaver, type Messages } from "@langchain/langgraph";
 import { z } from "zod";
 import { ChatOpenAI } from "@langchain/openai";
 import { createAgentTools } from "./tools/index.js";
+import { createApiBasedToolsMiddleware } from "./middleware/apiBasedTools.js";
+import type { ApiBasedTool } from "../apiBasedTools.js";
 
 const checkpointer = new MemorySaver();
 
@@ -88,6 +90,7 @@ export async function callAgent(params: {
   summaryModel: ChatOpenAI;
   messages: Messages;
   adminUser: AdminUser;
+  apiBasedTools: Record<string, ApiBasedTool>;
   customComponentsDir: string;
   sessionId: string;
   turnId: string;
@@ -96,15 +99,18 @@ export async function callAgent(params: {
     model,
     messages,
     adminUser,
+    apiBasedTools,
     customComponentsDir,
     sessionId,
     turnId,
     summaryModel,
     name,
   } = params;
-  const tools = await createAgentTools(customComponentsDir);
+  const tools = await createAgentTools(customComponentsDir, apiBasedTools);
+  const apiBasedToolsMiddleware = createApiBasedToolsMiddleware(apiBasedTools);
 
   const middleware = [
+    apiBasedToolsMiddleware,
     summarizationMiddleware({
       model: summaryModel,
       trigger: { tokens: 1024 * 8 },
@@ -125,6 +131,7 @@ export async function callAgent(params: {
 
   return await agent.stream(initialState, {
     streamMode: "messages",
+    recursionLimit: 50,
     configurable: {
       thread_id: sessionId,
     },

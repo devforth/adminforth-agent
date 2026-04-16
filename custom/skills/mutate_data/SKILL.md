@@ -10,6 +10,7 @@ description:  Create/update/delete some record of resource or call actions on on
 
 Before performing any state mutation including action calls edit/delete please fetch record which is going to be edited/deleted and show user record in format field → value (show several most important fields which can help user to understand what exactly record he is going to edit or delete). 
 For field values with long texts show only several first words and add "..." at the end.
+Also please add related link to record with will be changed. For example /{BASE_URL}/resource/{resourceId}/show/{primary key}. Use _label from `get_resource_data` as anchor text for link (use markdown link).
 And in the same message ask user for final confirmation.
 
 When creating new record, show user all data which you gona create and in same message ask for confirmation.
@@ -29,12 +30,14 @@ If you want to block some user you can confirm that this action by saying:
 * Email: john_doe@example.com
 * IP Country: USA
 * Currently blocked: No // show this field only if it exists in user record
+
+View [John Doe](/resource/users/show/123)
 Are you sure?
 ```
 
 ## Updating
 
-You can use tool `update_resource` tool it updates fields of record. To update `allowedActions.edit` should be set to true and 
+You can use tool `update_record` tool it updates fields of record. To update `allowedActions.edit` should be set to true and 
 `updated` column `showIn.edit` should be true at the same time. If one of this condition is not met, explain to user that is 
 not allowed to edit
 
@@ -50,13 +53,16 @@ I am going to update user:
 * Email: john_doe@example.com
 * IP Country: USA
 I am going to change email from john_doe@example.com to new_email@example.com
+
+View [John Doe](/admin/resource/users/show/123)
+
 Are you sure?
 ```
 
 
 ## Deleting
 
-To delete some record you can use `delete_resource` tool. To delete record `allowedActions.delete` should be set to true.
+To delete some record you can use `delete_record` tool. To delete record `allowedActions.delete` should be set to true.
 
 ### Example 
 
@@ -67,6 +73,9 @@ If you gonna delete user record, in confirmation please share full user info (no
 * Email: john_doe@example.com
 * Signed up: 2024 Jan 1
 * IP Country: USA
+
+View [John Doe](/admin/resource/users/show/123)
+
 Are you sure?
 ```
 

@@ -13,14 +13,55 @@ import { HumanMessage, SystemMessage } from "langchain";
 import { createAgentChatModel, callAgent } from "./agent/simpleAgent.js";
 import {
   prepareApiBasedTools as buildApiBasedTools,
-  serializeUnknownError,
-  serializeApiBasedTool,
 } from './apiBasedTools.js';
 import type { ApiBasedTool } from './apiBasedTools.js';
 import {
   buildAgentSystemPrompt,
   DEFAULT_AGENT_SYSTEM_PROMPT,
 } from "./agent/systemPrompt.js";
+import { ALWAYS_AVAILABLE_API_TOOL_NAMES } from "./agent/tools/constants.js";
+
+function isAggregateErrorLike(
+  error: unknown,
+): error is { errors: unknown[]; message?: string; stack?: string } {
+  return typeof error === "object" && error !== null && Array.isArray((error as { errors?: unknown[] }).errors);
+}
+
+function formatAgentError(error: unknown) {
+  if (isAggregateErrorLike(error)) {
+    const nestedErrors = error.errors
+      .map((nestedError, index) => {
+        if (nestedError instanceof Error) {
+          return `${index + 1}. ${nestedError.stack ?? nestedError.message}`;
+        }
+
+        return `${index + 1}. ${String(nestedError)}`;
+      })
+      .join("\n");
+
+    return `${error.stack ?? error.message}\nNested errors:\n${nestedErrors}`;
+  }
+
+  if (error instanceof Error) {
+    return error.stack ?? error.message;
+  }
+
+  return String(error);
+}
+
+function assertRequiredApiTool(
+  apiBasedTools: Record<string, ApiBasedTool>,
+  toolName: string,
+) {
+  if (toolName in apiBasedTools) {
+    return;
+  }
+
+  const availableToolNames = Object.keys(apiBasedTools).sort().join(", ");
+  throw new Error(
+    `Required API tool "${toolName}" is missing from AdminForth Agent tools. Available tools: ${availableToolNames}`,
+  );
+}
 
 export default class AdminForthAgentPlugin extends AdminForthPlugin {
   options: PluginOptions;
@@ -55,40 +96,10 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
   
   validateConfigAfterDiscover(adminforth: IAdminForth, resourceConfig: AdminForthResource) {
     this.apiBasedTools = buildApiBasedTools(adminforth);
-    void Promise.resolve().then(() => this.logPreparedApiToolProbe(adminforth));
-  }
-
-  private async logPreparedApiToolProbe(adminforth: IAdminForth) {
-    const getResourceTool = this.apiBasedTools['get_resource'];
-    logger.info({ tool: serializeApiBasedTool(getResourceTool) }, "apiBasedTools['get_resource']");
-///
-    try {
-
-      const adminUserResource = adminforth.config.resources.find((resource) => resource.resourceId === 'adminuser');
-
-      const [dbUser] = await adminforth.resource('adminuser').list([], 1);
-
-      const primaryKeyName = adminUserResource.columns.find((column) => column.primaryKey)!.name;
-      const usernameField = adminforth.config.auth?.usernameField ?? primaryKeyName;
-      const adminUser: AdminUser = {
-        pk: `${dbUser[primaryKeyName]}`,
-        username: `${dbUser[usernameField] ?? dbUser[primaryKeyName]}`,
-        dbUser,
-      };
-
-      const result = await getResourceTool.call({
-        adminUser,
-        inputs: {
-          resourceId: 'adminuser',
-        },
-      });
-
-      logger.info(`apiBasedTools['get_resource'].call({ resourceId: 'adminuser' })\n${result}`);
-    } catch (error) {
-      logger.error({
-        error: serializeUnknownError(error),
-      }, 'Failed to run apiBasedTools probe');
+    for (const toolName of ALWAYS_AVAILABLE_API_TOOL_NAMES) {
+      assertRequiredApiTool(this.apiBasedTools, toolName);
     }
+    assertRequiredApiTool(this.apiBasedTools, "update_record");
     this.agentSystemPromptPromise = buildAgentSystemPrompt(adminforth);
   }
 
@@ -201,6 +212,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
               new HumanMessage(prompt),
             ],
             adminUser,
+            apiBasedTools: this.apiBasedTools,
             customComponentsDir: this.adminforth.config.customization.customComponentsDir,
             sessionId,
             turnId,
@@ -253,7 +265,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             }
           }
         } catch (error) {
-          logger.error(`Agent response streaming failed: ${error}`);
+          logger.error(`Agent response streaming failed:\n${formatAgentError(error)}`);
           const textId = startBlock('text');
           send({
             type: 'text-delta',
