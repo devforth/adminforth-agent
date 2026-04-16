@@ -4,14 +4,15 @@ import type { PluginOptions } from './types.js';
 import { randomUUID } from 'crypto';
 import { HumanMessage, SystemMessage } from "langchain";
 import { createAgentChatModel, callAgent } from "./agent/simpleAgent.js";
+import {
+  buildAgentSystemPrompt,
+  DEFAULT_AGENT_SYSTEM_PROMPT,
+} from "./agent/systemPrompt.js";
 import { Filters, Sorts } from 'adminforth';
-
-const AGENT_SYSTEM_MESSAGE = new SystemMessage(
-  "You are an AdminForth assistant. Help the current admin user with the active admin panel context and answer concisely."
-);
 
 export default class  extends AdminForthPlugin {
   options: PluginOptions;
+  agentSystemPrompt = DEFAULT_AGENT_SYSTEM_PROMPT;
 
   constructor(options: PluginOptions) {
     super(options, import.meta.url);
@@ -40,7 +41,7 @@ export default class  extends AdminForthPlugin {
   }
   
   validateConfigAfterDiscover(adminforth: IAdminForth, resourceConfig: AdminForthResource) {
-    // optional method where you can safely check field types after database discovery was performed
+    this.agentSystemPrompt = buildAgentSystemPrompt(adminforth);
   }
 
   instanceUniqueRepresentation(pluginOptions: any) : string {
@@ -148,7 +149,7 @@ export default class  extends AdminForthPlugin {
             model,
             summaryModel,
             messages: [
-              AGENT_SYSTEM_MESSAGE,
+              new SystemMessage(this.agentSystemPrompt),
               new HumanMessage(prompt),
             ],
             adminUser,
