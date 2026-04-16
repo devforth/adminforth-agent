@@ -3,9 +3,8 @@
     class="max-w-[500px] flex px-4 m-2 rounded-xl border border-gray-200 dark:border-gray-700"
     :class="props.role === 'user' ? 'bg-gray-100 dark:bg-gray-100/10 self-end' : isTypeReasoning ? 'bg-white-100 dark:bg-gray-700 border-none self-start' : 'bg-blue-100 dark:bg-blue-700/10 self-start'"
   >
-
     <IncremarkContent
-      class="max-w-[460px]"
+      class="max-w-[460px] text-wrap break-words"
       v-if="content && props.type === 'text'"
       :content="content" 
       :is-finished="isFinished" 

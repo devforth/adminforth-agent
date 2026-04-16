@@ -16,7 +16,7 @@ export const useAgentStore = defineStore('agent', () => {
   const isSessionHistoryOpen = ref(false);
   const textInput = ref<HTMLInputElement | null>(null);
   const userMessageInput = ref();
-  const trimmedUserMessage = computed(() => userMessageInput.value.trim());
+  const trimmedUserMessage = computed(() => userMessageInput.value ? userMessageInput.value.trim() : '');
   const lastMessage = ref('');
   const chat = new Chat({
     transport: new DefaultChatTransport({
@@ -51,7 +51,9 @@ export const useAgentStore = defineStore('agent', () => {
     if (!message || isResponseInProgress.value) {
       return;
     }
-    await createNewSession(message);
+    if (!currentSession.value || currentSession.value.sessionId === 'pre-session') {
+      await createNewSession(message);
+    }
     lastMessage.value = message;
     chat.sendMessage({
       text: message,
@@ -241,5 +243,7 @@ export const useAgentStore = defineStore('agent', () => {
     sendMessage,
     userMessageInput,
     chatMessages: computed(() => chat.messages),
+    trimmedUserMessage,
+    isResponseInProgress
   }
 })
