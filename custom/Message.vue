@@ -1,10 +1,10 @@
 <template>
   <div 
-    class="max-w-[500px] flex px-4 m-2 rounded-xl border border-gray-200 dark:border-gray-700"
+    class="max-w-[80%] flex px-4 m-2 rounded-xl border border-gray-200 dark:border-gray-700"
     :class="props.role === 'user' ? 'bg-lightListTableHeading dark:bg-darkListTableHeading self-end' : isTypeReasoning ? 'bg-transparent border-none self-start' : 'bg-blue-100 dark:bg-blue-700/10 self-start'"
   >
     <IncremarkContent
-      class="max-w-[460px] text-wrap break-words"
+      class="text-wrap break-words"
       v-if="content && props.type === 'text'"
       :content="content" 
       :is-finished="isFinished" 
@@ -17,11 +17,11 @@
       class="flex flex-col items-start gap-1 text-gray-500 py-2 " 
     >
       <div class="flex items-center gap-1 hover:underline cursor-pointer text-lightListTableHeadingText hover:text-lightListTableHeadingText  dark:text-darkListTableHeadingText dark:hover:text-darkListTableHeadingText" @click="isThoughtsExpanded = !isThoughtsExpanded">
-        {{ isStateStreaming ? 'Thinking' : 'Thoughts' }}
         <IconAngleDownOutline 
           :class="isThoughtsExpanded ? 'rotate-180' : 'rotate-0'"
           class="transition-transform duration-200"
         />
+        {{ isStateStreaming ? 'Thinking' : 'Thoughts' }}
         <template v-if="isStateStreaming">
           <span class="bounce-dot1 rounded-full w-2 h-2 bg-lightPrimary"></span>
           <span class="bounce-dot2 rounded-full w-2 h-2 bg-lightPrimary"></span>
