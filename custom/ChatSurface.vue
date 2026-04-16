@@ -50,7 +50,7 @@
           v-model="agentStore.userMessageInput"
           ref="textInput"
           @input="autoResize"
-          class="min-h-12 p-4 pr-12 w-full resize-none overflow-hidden border rounded-md bg-transparent text-sm bg-white focus:outline-none"
+          class="min-h-12 p-4 pr-12 w-full resize-none overflow-hidden border text-lightInputText dark:text-darkInputText rounded-md bg-transparent  text-sm bg-gray-50 dark:bg-gray-700 dark:border-gray-600 focus:outline-none"
           placeholder="Type a message..."
           @keydown.enter.exact.prevent="async () => {await agentStore.sendMessage(); autoResize();}"
         />

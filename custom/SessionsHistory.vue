@@ -1,7 +1,8 @@
 <template>
   <div class="absolute top-0 left-0 transition-transform 
-    duration-200 ease-in-out border-y border-r z-20 
+    duration-200 ease-in-out border-y border-r dark:border-gray-600 z-20 
     bg-lightNavbar dark:bg-darkNavbar w-96 h-full flex flex-col items-center
+    overflow-y-auto overflow-x-hidden
     "
   >
     <h3 :class="h3Style">{{ $t('Chat history') }}</h3>
@@ -9,7 +10,7 @@
       <IconPlusOutline class="w-5 h-5" />
       {{ $t('New chat') }}
     </Button>
-    <div class="w-full border-b"/>
+    <div class="w-full border-b border-gray-200 dark:border-gray-700"/>
 
     <div v-for="session in agentStore.sessionList" :key="session.sessionId" 
       class="flex items-center justify-between w-full px-4 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200 ease-in-out text-gray-800 dark:text-gray-200"
@@ -17,7 +18,7 @@
       @click="agentStore.setActiveSession(session.sessionId)"
     >
       {{ session.title || session.sessionId }}
-      <div @click="agentStore.deleteSession(session.sessionId)" class=" w-7 h-7 p-1 hover:scale-110 hover:bg-gray-200 flex items-center justify-center rounded">
+      <div @click="agentStore.deleteSession(session.sessionId)" class=" w-7 h-7 p-1 hover:scale-110 hover:bg-gray-200 dark:hover:bg-gray-500 flex items-center justify-center rounded">
         <IconPlusOutline class="rotate-45 w-6 h-6"/>
       </div>
     </div>

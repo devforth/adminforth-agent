@@ -1,7 +1,7 @@
 <template>
   <div 
     class="max-w-[500px] flex px-4 m-2 rounded-xl border border-gray-200 dark:border-gray-700"
-    :class="props.role === 'user' ? 'bg-gray-100 dark:bg-gray-100/10 self-end' : isTypeReasoning ? 'bg-white-100 dark:bg-gray-700 border-none self-start' : 'bg-blue-100 dark:bg-blue-700/10 self-start'"
+    :class="props.role === 'user' ? 'bg-lightListTableHeading dark:bg-darkListTableHeading self-end' : isTypeReasoning ? 'bg-transparent border-none self-start' : 'bg-blue-100 dark:bg-blue-700/10 self-start'"
   >
     <IncremarkContent
       class="max-w-[460px] text-wrap break-words"
@@ -16,7 +16,7 @@
       v-else-if="isTypeReasoning || isStateStreaming" 
       class="flex flex-col items-start gap-1 text-gray-500 py-2 " 
     >
-      <div class="flex items-center gap-1 hover:underline cursor-pointer hover:text-gray-700" @click="isThoughtsExpanded = !isThoughtsExpanded">
+      <div class="flex items-center gap-1 hover:underline cursor-pointer text-lightListTableHeadingText hover:text-lightListTableHeadingText  dark:text-darkListTableHeadingText dark:hover:text-darkListTableHeadingText" @click="isThoughtsExpanded = !isThoughtsExpanded">
         {{ isStateStreaming ? 'Thinking' : 'Thoughts' }}
         <IconAngleDownOutline 
           :class="isThoughtsExpanded ? 'rotate-180' : 'rotate-0'"
