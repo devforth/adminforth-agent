@@ -1,9 +1,20 @@
 import { AdminForthPlugin, logger } from "adminforth";
-import type { IAdminForth, IHttpServer, AdminForthResource } from "adminforth";
+import type {
+  AdminForthResource,
+  AdminUser,
+  IAdminForth,
+  IHttpServer,
+} from "adminforth";
 import type { PluginOptions } from './types.js';
 import { randomUUID } from 'crypto';
 import { HumanMessage, SystemMessage } from "langchain";
 import { createAgentChatModel, callAgent } from "./agent/simpleAgent.js";
+import {
+  prepareApiBasedTools as buildApiBasedTools,
+  serializeUnknownError,
+  serializeApiBasedTool,
+} from './apiBasedTools.js';
+import type { ApiBasedTool } from './apiBasedTools.js';
 import { Filters, Sorts } from 'adminforth';
 
 const AGENT_SYSTEM_MESSAGE = new SystemMessage(
@@ -12,6 +23,8 @@ const AGENT_SYSTEM_MESSAGE = new SystemMessage(
 
 export default class  extends AdminForthPlugin {
   options: PluginOptions;
+  apiBasedTools: Record<string, ApiBasedTool> = {};
+  private apiBasedToolsPrepared = false;
 
   constructor(options: PluginOptions) {
     super(options, import.meta.url);
@@ -40,7 +53,50 @@ export default class  extends AdminForthPlugin {
   }
   
   validateConfigAfterDiscover(adminforth: IAdminForth, resourceConfig: AdminForthResource) {
-    // optional method where you can safely check field types after database discovery was performed
+    if (this.apiBasedToolsPrepared) {
+      return;
+    }
+
+    this.prepareApiBasedTools(adminforth);
+    void Promise.resolve().then(() => this.logPreparedApiToolProbe(adminforth));
+  }
+
+  prepareApiBasedTools(adminforth: IAdminForth) {
+    this.apiBasedTools = buildApiBasedTools(adminforth);
+    this.apiBasedToolsPrepared = true;
+  }
+
+  private async logPreparedApiToolProbe(adminforth: IAdminForth) {
+    const getResourceTool = this.apiBasedTools['get_resource'];
+    logger.info({ tool: serializeApiBasedTool(getResourceTool) }, "apiBasedTools['get_resource']");
+
+    try {
+
+      const adminUserResource = adminforth.config.resources.find((resource) => resource.resourceId === 'adminuser');
+
+      const [dbUser] = await adminforth.resource('adminuser').list([], 1);
+
+      const primaryKeyName = adminUserResource.columns.find((column) => column.primaryKey)!.name;
+      const usernameField = adminforth.config.auth?.usernameField ?? primaryKeyName;
+      const adminUser: AdminUser = {
+        pk: `${dbUser[primaryKeyName]}`,
+        username: `${dbUser[usernameField] ?? dbUser[primaryKeyName]}`,
+        dbUser,
+      };
+
+      const result = await getResourceTool.call({
+        adminUser,
+        inputs: {
+          resourceId: 'adminuser',
+        },
+      });
+
+      logger.info(`apiBasedTools['get_resource'].call({ resourceId: 'adminuser' })\n${result}`);
+    } catch (error) {
+      logger.error({
+        error: serializeUnknownError(error),
+      }, 'Failed to run apiBasedTools probe');
+    }
   }
 
   instanceUniqueRepresentation(pluginOptions: any) : string {
