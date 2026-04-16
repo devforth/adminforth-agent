@@ -1,10 +1,13 @@
-import { AdminForthPlugin, logger } from "adminforth";
 import type {
   AdminForthResource,
   AdminUser,
   IAdminForth,
   IHttpServer,
+  Filters, Sorts
 } from "adminforth";
+
+import { AdminForthPlugin, logger } from "adminforth";
+
 import type { PluginOptions } from './types.js';
 import { randomUUID } from 'crypto';
 import { HumanMessage, SystemMessage } from "langchain";
@@ -15,16 +18,16 @@ import {
   serializeApiBasedTool,
 } from './apiBasedTools.js';
 import type { ApiBasedTool } from './apiBasedTools.js';
-import { Filters, Sorts } from 'adminforth';
+import {
+  buildAgentSystemPrompt,
+  DEFAULT_AGENT_SYSTEM_PROMPT,
+} from "./agent/systemPrompt.js";
 
-const AGENT_SYSTEM_MESSAGE = new SystemMessage(
-  "You are an AdminForth assistant. Help the current admin user with the active admin panel context and answer concisely."
-);
-
-export default class  extends AdminForthPlugin {
+export default class AdminForthAgentPlugin extends AdminForthPlugin {
   options: PluginOptions;
   apiBasedTools: Record<string, ApiBasedTool> = {};
   private apiBasedToolsPrepared = false;
+  agentSystemPrompt = DEFAULT_AGENT_SYSTEM_PROMPT;
 
   constructor(options: PluginOptions) {
     super(options, import.meta.url);
@@ -97,6 +100,7 @@ export default class  extends AdminForthPlugin {
         error: serializeUnknownError(error),
       }, 'Failed to run apiBasedTools probe');
     }
+    this.agentSystemPrompt = buildAgentSystemPrompt(adminforth);
   }
 
   instanceUniqueRepresentation(pluginOptions: any) : string {
@@ -204,7 +208,7 @@ export default class  extends AdminForthPlugin {
             model,
             summaryModel,
             messages: [
-              AGENT_SYSTEM_MESSAGE,
+              new SystemMessage(this.agentSystemPrompt),
               new HumanMessage(prompt),
             ],
             adminUser,

@@ -6,7 +6,7 @@ import { ChatOpenAI } from "@langchain/openai";
 
 const checkpointer = new MemorySaver();
 
-const contextSchema = z.object({
+export const contextSchema = z.object({
   adminUser: z.custom<AdminUser>(),
   sessionId: z.string(),
   turnId: z.string(),
