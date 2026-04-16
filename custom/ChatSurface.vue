@@ -26,7 +26,7 @@
   > 
     <div 
       v-if="!coreStore.isMobile"
-      class="w-2 cursor-ew-resize absolute left-0 top-0 h-full z-20"
+      class="w-2 cursor-ew-resize absolute left-0 top-0 h-full z-30"
       @mousedown="startResize"
     ></div>
 
