@@ -90,7 +90,7 @@ export const useAgentStore = defineStore('agent', () => {
 
   //create a pre-session, until user will type something, so we can save session
   async function createPreSession() {
-    sessionList.value.push({
+    sessionList.value.unshift({
       sessionId: 'pre-session',
       title: 'New Session',
       timestamp: new Date().toISOString(),
@@ -128,10 +128,10 @@ export const useAgentStore = defineStore('agent', () => {
       }
       deletePreSession();
       sessions.value[res.sessionId] = res;
-      sessionList.value.push({
+      sessionList.value.unshift({
         sessionId: res.sessionId,
         title: res.title,
-        timestamp: res.timestamp,
+        timestamp: new Date().toISOString(),
       });
       setActiveSession(res.sessionId);
     } catch (error) {
@@ -202,7 +202,7 @@ export const useAgentStore = defineStore('agent', () => {
       await fetchSession(sessionId);    
     }
     currentSession.value = sessions.value[sessionId];
-    chat.messages = currentSession.value?.messages.map(m => ({
+    chat.messages = currentSession.value?.messages.map((m: any) => ({
       text: m.text,
       role: m.role,
     })) || [];
@@ -225,6 +225,7 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   return {
+    //_________-Sessions management-_____________
     activeSessionId,
     currentSession,
     sessions,
@@ -234,7 +235,7 @@ export const useAgentStore = defineStore('agent', () => {
     fetchSessionsList,
     deleteSession,
     createPreSession,
-    //////////////////// UI related
+    //____________________________________________
     regisrerTextInput,
     isChatOpen,
     setIsChatOpen,

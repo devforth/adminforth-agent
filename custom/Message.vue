@@ -17,11 +17,11 @@
       class="flex flex-col items-start gap-1 text-gray-500 py-2 " 
     >
       <div class="flex items-center gap-1 hover:underline cursor-pointer text-lightListTableHeadingText hover:text-lightListTableHeadingText  dark:text-darkListTableHeadingText dark:hover:text-darkListTableHeadingText" @click="isThoughtsExpanded = !isThoughtsExpanded">
-        {{ isStateStreaming ? 'Thinking' : 'Thoughts' }}
         <IconAngleDownOutline 
           :class="isThoughtsExpanded ? 'rotate-180' : 'rotate-0'"
           class="transition-transform duration-200"
         />
+        {{ isStateStreaming ? 'Thinking' : 'Thoughts' }}
         <template v-if="isStateStreaming">
           <span class="bounce-dot1 rounded-full w-2 h-2 bg-lightPrimary"></span>
           <span class="bounce-dot2 rounded-full w-2 h-2 bg-lightPrimary"></span>

@@ -274,7 +274,7 @@ export default class  extends AdminForthPlugin {
       handler: async ({body, adminUser }) => {
         const triggerMessage = body.triggerMessage;
         const userId = adminUser.pk;
-        const title = triggerMessage ? triggerMessage.slice(0, 40) + '...' : 'New Session';
+        const title = triggerMessage ? (triggerMessage.length > 40 ? triggerMessage.slice(0, 40) + '...' : triggerMessage) : 'New Session';
         const newSession = {
           [this.pluginOptions.sessionResource.id_field]: randomUUID(),
           [this.pluginOptions.sessionResource.title_field]: title,
