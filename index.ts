@@ -2,11 +2,10 @@ import type {
   AdminForthResource,
   AdminUser,
   IAdminForth,
-  IHttpServer,
-  Filters, Sorts
+  IHttpServer
 } from "adminforth";
 
-import { AdminForthPlugin, logger } from "adminforth";
+import { AdminForthPlugin, logger, Filters, Sorts } from "adminforth";
 
 import type { PluginOptions } from './types.js';
 import { randomUUID } from 'crypto';
@@ -26,7 +25,6 @@ import {
 export default class AdminForthAgentPlugin extends AdminForthPlugin {
   options: PluginOptions;
   apiBasedTools: Record<string, ApiBasedTool> = {};
-  private apiBasedToolsPrepared = false;
   agentSystemPromptPromise = Promise.resolve(DEFAULT_AGENT_SYSTEM_PROMPT);
 
   constructor(options: PluginOptions) {
@@ -56,23 +54,14 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
   }
   
   validateConfigAfterDiscover(adminforth: IAdminForth, resourceConfig: AdminForthResource) {
-    if (this.apiBasedToolsPrepared) {
-      return;
-    }
-
-    this.prepareApiBasedTools(adminforth);
-    void Promise.resolve().then(() => this.logPreparedApiToolProbe(adminforth));
-  }
-
-  prepareApiBasedTools(adminforth: IAdminForth) {
     this.apiBasedTools = buildApiBasedTools(adminforth);
-    this.apiBasedToolsPrepared = true;
+    void Promise.resolve().then(() => this.logPreparedApiToolProbe(adminforth));
   }
 
   private async logPreparedApiToolProbe(adminforth: IAdminForth) {
     const getResourceTool = this.apiBasedTools['get_resource'];
     logger.info({ tool: serializeApiBasedTool(getResourceTool) }, "apiBasedTools['get_resource']");
-
+///
     try {
 
       const adminUserResource = adminforth.config.resources.find((resource) => resource.resourceId === 'adminuser');
