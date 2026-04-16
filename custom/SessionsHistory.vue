@@ -12,14 +12,22 @@
     </Button>
     <div class="w-full border-b border-gray-200 dark:border-gray-700"/>
 
-    <div v-for="session in agentStore.sessionList" :key="session.sessionId" 
-      class="flex items-center justify-between w-full px-4 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200 ease-in-out text-gray-800 dark:text-gray-200"
-      :class="{'bg-lightPrimary/20 hover:bg-lightPrimary/20 dark:bg-darkPrimary/20 dark:hover:bg-darkPrimary/20': agentStore.activeSessionId === session.sessionId}"
-      @click="agentStore.setActiveSession(session.sessionId)"
-    >
-      {{ session.title || session.sessionId }}
-      <div @click="agentStore.deleteSession(session.sessionId)" class=" w-7 h-7 p-1 hover:scale-110 hover:bg-gray-200 dark:hover:bg-gray-500 flex items-center justify-center rounded">
-        <IconPlusOutline class="rotate-45 w-6 h-6"/>
+    <div v-for="group in groupedSessions" :key="group.dayKey" class="w-full py-2">
+      <div class="px-4 pb-2 text-xs font-semibold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+        {{ group.label }}
+      </div>
+
+      <div
+        v-for="session in group.sessions"
+        :key="session.sessionId"
+        class="flex items-center justify-between w-full px-4 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200 ease-in-out text-gray-800 dark:text-gray-200"
+        :class="{'bg-lightPrimary/20 hover:bg-lightPrimary/20 dark:bg-darkPrimary/20 dark:hover:bg-darkPrimary/20': agentStore.activeSessionId === session.sessionId}"
+        @click="agentStore.setActiveSession(session.sessionId)"
+      >
+        {{ session.title || session.sessionId }}
+        <div @click.stop="agentStore.deleteSession(session.sessionId)" class="w-7 h-7 p-1 hover:scale-110 hover:bg-gray-200 dark:hover:bg-gray-500 flex items-center justify-center rounded">
+          <IconPlusOutline class="rotate-45 w-6 h-6"/>
+        </div>
       </div>
     </div>
   </div>
@@ -28,11 +36,48 @@
 
 <script setup lang="ts">
 import { Button } from '@/afcl'
+import { computed } from 'vue';
 import { IconPlusOutline } from '@iconify-prerendered/vue-flowbite';
+import type { ISessionsListItem } from './types';
 import { useAgentStore } from './useAgentStore';
 
 const agentStore = useAgentStore();
 
 const h3Style = "text-gray-800 dark:text-gray-200 font-medium text-xl tracking-widest mt-4"
+
+const dayLabelFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
+const dayLabelWithYearFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+
+function getLocalDayKey(date: Date) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+}
+
+const groupedSessions = computed(() => {
+  const groups = new Map<string, { dayKey: string; label: string; sessions: ISessionsListItem[] }>();
+
+  for (const session of agentStore.sessionList) {
+    const date = new Date(session.timestamp);
+    const dayKey = getLocalDayKey(date);
+    const label = date.getFullYear() === new Date().getFullYear()
+      ? dayLabelFormatter.format(date)
+      : dayLabelWithYearFormatter.format(date);
+
+    if (!groups.has(dayKey)) {
+      groups.set(dayKey, {
+        dayKey,
+        label,
+        sessions: [],
+      });
+    }
+
+    groups.get(dayKey)!.sessions.push(session);
+  }
+
+  return Array.from(groups.values());
+});
 
 </script>

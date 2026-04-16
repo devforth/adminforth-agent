@@ -223,7 +223,7 @@ export default class  extends AdminForthPlugin {
       handler: async ({body, adminUser }) => {
         const userId = adminUser.pk;
         const sessions = await this.adminforth.resource(this.pluginOptions.sessionResource.resource_id).list(
-          [Filters.EQ(this.pluginOptions.sessionResource.asker_id_field, userId)]
+          [Filters.EQ(this.pluginOptions.sessionResource.asker_id_field, userId)], undefined, undefined, [Sorts.DESC(this.pluginOptions.sessionResource.created_at_field)]
         );
         const sessionsToReturn = [];
         for (const session of sessions) {
