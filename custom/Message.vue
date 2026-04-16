@@ -28,7 +28,7 @@
           <span class="bounce-dot3 rounded-full w-2 h-2 bg-lightPrimary"></span>
         </template>
       </div>
-      <transition name="expand">
+      <transition name="expand" class="max-h-36 overflow-y-auto">
         <p v-show="isThoughtsExpanded" class="overflow-hidden">
           {{ content }}
         </p>
@@ -42,7 +42,7 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, defineAsyncComponent, onMounted, ref } from 'vue';
+  import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue';
   import { IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
   
   const IncremarkContent = defineAsyncComponent(() => import('@incremark/vue').then(module => module.IncremarkContent))
@@ -69,13 +69,19 @@
     state: string
     role: 'user' | 'assistant'
   }>();
-  
+
+  const emit = defineEmits(['toggle-thoughts']);
+
   const content = computed(() => props.message)
   const isFinished = computed(() => props.state === 'done')
   const isThoughtsExpanded = ref(false)
 
   const isTypeReasoning = computed(() => props.type === 'reasoning')
   const isStateStreaming = computed(() => props.state === 'streaming')
+
+  watch(isThoughtsExpanded, (newValue) => {
+    emit('toggle-thoughts', newValue);
+  })
 
 </script>
 
@@ -129,7 +135,7 @@
 .expand-enter-to,
 .expand-leave-from {
   opacity: 1;
-  max-height: 700px;
+  max-height: 144px;
 }
 
 </style>

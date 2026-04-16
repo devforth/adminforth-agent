@@ -6,36 +6,40 @@
     "
   >
     <h3 :class="h3Style">{{ $t('Chat history') }}</h3>
-    <Button @click="agentStore.createPreSession()" class="w-[360px] mx-4 my-2 mb-4 rounded-3xl text-gray-800 dark:text-gray-200">
+    <Button @click="agentStore.createPreSession()" :disabled="agentStore.isResponseInProgress" class="w-[360px] mx-4 my-2 mb-4 rounded-3xl text-gray-800 dark:text-gray-200">
       <IconPlusOutline class="w-5 h-5" />
       {{ $t('New chat') }}
     </Button>
     <div class="w-full border-b border-gray-200 dark:border-gray-700"/>
-
+    <div class="absolute w-full h-full flex flex-col items-center justify-center bg-gray-100/50 dark:bg-gray-700/50 z-10" v-if="agentStore.isResponseInProgress">
+      <Spinner class="w-8 h-8" v-if="agentStore.isResponseInProgress" />
+      <p class="mt-2 text-gray-800 dark:text-gray-200">generation in progress...</p>
+    </div>
     <div v-for="group in groupedSessions" :key="group.dayKey" class="w-full py-2">
       <div class="px-4 pb-2 text-xs font-semibold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
         {{ group.label }}
       </div>
 
-      <div
+      <button
         v-for="session in group.sessions"
         :key="session.sessionId"
         class="flex items-center justify-between w-full px-4 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200 ease-in-out text-gray-800 dark:text-gray-200"
-        :class="{'bg-lightPrimary/20 hover:bg-lightPrimary/20 dark:bg-darkPrimary/20 dark:hover:bg-darkPrimary/20': agentStore.activeSessionId === session.sessionId}"
+        :class="{'bg-lightPrimary/20 hover:bg-lightPrimary/20 dark:bg-darkPrimary/20 dark:hover:bg-darkPrimary/20': agentStore.activeSessionId === session.sessionId, 'cursor-default opacity-50 pointer-events-none': agentStore.isResponseInProgress}"
         @click="agentStore.setActiveSession(session.sessionId)"
+        :disabled="agentStore.isResponseInProgress"
       >
         {{ session.title || session.sessionId }}
         <div @click.stop="agentStore.deleteSession(session.sessionId)" class="w-7 h-7 p-1 hover:scale-110 hover:bg-gray-200 dark:hover:bg-gray-500 flex items-center justify-center rounded">
           <IconPlusOutline class="rotate-45 w-6 h-6"/>
         </div>
-      </div>
+      </button>
     </div>
   </div>
 </template>
 
 
 <script setup lang="ts">
-import { Button } from '@/afcl'
+import { Button, Spinner } from '@/afcl'
 import { computed } from 'vue';
 import { IconPlusOutline } from '@iconify-prerendered/vue-flowbite';
 import type { ISessionsListItem } from './types';

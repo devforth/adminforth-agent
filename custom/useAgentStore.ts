@@ -151,6 +151,9 @@ export const useAgentStore = defineStore('agent', () => {
 
   //create a pre-session, until user will type something, so we can save session
   async function createPreSession() {
+    if (sessionList.value.some((s: ISessionsListItem) => s.sessionId === 'pre-session')) {
+      return;
+    }
     sessionList.value.unshift({
       sessionId: 'pre-session',
       title: 'New Session',
@@ -164,6 +167,7 @@ export const useAgentStore = defineStore('agent', () => {
       messages: [],
     };
     sessions.value['pre-session'] = currentSession.value;
+    chat.messages = [];
   }
 
   async function deletePreSession() {

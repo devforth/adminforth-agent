@@ -27,12 +27,13 @@
       :class="message.role === 'user' ? 'self-end' : 'self-start'"
     >
       <Message
-        v-for="part in message.parts"
+        v-for="part in getParts(message)"
         :key="part.type"
         :message="part.text"
         :role="message.role"
         :type="part.type"
         :state="part.state"
+        @toggle-thoughts="(isExpanded) => clicks++"
       >
 
       </Message>
@@ -51,7 +52,7 @@
 <script setup lang="ts">
 import Message from './Message.vue';
 import type { IMessage } from './types';
-import { useTemplateRef, ref, defineAsyncComponent, onMounted, watch } from 'vue';
+import { useTemplateRef, ref, defineAsyncComponent, onMounted, watch, computed } from 'vue';
 import { IconArrowDownOutline } from '@iconify-prerendered/vue-flowbite';
 import SessionsHistory from './SessionsHistory.vue';
 import { useAgentStore } from './useAgentStore';
@@ -61,6 +62,14 @@ const showScrollToBottomButton = ref(false);
 const innerScrollContainerRef = ref(null);
 const AutoScrollContainer = defineAsyncComponent(() => import('@incremark/vue').then(module => module.AutoScrollContainer))
 const agentStore = useAgentStore();
+const clicks = ref(0);
+
+function recalculateScroll() {
+  if (scrollContainer.value) {
+    const isScrolledUp = scrollContainer.value.isUserScrolledUp();
+    showScrollToBottomButton.value = !!isScrolledUp;
+  }
+}
 
 onMounted(async () => {
   await import('@incremark/theme/styles.css')
@@ -71,11 +80,21 @@ watch(scrollContainer, () => {
     innerScrollContainerRef.value = scrollContainer.value.container;
 
     innerScrollContainerRef.value.addEventListener('scroll', () => {
-      const isScrolledUp = scrollContainer.value?.isUserScrolledUp();
-      showScrollToBottomButton.value = !!isScrolledUp;
+      recalculateScroll();
     });
   }
 })
+
+watch(clicks, () => {
+  recalculateScroll();
+
+})
+
+const getParts = (message: IMessage) => {
+  return message.parts?.length
+    ? message.parts
+    : [{ text: '', type: 'reasoning', state: 'streaming' }];
+};
 
 const props = defineProps<{
   messages: IMessage[]
