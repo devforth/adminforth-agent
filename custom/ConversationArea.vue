@@ -39,9 +39,10 @@
     </div>
     <div 
       v-if="props.messages.length === 0"
-      class="flex-1 flex items-center justify-center text-gray-400 tracking-widest text-xl font-medium"
+      class="flex-1 flex flex-col items-center justify-center text-gray-400 tracking-widest text-xl font-medium"
     >
-      Start the conversation
+      <p>Start the conversation</p>
+      <p class="tracking-normal text-base text">Give any input to begin</p>
     </div>
   </AutoScrollContainer>
 </template>

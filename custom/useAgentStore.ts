@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { IAgentSession, ISessionsListItem, IMessage } from './types';
-import { ref, nextTick, computed } from 'vue';
+import { ref, nextTick, computed, watch, onMounted } from 'vue';
 import { callAdminForthApi } from '@/utils';
 import { useAdminforth } from '@/adminforth';
 import { Chat } from "@ai-sdk/vue";
@@ -18,6 +18,42 @@ export const useAgentStore = defineStore('agent', () => {
   const userMessageInput = ref();
   const trimmedUserMessage = computed(() => userMessageInput.value ? userMessageInput.value.trim() : '');
   const lastMessage = ref('');
+  const isTeleportedToBody = ref(false);
+  const setIsTeleportedToBody = (isTeleported: boolean) => {
+    isTeleportedToBody.value = isTeleported;
+  }
+  const appRoot = ref<HTMLElement | null>(null);
+  const header = ref<HTMLElement | null>(null);
+  onMounted(() => {
+    appRoot.value = document.getElementById('app');
+    header.value = document.getElementById('af-header-nav');
+    if (appRoot.value && header.value) {
+      nextTick(() => {
+        appRoot.value.style.transition = 'padding-right 200ms ease-in-out';
+        header.value.style.transition = 'padding-right 200ms ease-in-out';
+      });
+    }  
+  })
+  const chatWidth = ref(600);
+  function setChatWidth(width: number) {
+    if (appRoot.value && header.value) {
+      appRoot.value.style.transition = '';
+      header.value.style.transition = '';
+    }
+    chatWidth.value = width;
+
+  }
+  watch([isTeleportedToBody, isChatOpen, chatWidth], ([newIsTeleportedToBody, newIsChatOpen, newChatWidth]) => {
+    if (appRoot.value && header.value) {
+      if (newIsTeleportedToBody && newIsChatOpen) {
+        appRoot.value.style.paddingRight = `${chatWidth.value}px`;
+        header.value.style.paddingRight = `${chatWidth.value}px`;
+      } else {
+        appRoot.value.style.paddingRight = '';
+        header.value.style.paddingRight = '';
+      }
+    }
+  })
   const chat = new Chat({
     transport: new DefaultChatTransport({
       api: `${import.meta.env.VITE_ADMINFORTH_PUBLIC_PATH || ''}/adminapi/v1/agent/response`,
@@ -245,6 +281,10 @@ export const useAgentStore = defineStore('agent', () => {
     userMessageInput,
     chatMessages: computed(() => chat.messages),
     trimmedUserMessage,
-    isResponseInProgress
+    isResponseInProgress,
+    isTeleportedToBody,
+    setIsTeleportedToBody,
+    chatWidth,
+    setChatWidth,
   }
 })
