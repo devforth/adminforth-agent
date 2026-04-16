@@ -1,11 +1,11 @@
-import { existsSync, readdirSync, readFileSync } from "fs";
 import { readdir, readFile } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { parse as parseYaml } from "yaml";
 
-const SKILLS_DIRECTORY_URL = new URL("../../custom/skills/", import.meta.url);
-const SKILLS_DIRECTORY_PATH = fileURLToPath(SKILLS_DIRECTORY_URL);
+const PLUGIN_SKILLS_DIRECTORY_PATH = fileURLToPath(
+  new URL("../../custom/skills/", import.meta.url),
+);
 const SKILL_MARKDOWN_FILENAME = "SKILL.md";
 const SKILL_FRONTMATTER_SEPARATOR = "\n---\n";
 
@@ -16,119 +16,120 @@ export interface AgentSkillManifest {
   instructions: string;
 }
 
-function normalizeSkillMarkdown(markdown: string) {
-  return markdown.split("\r\n").join("\n");
-}
-
-function parseSkillMetadata(frontmatterBlock: string) {
-  return parseYaml(frontmatterBlock);
-}
-
 function parseSkillManifest(directoryName: string, markdown: string): AgentSkillManifest {
-  const normalizedMarkdown = normalizeSkillMarkdown(markdown);
-  const [frontmatterBlock, instructionsBlock = ""] = normalizedMarkdown.split(
+  const [frontmatterBlock, instructions = ""] = markdown.split("\r\n").join("\n").split(
     SKILL_FRONTMATTER_SEPARATOR,
     2,
   );
-  const metadata = parseSkillMetadata(frontmatterBlock);
+  const metadata = parseYaml(frontmatterBlock) as {
+    name?: string;
+    description?: string;
+  };
 
   return {
     directoryName,
     name: metadata.name ?? directoryName,
     description: metadata.description ?? "",
-    instructions: instructionsBlock.trim(),
+    instructions: instructions.trim(),
   };
 }
 
-function readSkillMarkdownByPathSync(skillsDirectoryPath: string, skillDirectoryName: string) {
-  return readFileSync(
-    path.join(skillsDirectoryPath, skillDirectoryName, SKILL_MARKDOWN_FILENAME),
+async function readSkillManifest(skillsDirectoryPath: string, directoryName: string) {
+  const markdown = await readFile(
+    path.join(skillsDirectoryPath, directoryName, SKILL_MARKDOWN_FILENAME),
     "utf8",
   );
+
+  return parseSkillManifest(directoryName, markdown);
 }
 
-function readSkillManifestByPathSync(skillsDirectoryPath: string, skillDirectoryName: string) {
-  const skillMarkdown = readSkillMarkdownByPathSync(
-    skillsDirectoryPath,
-    skillDirectoryName,
-  );
+async function listDirectorySkillManifests(skillsDirectoryPath: string) {
+  try {
+    const entries = await readdir(skillsDirectoryPath, { withFileTypes: true });
 
-  return parseSkillManifest(skillDirectoryName, skillMarkdown);
-}
+    return await Promise.all(
+      entries
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .sort()
+        .map((directoryName) => readSkillManifest(skillsDirectoryPath, directoryName)),
+    );
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return [];
+    }
 
-async function getSkillDirectoryNames() {
-  const entries = await readdir(SKILLS_DIRECTORY_URL, { withFileTypes: true });
-
-  return entries
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .sort();
-}
-
-function getSkillDirectoryNamesSync(skillsDirectoryPath: string) {
-  if (!existsSync(skillsDirectoryPath)) {
-    return [];
+    throw error;
   }
-
-  return readdirSync(skillsDirectoryPath, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .sort();
 }
 
-async function readSkillManifest(skillDirectoryName: string) {
-  const skillMarkdown = await readSkillMarkdownByDirectory(skillDirectoryName);
-
-  return parseSkillManifest(skillDirectoryName, skillMarkdown);
-}
-
-async function readSkillMarkdownByDirectory(skillDirectoryName: string) {
-  const skillMarkdownUrl = new URL(
-    `../../custom/skills/${skillDirectoryName}/${SKILL_MARKDOWN_FILENAME}`,
-    import.meta.url,
-  );
-
-  return await readFile(skillMarkdownUrl, "utf8");
-}
-
-export async function listSkillManifests() {
-  const skillDirectoryNames = await getSkillDirectoryNames();
-  return await Promise.all(
-    skillDirectoryNames.map((skillDirectoryName) =>
-      readSkillManifest(skillDirectoryName),
-    ),
+function mergeSkillManifests(skillGroups: AgentSkillManifest[][]) {
+  return Array.from(
+    new Map(
+      skillGroups.flat().map((skill) => [
+        `${skill.name}:${skill.directoryName}`,
+        skill,
+      ]),
+    ).values(),
   );
 }
 
-export function listSkillManifestsFromDirectorySync(skillsDirectoryPath: string) {
-  const skillDirectoryNames = getSkillDirectoryNamesSync(skillsDirectoryPath);
+export function getProjectSkillsDirectoryPath(customComponentsDir: string) {
+  return path.resolve(customComponentsDir, "skills");
+}
 
-  return skillDirectoryNames.map((skillDirectoryName) =>
-    readSkillManifestByPathSync(skillsDirectoryPath, skillDirectoryName),
+export async function listBundledSkillManifests() {
+  return await listDirectorySkillManifests(PLUGIN_SKILLS_DIRECTORY_PATH);
+}
+
+export async function listProjectSkillManifests(customComponentsDir: string) {
+  return await listDirectorySkillManifests(
+    getProjectSkillsDirectoryPath(customComponentsDir),
   );
 }
 
-export function listBundledSkillManifestsSync() {
-  return listSkillManifestsFromDirectorySync(SKILLS_DIRECTORY_PATH);
+export async function listSkillManifests(customComponentsDir: string) {
+  return mergeSkillManifests([
+    await listProjectSkillManifests(customComponentsDir),
+    await listBundledSkillManifests(),
+  ]);
 }
 
-export async function loadSkillManifest(skillName: string) {
-  const skillManifests = await listSkillManifests();
+export async function loadSkillManifest(skillName: string, customComponentsDir: string) {
+  const manifests = await listSkillManifests(customComponentsDir);
 
   return (
-    skillManifests.find(
+    manifests.find(
       (manifest) =>
         manifest.name === skillName || manifest.directoryName === skillName,
     ) ?? null
   );
 }
 
-export async function loadSkillMarkdown(skillName: string) {
-  const manifest = await loadSkillManifest(skillName);
+export async function loadSkillMarkdown(skillName: string, customComponentsDir: string) {
+  const manifest = await loadSkillManifest(skillName, customComponentsDir);
 
   if (!manifest) {
     return null;
   }
 
-  return await readSkillMarkdownByDirectory(manifest.directoryName);
+  const directories = [
+    getProjectSkillsDirectoryPath(customComponentsDir),
+    PLUGIN_SKILLS_DIRECTORY_PATH,
+  ];
+
+  for (const skillsDirectoryPath of directories) {
+    try {
+      return await readFile(
+        path.join(skillsDirectoryPath, manifest.directoryName, SKILL_MARKDOWN_FILENAME),
+        "utf8",
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw error;
+      }
+    }
+  }
+
+  return null;
 }

@@ -12,7 +12,7 @@ import { Filters, Sorts } from 'adminforth';
 
 export default class  extends AdminForthPlugin {
   options: PluginOptions;
-  agentSystemPrompt = DEFAULT_AGENT_SYSTEM_PROMPT;
+  agentSystemPromptPromise = Promise.resolve(DEFAULT_AGENT_SYSTEM_PROMPT);
 
   constructor(options: PluginOptions) {
     super(options, import.meta.url);
@@ -41,7 +41,7 @@ export default class  extends AdminForthPlugin {
   }
   
   validateConfigAfterDiscover(adminforth: IAdminForth, resourceConfig: AdminForthResource) {
-    this.agentSystemPrompt = buildAgentSystemPrompt(adminforth);
+    this.agentSystemPromptPromise = buildAgentSystemPrompt(adminforth);
   }
 
   instanceUniqueRepresentation(pluginOptions: any) : string {
@@ -143,16 +143,17 @@ export default class  extends AdminForthPlugin {
             maxTokens,
             reasoning: summaryReasoning,
           });
-
+          const systemPrompt = await this.agentSystemPromptPromise;
           const stream = await callAgent({
             name: `adminforth-agent-${this.pluginInstanceId}`,
             model,
             summaryModel,
             messages: [
-              new SystemMessage(this.agentSystemPrompt),
+              new SystemMessage(systemPrompt),
               new HumanMessage(prompt),
             ],
             adminUser,
+            customComponentsDir: this.adminforth.config.customization.customComponentsDir,
             sessionId,
             turnId,
           });

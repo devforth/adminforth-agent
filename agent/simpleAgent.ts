@@ -3,6 +3,7 @@ import type { AdminUser, CompletionAdapter } from "adminforth";
 import { MemorySaver, type Messages } from "@langchain/langgraph";
 import { z } from "zod";
 import { ChatOpenAI } from "@langchain/openai";
+import { createAgentTools } from "./tools/index.js";
 
 const checkpointer = new MemorySaver();
 
@@ -87,6 +88,7 @@ export async function callAgent(params: {
   summaryModel: ChatOpenAI;
   messages: Messages;
   adminUser: AdminUser;
+  customComponentsDir: string;
   sessionId: string;
   turnId: string;
 }) {
@@ -94,11 +96,13 @@ export async function callAgent(params: {
     model,
     messages,
     adminUser,
+    customComponentsDir,
     sessionId,
     turnId,
     summaryModel,
     name,
   } = params;
+  const tools = await createAgentTools(customComponentsDir);
 
   const middleware = [
     summarizationMiddleware({
@@ -112,7 +116,7 @@ export async function callAgent(params: {
     name,
     model,
     checkpointer,
-    tools: [],
+    tools,
     contextSchema,
     middleware,
   });
