@@ -185,7 +185,6 @@ export default class  extends AdminForthPlugin {
               .join("");
 
             if (reasoningDelta) {
-              console.log("REASONING DELTA", { reasoningDelta });
               const reasoningId = startBlock('reasoning');
                 send({
                   type: 'reasoning-delta',
@@ -195,7 +194,6 @@ export default class  extends AdminForthPlugin {
             }
 
             if (textDelta) {
-              console.log("TEXT DELTA", { textDelta });
               const textId = startBlock('text');
               send({
                 type: 'text-delta',
