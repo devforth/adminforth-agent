@@ -1,7 +1,15 @@
+export interface IPartData {
+  toolCallId: string;
+  toolName: string;
+  phase: 'start' | 'end';
+  input?: any;
+  output?: any;
+}
 export interface IPart {
   type: string;
-  text: string;
-  state: 'started' | 'thinking' | 'processing' | 'done';
+  text?: string;
+  state?: 'started' | 'thinking' | 'processing' | 'streaming' | 'done';
+  data?: IPartData;
 }
 
 export interface IMessage {
