@@ -68,6 +68,38 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
   apiBasedTools: Record<string, ApiBasedTool> = {};
   agentSystemPromptPromise = Promise.resolve(DEFAULT_AGENT_SYSTEM_PROMPT);
 
+  private async createNewTurn(sessionId: string, prompt: string, response?: string) {
+    const turnId = randomUUID();
+    const turnRecord = {
+      [this.options.turnResource.idField]: turnId,
+      [this.options.turnResource.sessionIdField]: sessionId,
+      [this.options.turnResource.promptField]: prompt,
+      [this.options.turnResource.responseField]: response || "not_finished",
+    };
+    const newTurn = await this.adminforth.resource(this.options.turnResource.resourceId).create(turnRecord);
+    return newTurn.createdRecord[this.options.turnResource.idField];
+  }
+
+  private async updateTurnResponse(turnId: string, response: string) {
+    await this.adminforth.resource(this.options.turnResource.resourceId).update(turnId, {
+      [this.options.turnResource.responseField]: response,
+    });
+    return {ok: true};
+  }
+
+  private async getSessionTurns(sessionId: string) {
+    const turns = await this.adminforth.resource(this.options.turnResource.resourceId).list(
+      [Filters.EQ(this.options.turnResource.sessionIdField, sessionId)],
+      undefined,
+      undefined,
+      [Sorts.ASC(this.options.turnResource.createdAtField)]
+    );
+    return turns.map(turn => ({
+      prompt: turn[this.options.turnResource.promptField],
+      response: turn[this.options.turnResource.responseField],
+    }));
+  }
+
   constructor(options: PluginOptions) {
     super(options, import.meta.url);
     this.options = options;
@@ -116,8 +148,9 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         const messageId = randomUUID();
         const prompt = body.message;
         const sessionId = body.sessionId || adminUser?.pk || adminUser?.username || 'default';
-        const turnId = body.turnId || randomUUID();
-        let isStreamClosed = false;
+        const turnId = await this.createNewTurn(sessionId, prompt);
+        let fullResponse = "";
+        let isStreamClosed = false;        
 
         res.writeHead(200, {
           'Content-Type': 'text/event-stream',
@@ -257,6 +290,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
 
             if (textDelta) {
               const textId = startBlock('text');
+              fullResponse += textDelta;
               send({
                 type: 'text-delta',
                 id: textId,
@@ -273,6 +307,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             delta: 'Agent response failed. Check server logs for details.',
           });
         }
+        await this.updateTurnResponse(turnId, fullResponse);
         endStream();
         return null;
       }
@@ -317,11 +352,25 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             error: 'Unauthorized'
           };
         }
+        const turns = await this.getSessionTurns(sessionId);
+        const messagesToReturn = [];
+        for (const turn of turns) {
+          messagesToReturn.push({
+            text: turn.prompt,
+            role: 'user',
+          });
+          if (turn.response !== "not_finished") {
+            messagesToReturn.push({
+              text: turn.response,
+              role: 'assistant',
+            });
+          }
+        }
         const sessionToReturn = {
           sessionId: session[this.pluginOptions.sessionResource.idField],
           title: session[this.pluginOptions.sessionResource.titleField],
           timestamp: session[this.pluginOptions.sessionResource.createdAtField],
-          messages: []
+          messages: messagesToReturn
         }
         return {
           session: sessionToReturn
@@ -349,6 +398,18 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         };
       }
     });
+    /**
+     * 
+     * 
+     * 
+     * 
+     *    TODO: Implement turns deletion when session is deleted
+     * 
+     * 
+     * 
+     * 
+     *
+     */
     server.endpoint({
       method: 'POST',
       path: `/agent/delete-session`,

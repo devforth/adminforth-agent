@@ -40,5 +40,5 @@ export interface PluginOptions extends PluginsCommonOptions {
   reasoning?: "none" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
   sessionResource: ISessionResource;
-  // turnResource: ITurnResource;
+  turnResource: ITurnResource;
 }

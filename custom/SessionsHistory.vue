@@ -34,6 +34,12 @@
         </div>
       </button>
     </div>
+    <p
+      v-if="!groupedSessions || groupedSessions.length === 0"
+      class="w-full h-full flex items-center justify-center text-gray-800 dark:text-gray-200"
+    >
+      There is no previous chat sessions
+    </p>
   </div>
 </template>
 

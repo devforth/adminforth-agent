@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { IAgentSession, ISessionsListItem, IMessage } from './types';
-import { ref, nextTick, computed, watch, onMounted } from 'vue';
+import { ref, nextTick, computed, watch, onMounted, shallowRef } from 'vue';
 import { callAdminForthApi } from '@/utils';
 import { useAdminforth } from '@/adminforth';
 import { Chat } from "@ai-sdk/vue";
@@ -79,31 +79,43 @@ export const useAgentStore = defineStore('agent', () => {
       }
     }
   })
-  const chat = new Chat({
-    transport: new DefaultChatTransport({
-      api: `${import.meta.env.VITE_ADMINFORTH_PUBLIC_PATH || ''}/adminapi/v1/agent/response`,
-      credentials: 'include',
-      prepareSendMessagesRequest({ messages }: any) {
-        const message = lastMessage.value;
-        const body = {
-          message,
-        };
+  const chats = new Map<string, Chat>();
+  const currentChat = shallowRef<Chat>(null);
+  function setCurrentChat(sessionId: string) {
+    if (chats.has(sessionId)) {
+      currentChat.value = chats.get(sessionId) || null;
+    } else {
+      const newChat = new Chat({
+        transport: new DefaultChatTransport({
+          api: `${import.meta.env.VITE_ADMINFORTH_PUBLIC_PATH || ''}/adminapi/v1/agent/response`,
+          credentials: 'include',
+          prepareSendMessagesRequest({ messages }: any) {
+            const message = lastMessage.value;
+            const body = {
+              message,
+              sessionId
+            };
 
-        return {
-          headers: {
-            Accept: 'text/event-stream',
-            'x-vercel-ai-ui-message-stream': 'v1',
-          },
-          body
-        };
-      }
-    }),
-    onError(error: unknown) {
-      console.error("Chat error:", error);
-    },
-  });
+            return {
+              headers: {
+                Accept: 'text/event-stream',
+                'x-vercel-ai-ui-message-stream': 'v1',
+              },
+              body
+            };
+          }
+        }),
+        onError(error: unknown) {
+          console.error("Chat error:", error);
+        },
+      });
+      chats.set(sessionId, newChat);
+      currentChat.value = newChat;
+    }
+
+  }
   const isResponseInProgress = computed( () => {
-    return chat.status === 'streaming';
+    return currentChat.status === 'streaming';
   });
   const blockCloseOfChat = ref(false);
 
@@ -116,7 +128,7 @@ export const useAgentStore = defineStore('agent', () => {
       await createNewSession(message);
     }
     lastMessage.value = message;
-    chat.sendMessage({
+    currentChat.value?.sendMessage({
       text: message,
     });
     userMessageInput.value = '';
@@ -167,7 +179,7 @@ export const useAgentStore = defineStore('agent', () => {
       messages: [],
     };
     sessions.value['pre-session'] = currentSession.value;
-    chat.messages = [];
+    setCurrentChat('pre-session');
   }
 
   async function deletePreSession() {
@@ -256,6 +268,7 @@ export const useAgentStore = defineStore('agent', () => {
         return;
       }
       sessions.value[sessionId] = res.session;
+      setCurrentChat(sessionId);
     } catch (error) {
       console.error('Error fetching session', error);
     }
@@ -266,11 +279,19 @@ export const useAgentStore = defineStore('agent', () => {
     if (!sessions.value[sessionId]) {
       await fetchSession(sessionId);    
     }
+    console.log('setActiveSession', sessionId, sessions.value[sessionId]);
     currentSession.value = sessions.value[sessionId];
-    chat.messages = currentSession.value?.messages.map((m: any) => ({
-      text: m.text,
+    setCurrentChat(sessionId);
+    console.log('Current session messages', JSON.stringify(currentSession.value?.messages));
+    currentChat.value.messages = currentSession.value?.messages.map((m: any) => ({
       role: m.role,
-    })) || [];
+      parts:[{
+        type: 'text',
+        text: m.text,
+        state: 'done',
+      }]
+    }));
+    console.log('Current chat messages after setActiveSession', JSON.stringify(currentChat.value.messages));
   }
 
   async function fetchSessionsList() {
@@ -295,7 +316,6 @@ export const useAgentStore = defineStore('agent', () => {
     currentSession,
     sessions,
     sessionList,
-    createNewSession,
     setActiveSession,
     fetchSessionsList,
     deleteSession,
@@ -308,7 +328,7 @@ export const useAgentStore = defineStore('agent', () => {
     setSessionHistoryOpen,
     sendMessage,
     userMessageInput,
-    chatMessages: computed(() => chat.messages),
+    chatMessages: computed(() => currentChat.value?.messages || []),
     trimmedUserMessage,
     isResponseInProgress,
     isTeleportedToBody,
