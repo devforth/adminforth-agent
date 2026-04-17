@@ -6,6 +6,7 @@ import { ChatOpenAI } from "@langchain/openai";
 import { createAgentTools } from "./tools/index.js";
 import { createApiBasedToolsMiddleware } from "./middleware/apiBasedTools.js";
 import type { ApiBasedTool } from "../apiBasedTools.js";
+import type { ToolCallEventSink } from "./toolCallEvents.js";
 
 const checkpointer = new MemorySaver();
 
@@ -13,6 +14,7 @@ export const contextSchema = z.object({
   adminUser: z.custom<AdminUser>(),
   sessionId: z.string(),
   turnId: z.string(),
+  emitToolCallEvent: z.custom<ToolCallEventSink>(),
 });
 
 type AgentReasoning =
@@ -94,6 +96,7 @@ export async function callAgent(params: {
   customComponentsDir: string;
   sessionId: string;
   turnId: string;
+  emitToolCallEvent: ToolCallEventSink;
 }) {
   const {
     model,
@@ -103,6 +106,7 @@ export async function callAgent(params: {
     customComponentsDir,
     sessionId,
     turnId,
+    emitToolCallEvent,
     summaryModel,
     name,
   } = params;
@@ -139,6 +143,7 @@ export async function callAgent(params: {
       adminUser,
       sessionId,
       turnId,
+      emitToolCallEvent,
     },
   });
 }

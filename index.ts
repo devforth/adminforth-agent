@@ -20,6 +20,7 @@ import {
   DEFAULT_AGENT_SYSTEM_PROMPT,
 } from "./agent/systemPrompt.js";
 import { ALWAYS_AVAILABLE_API_TOOL_NAMES } from "./agent/tools/constants.js";
+import type { ToolCallEvent } from "./agent/toolCallEvents.js";
 
 function isAggregateErrorLike(
   error: unknown,
@@ -166,6 +167,13 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           res.write(`data: ${JSON.stringify(obj)}\n\n`);
         };
 
+        const emitToolCallEvent = (event: ToolCallEvent) => {
+          send({
+            type: "data-tool-call",
+            data: event,
+          });
+        };
+
         let activeBlock: { type: 'text' | 'reasoning'; id: string } | null = null;
 
         const endActiveBlock = () => {
@@ -249,6 +257,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             customComponentsDir: this.adminforth.config.customization.customComponentsDir,
             sessionId,
             turnId,
+            emitToolCallEvent,
           });
 
           for await (const rawChunk of stream as AsyncIterable<[any, any]>) {
