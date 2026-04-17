@@ -1,6 +1,7 @@
 <template>
   <div 
     class="max-w-[80%] flex px-4 m-2 rounded-xl border border-gray-200 dark:border-gray-700"
+    @click="handleMarkdownLinkClick"
     :class="props.role === 'user' ? 'bg-lightListTableHeading dark:bg-darkListTableHeading self-end' : isTypeReasoning ? 'bg-transparent border-none self-start' : 'bg-blue-100 dark:bg-blue-700/10 self-start'"
   >
     <IncremarkContent
@@ -43,6 +44,7 @@
 
 <script setup lang="ts">
   import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue';
+  import { useRouter } from 'vue-router';
   import { IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
   
   const IncremarkContent = defineAsyncComponent(() => import('@incremark/vue').then(module => module.IncremarkContent))
@@ -58,6 +60,8 @@
 		containers: true,
 		htmlTree: true,
 	};
+
+  const router = useRouter();
 
   onMounted(async () => {
     void import('katex/dist/katex.min.css')
@@ -79,9 +83,52 @@
   const isTypeReasoning = computed(() => props.type === 'reasoning')
   const isStateStreaming = computed(() => props.state === 'streaming')
 
-  watch(isThoughtsExpanded, (newValue) => {
+  watch(isThoughtsExpanded, (newValue: boolean) => {
     emit('toggle-thoughts', newValue);
   })
+
+  function handleMarkdownLinkClick(event: MouseEvent) {
+    if (props.type !== 'text' || event.defaultPrevented || event.button !== 0) {
+      return;
+    }
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+      return;
+    }
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+    const anchor = target.closest('a');
+    if (!(anchor instanceof HTMLAnchorElement)) {
+      return;
+    }
+    const href = anchor.getAttribute('href');
+    if (!href || href.startsWith('mailto:') || href.startsWith('tel:')) {
+      return;
+    }
+    event.preventDefault();
+
+    const internalRoute = resolveInternalRoute(href);
+    if (internalRoute !== null) {
+      void router.push(internalRoute);
+      return;
+    }
+
+    window.location.assign(new URL(href, window.location.href).toString());
+  }
+
+  function resolveInternalRoute(href: string): string | null {
+    if (href.startsWith('#')) {
+      return `${window.location.pathname}${window.location.search}${href}`;
+    }
+
+    const resolvedUrl = new URL(href, window.location.href);
+    if (resolvedUrl.origin !== window.location.origin) {
+      return null;
+    }
+
+    return `${resolvedUrl.pathname}${resolvedUrl.search}${resolvedUrl.hash}`;
+  }
 
 </script>
 
