@@ -33,13 +33,13 @@ export const useAgentStore = defineStore('agent', () => {
   function getLocalStorageItem(key: string) {
     return window.localStorage.getItem(`${coreStore.config.brandName || 'adminforth'}-${key}`);
   }
-  watch(isTeleportedToBody, (newVal) => {
+  watch(isTeleportedToBody, (newVal: boolean) => {
     setLocalStorageItem('isTeleportedToBody', newVal ? 'true' : 'false');
   })
-  watch(isChatOpen, (newVal) => {
+  watch(isChatOpen, (newVal: boolean) => {
     setLocalStorageItem('isChatOpen', newVal ? 'true' : 'false');
   })
-  watch(chatWidth, (newVal) => {
+  watch(chatWidth, (newVal: number) => {
     setLocalStorageItem('chatWidth', newVal.toString());
   })
   onMounted(() => {
@@ -68,7 +68,7 @@ export const useAgentStore = defineStore('agent', () => {
     chatWidth.value = width;
 
   }
-  watch([isTeleportedToBody, isChatOpen, chatWidth], ([newIsTeleportedToBody, newIsChatOpen, newChatWidth]) => {
+  watch([isTeleportedToBody, isChatOpen, chatWidth], ([newIsTeleportedToBody, newIsChatOpen, newChatWidth]: [boolean, boolean, number]) => {
     if (appRoot.value && header.value) {
       if (newIsTeleportedToBody && newIsChatOpen) {
         appRoot.value.style.paddingRight = `${chatWidth.value}px`;
@@ -115,7 +115,7 @@ export const useAgentStore = defineStore('agent', () => {
 
   }
   const isResponseInProgress = computed( () => {
-    return currentChat.status === 'streaming';
+    return currentChat.value?.status === 'streaming';
   });
   const blockCloseOfChat = ref(false);
 
@@ -163,6 +163,7 @@ export const useAgentStore = defineStore('agent', () => {
 
   //create a pre-session, until user will type something, so we can save session
   async function createPreSession() {
+    saveCurrentSessionInCache();
     if (sessionList.value.some((s: ISessionsListItem) => s.sessionId === 'pre-session')) {
       return;
     }
@@ -274,15 +275,24 @@ export const useAgentStore = defineStore('agent', () => {
     }
   }
 
+  function saveCurrentSessionInCache() {
+    if (currentSession.value) {
+      currentSession.value.messages = currentChat.value?.messages.map((m: any) => ({
+        role: m.role,
+        text: m.parts.map((p: any) => p.text).join(' '),
+      })) || [];
+      sessions.value[currentSession.value.sessionId] = currentSession.value;
+    }
+  }
+
   async function setActiveSession(sessionId: string) {
     activeSessionId.value = sessionId;
+    saveCurrentSessionInCache();
     if (!sessions.value[sessionId]) {
       await fetchSession(sessionId);    
     }
-    console.log('setActiveSession', sessionId, sessions.value[sessionId]);
     currentSession.value = sessions.value[sessionId];
     setCurrentChat(sessionId);
-    console.log('Current session messages', JSON.stringify(currentSession.value?.messages));
     currentChat.value.messages = currentSession.value?.messages.map((m: any) => ({
       role: m.role,
       parts:[{
@@ -291,7 +301,6 @@ export const useAgentStore = defineStore('agent', () => {
         state: 'done',
       }]
     }));
-    console.log('Current chat messages after setActiveSession', JSON.stringify(currentChat.value.messages));
   }
 
   async function fetchSessionsList() {
