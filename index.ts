@@ -11,6 +11,7 @@ import type { PluginOptions } from './types.js';
 import { randomUUID } from 'crypto';
 import { HumanMessage, SystemMessage } from "langchain";
 import { createAgentChatModel, callAgent } from "./agent/simpleAgent.js";
+import { createSequenceDebugCollector } from "./agent/middleware/sequenceDebug.js";
 import {
   prepareApiBasedTools as buildApiBasedTools,
 } from './apiBasedTools.js';
@@ -19,7 +20,7 @@ import {
   buildAgentSystemPrompt,
   DEFAULT_AGENT_SYSTEM_PROMPT,
 } from "./agent/systemPrompt.js";
-import { ALWAYS_AVAILABLE_API_TOOL_NAMES } from "./agent/tools/constants.js";
+import { ALWAYS_AVAILABLE_API_TOOL_NAMES } from "./agent/tools/index.js";
 import type { ToolCallEvent } from "./agent/toolCallEvents.js";
 
 function isAggregateErrorLike(
@@ -81,10 +82,8 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     return newTurn.createdRecord[this.options.turnResource.idField];
   }
 
-  private async updateTurnResponse(turnId: string, response: string) {
-    await this.adminforth.resource(this.options.turnResource.resourceId).update(turnId, {
-      [this.options.turnResource.responseField]: response,
-    });
+  private async updateTurn(turnId: string, updates: Record<string, unknown>) {
+    await this.adminforth.resource(this.options.turnResource.resourceId).update(turnId, updates);
     return {ok: true};
   }
 
@@ -151,7 +150,8 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         const sessionId = body.sessionId || adminUser?.pk || adminUser?.username || 'default';
         const turnId = await this.createNewTurn(sessionId, prompt);
         let fullResponse = "";
-        let isStreamClosed = false;        
+        let isStreamClosed = false;
+        const sequenceDebugCollector = createSequenceDebugCollector();
 
         res.writeHead(200, {
           'Content-Type': 'text/event-stream',
@@ -168,6 +168,8 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         };
 
         const emitToolCallEvent = (event: ToolCallEvent) => {
+          sequenceDebugCollector.handleToolCallEvent(event);
+
           send({
             type: "data-tool-call",
             data: event,
@@ -258,6 +260,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             sessionId,
             turnId,
             emitToolCallEvent,
+            sequenceDebugSink: sequenceDebugCollector,
           });
 
           for await (const rawChunk of stream as AsyncIterable<[any, any]>) {
@@ -309,6 +312,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           }
         } catch (error) {
           logger.error(`Agent response streaming failed:\n${formatAgentError(error)}`);
+          sequenceDebugCollector.flush();
           const textId = startBlock('text');
           send({
             type: 'text-delta',
@@ -316,7 +320,16 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             delta: 'Agent response failed. Check server logs for details.',
           });
         }
-        await this.updateTurnResponse(turnId, fullResponse);
+        sequenceDebugCollector.flush();
+        const turnUpdates: Record<string, unknown> = {
+          [this.options.turnResource.responseField]: fullResponse,
+        };
+
+        if (this.options.turnResource.debugField) {
+          turnUpdates[this.options.turnResource.debugField] = sequenceDebugCollector.getHistory();
+        }
+
+        await this.updateTurn(turnId, turnUpdates);
         endStream();
         return null;
       }

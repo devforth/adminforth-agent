@@ -2,8 +2,8 @@ import { ToolMessage } from "@langchain/core/messages";
 import { createMiddleware } from "langchain";
 import { logger } from "adminforth";
 import type { ApiBasedTool } from "../../apiBasedTools.js";
+import { ALWAYS_AVAILABLE_API_TOOL_NAMES } from "../tools/index.js";
 import { createApiTool } from "../tools/apiTool.js";
-import { ALWAYS_AVAILABLE_API_TOOL_NAMES } from "../tools/constants.js";
 
 function getEnabledApiToolNames(messages: unknown[]) {
   const enabledToolNames = new Set<string>();

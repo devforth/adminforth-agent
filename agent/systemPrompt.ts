@@ -4,7 +4,7 @@ import {
   listProjectSkillManifests,
   type AgentSkillManifest,
 } from "./skills/registry.js";
-import { ALWAYS_AVAILABLE_API_TOOL_NAMES } from "./tools/constants.js";
+import { ALWAYS_AVAILABLE_API_TOOL_NAMES } from "./tools/index.js";
 
 export const DEFAULT_AGENT_SYSTEM_PROMPT = [
   "You are AI Assistant for Admin Panel.",

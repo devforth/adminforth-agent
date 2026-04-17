@@ -5,6 +5,10 @@ import { z } from "zod";
 import { ChatOpenAI } from "@langchain/openai";
 import { createAgentTools } from "./tools/index.js";
 import { createApiBasedToolsMiddleware } from "./middleware/apiBasedTools.js";
+import {
+  createSequenceDebugMiddleware,
+  type SequenceDebugModelCallSink,
+} from "./middleware/sequenceDebug.js";
 import type { ApiBasedTool } from "../apiBasedTools.js";
 import type { ToolCallEventSink } from "./toolCallEvents.js";
 
@@ -97,6 +101,7 @@ export async function callAgent(params: {
   sessionId: string;
   turnId: string;
   emitToolCallEvent: ToolCallEventSink;
+  sequenceDebugSink: SequenceDebugModelCallSink;
 }) {
   const {
     model,
@@ -107,14 +112,19 @@ export async function callAgent(params: {
     sessionId,
     turnId,
     emitToolCallEvent,
+    sequenceDebugSink,
     summaryModel,
     name,
   } = params;
   const tools = await createAgentTools(customComponentsDir, apiBasedTools);
   const apiBasedToolsMiddleware = createApiBasedToolsMiddleware(apiBasedTools);
+  const sequenceDebugMiddleware = createSequenceDebugMiddleware(
+    sequenceDebugSink,
+  );
 
   const middleware = [
     apiBasedToolsMiddleware,
+    sequenceDebugMiddleware,
     summarizationMiddleware({
       model: summaryModel,
       trigger: { tokens: 1024 * 8 },

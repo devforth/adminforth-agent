@@ -17,6 +17,7 @@ interface ITurnResource {
   createdAtField: string;
   promptField: string;
   responseField: string;
+  debugField?: string;
 }
 
 export interface PluginOptions extends PluginsCommonOptions {
