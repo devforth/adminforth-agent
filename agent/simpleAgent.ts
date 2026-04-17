@@ -104,7 +104,9 @@ export async function callAgent(params: {
   sequenceDebugSink: SequenceDebugModelCallSink;
 }) {
   const {
+    name,
     model,
+    summaryModel,
     messages,
     adminUser,
     apiBasedTools,
@@ -113,9 +115,8 @@ export async function callAgent(params: {
     turnId,
     emitToolCallEvent,
     sequenceDebugSink,
-    summaryModel,
-    name,
   } = params;
+
   const tools = await createAgentTools(customComponentsDir, apiBasedTools);
   const apiBasedToolsMiddleware = createApiBasedToolsMiddleware(apiBasedTools);
   const sequenceDebugMiddleware = createSequenceDebugMiddleware(
@@ -141,9 +142,7 @@ export async function callAgent(params: {
     middleware,
   });
 
-  const initialState = { messages } as Parameters<typeof agent.stream>[0];
-
-  return await agent.stream(initialState, {
+  return await agent.stream({ messages } as any, {
     streamMode: "messages",
     recursionLimit: 50,
     configurable: {

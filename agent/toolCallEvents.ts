@@ -9,6 +9,7 @@ export type ToolCallEvent =
       toolCallId: string;
       toolName: string;
       phase: "end";
+      durationMs: number;
       output: string | null;
       error: string | null;
     };

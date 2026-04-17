@@ -53,6 +53,7 @@ export function createApiTool(toolName: string, apiBasedTool: ApiBasedTool) {
     async (input, runtime) => {
       const normalizedInput = (input ?? {}) as Record<string, unknown>;
       const toolCallId = randomUUID();
+      const startedAt = Date.now();
       runtime.context.emitToolCallEvent({
         toolCallId,
         toolName,
@@ -70,6 +71,7 @@ export function createApiTool(toolName: string, apiBasedTool: ApiBasedTool) {
           toolCallId,
           toolName,
           phase: "end",
+          durationMs: Date.now() - startedAt,
           output,
           error: null,
         });
@@ -80,6 +82,7 @@ export function createApiTool(toolName: string, apiBasedTool: ApiBasedTool) {
           toolCallId,
           toolName,
           phase: "end",
+          durationMs: Date.now() - startedAt,
           output: null,
           error: YAML.stringify(serializeUnknownError(error)),
         });
