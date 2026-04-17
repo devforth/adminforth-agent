@@ -1,5 +1,7 @@
 import { tool } from "langchain";
+import YAML from "yaml";
 import type { ApiBasedTool } from "../../apiBasedTools.js";
+import { serializeUnknownError } from "../../apiBasedTools.js";
 
 const emptyToolSchema = {
   type: "object",
@@ -47,11 +49,38 @@ function normalizeToolInputSchema(inputSchema: unknown) {
 
 export function createApiTool(toolName: string, apiBasedTool: ApiBasedTool) {
   return tool(
-    async (input, runtime) =>
-      await apiBasedTool.call({
-        adminUser: runtime.context.adminUser,
-        inputs: input as Record<string, unknown>,
-      }),
+    async (input, runtime) => {
+      const normalizedInput = (input ?? {}) as Record<string, unknown>;
+      runtime.context.emitToolCallEvent({
+        toolName,
+        phase: "start",
+        input: YAML.stringify(normalizedInput),
+      });
+
+      try {
+        const output = await apiBasedTool.call({
+          adminUser: runtime.context.adminUser,
+          inputs: normalizedInput,
+        });
+
+        runtime.context.emitToolCallEvent({
+          toolName,
+          phase: "end",
+          output,
+          error: null,
+        });
+
+        return output;
+      } catch (error) {
+        runtime.context.emitToolCallEvent({
+          toolName,
+          phase: "end",
+          output: null,
+          error: YAML.stringify(serializeUnknownError(error)),
+        });
+        throw error;
+      }
+    },
     {
       name: toolName,
       description: apiBasedTool.description ?? `${toolName} tool`,
