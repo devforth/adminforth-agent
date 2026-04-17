@@ -2,7 +2,9 @@
   <div 
     class="max-w-[80%] flex px-4 m-2 rounded-xl border border-gray-200 dark:border-gray-700"
     @click="handleMarkdownLinkClick"
-    :class="props.role === 'user' ? 'bg-lightListTableHeading dark:bg-darkListTableHeading self-end' : isTypeReasoning ? 'bg-transparent border-none self-start' : 'bg-blue-100 dark:bg-blue-700/10 self-start'"
+    :class="props.role === 'user' ? 'bg-lightListTableHeading dark:bg-darkListTableHeading self-end' 
+      : isTypeReasoning || isTypeToolCall ? 'bg-transparent border-none self-start' 
+        : 'bg-blue-100 dark:bg-blue-700/10 self-start'"
   >
     <IncremarkContent
       class="text-wrap break-words"
@@ -35,7 +37,12 @@
         </p>
       </transition>    
     </div>
-
+    <div v-else-if="isTypeToolCall && isToolCallStart">
+      {{ props.data?.toolName }} start
+    </div>
+    <div v-else-if="isTypeToolCall && isToolCallEnd">
+      {{ props.data?.toolName }} end
+    </div>
     <p v-else class="text-red-500 py-2">
       Error occured
     </p>
@@ -71,6 +78,7 @@
     type: string,
     message: string
     state: string
+    data?: any
     role: 'user' | 'assistant'
   }>();
 
@@ -81,6 +89,15 @@
   const isThoughtsExpanded = ref(false)
 
   const isTypeReasoning = computed(() => props.type === 'reasoning')
+  const isTypeToolCall = computed(() => props.type === 'data-tool-call')
+  const isToolCallStart = computed(() => {
+    if (props.type !== 'data-tool-call') return false;
+    return props.data?.phase === 'start';
+  })
+  const isToolCallEnd = computed(() => {
+    if (props.type !== 'data-tool-call') return false;
+    return props.data?.phase === 'end';
+  })
   const isStateStreaming = computed(() => props.state === 'streaming')
 
   watch(isThoughtsExpanded, (newValue: boolean) => {

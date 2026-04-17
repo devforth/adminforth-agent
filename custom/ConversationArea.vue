@@ -21,23 +21,38 @@
     class="flex flex-col overflow-y-auto border-t border-gray-200 dark:border-gray-700"
     ref="scrollContainer"
     behavior="smooth"
-  >
+  > 
+
     <div 
       v-for="message in props.messages" :key="message.id"
+      class="flex flex-col"
       :class="message.role === 'user' ? 'self-end' : 'self-start'"
     >
-      <Message
+      <template 
         v-for="part in getParts(message)"
         :key="part.type"
-        :message="part.text"
-        :role="message.role"
-        :type="part.type"
-        :state="part.state"
-        @toggle-thoughts="(isExpanded) => clicks++"
       >
-
-      </Message>
+        <Message
+          v-if="part.type !== 'data-tool-call'"
+          :message="part.text"
+          :role="message.role"
+          :type="part.type"
+          :state="part.state"
+          :data="part.data"
+          @toggle-thoughts="() => clicks++"
+        >
+        </Message>
+        <ToolRenderer v-else :data="formatToolCallTextPart(part, message)" />
+      </template>
     </div>
+    <!-- Show a placeholder message if the last message is not of type 'text' or 'reasoning' -->
+    <Message
+      v-if="props.messages.length > 0 && showFakeThinkingMessage"
+      :message="''"
+      :role="props.messages[props.messages.length - 1].role"
+      type="reasoning"
+      state="streaming"
+    />
     <div 
       v-if="props.messages.length === 0"
       class="flex-1 flex flex-col items-center justify-center text-gray-400 tracking-widest text-xl font-medium"
@@ -51,11 +66,12 @@
 
 <script setup lang="ts">
 import Message from './Message.vue';
-import type { IMessage } from './types';
+import type { IMessage, IPart } from './types';
 import { useTemplateRef, ref, defineAsyncComponent, onMounted, watch, computed } from 'vue';
 import { IconArrowDownOutline } from '@iconify-prerendered/vue-flowbite';
 import SessionsHistory from './SessionsHistory.vue';
 import { useAgentStore } from './useAgentStore';
+import ToolRenderer from './ToolRenderer.vue';
 
 const scrollContainer = useTemplateRef('scrollContainer');
 const showScrollToBottomButton = ref(false);
@@ -87,7 +103,13 @@ watch(scrollContainer, () => {
 
 watch(clicks, () => {
   recalculateScroll();
+})
 
+const showFakeThinkingMessage = computed(() => {
+  const lastMessage = props.messages[props.messages.length - 1];
+  if (!lastMessage) return false;
+  const lastPart = getParts(lastMessage)[getParts(lastMessage).length - 1];
+  return lastPart?.type !== 'text' && lastPart?.type !== 'reasoning';
 })
 
 const getParts = (message: IMessage) => {
@@ -95,6 +117,25 @@ const getParts = (message: IMessage) => {
     ? message.parts
     : [{ text: '', type: 'reasoning', state: 'streaming' }];
 };
+
+const formatToolCallTextPart = ((part: IPart, currentMessage: IMessage) => {
+  if (part.type === 'data-tool-call') {
+    if (part.data?.phase === 'start') {
+      const finishedPart = currentMessage.parts?.find(p => p.type === 'data-tool-call' && p.data?.toolCallId === part.data?.toolCallId && p.data?.phase === 'end');
+      return {
+        type: 'text',
+        toolInfo: {
+          toolCallId: part.data!.toolCallId,
+          toolName: part.data!.toolName,
+          phase: finishedPart ? 'end' : 'start',
+          // input: part.data!.input,
+          // output: finishedPart ? finishedPart.data!.output : undefined,
+        }          
+      }
+    }
+  }
+  return null;  
+});
 
 const props = defineProps<{
   messages: IMessage[]
