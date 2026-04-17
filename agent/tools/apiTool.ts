@@ -1,4 +1,5 @@
 import { tool } from "langchain";
+import { randomUUID } from "crypto";
 import YAML from "yaml";
 import type { ApiBasedTool } from "../../apiBasedTools.js";
 import { serializeUnknownError } from "../../apiBasedTools.js";
@@ -51,7 +52,9 @@ export function createApiTool(toolName: string, apiBasedTool: ApiBasedTool) {
   return tool(
     async (input, runtime) => {
       const normalizedInput = (input ?? {}) as Record<string, unknown>;
+      const toolCallId = randomUUID();
       runtime.context.emitToolCallEvent({
+        toolCallId,
         toolName,
         phase: "start",
         input: YAML.stringify(normalizedInput),
@@ -64,6 +67,7 @@ export function createApiTool(toolName: string, apiBasedTool: ApiBasedTool) {
         });
 
         runtime.context.emitToolCallEvent({
+          toolCallId,
           toolName,
           phase: "end",
           output,
@@ -73,6 +77,7 @@ export function createApiTool(toolName: string, apiBasedTool: ApiBasedTool) {
         return output;
       } catch (error) {
         runtime.context.emitToolCallEvent({
+          toolCallId,
           toolName,
           phase: "end",
           output: null,

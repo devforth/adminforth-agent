@@ -6,6 +6,7 @@ import type { ToolCallEvent } from "../toolCallEvents.js";
 export type SequenceDebugResultType = "tool_calls" | "final_text";
 
 type SequenceDebugToolCall = {
+  toolCallId: string;
   toolName: string;
   input: string;
   output: string | null;
@@ -229,6 +230,7 @@ export function createSequenceDebugCollector(): SequenceDebugCollector {
 
       if (event.phase === "start") {
         sequenceDebug.toolCalls.push({
+          toolCallId: event.toolCallId,
           toolName: event.toolName,
           input: event.input,
           output: null,
@@ -240,7 +242,7 @@ export function createSequenceDebugCollector(): SequenceDebugCollector {
       }
 
       const pendingToolCall = sequenceDebug.toolCalls.find(
-        (toolCall) => toolCall.toolName === event.toolName && !toolCall.completed,
+        (toolCall) => toolCall.toolCallId === event.toolCallId && !toolCall.completed,
       );
 
       if (pendingToolCall) {
@@ -249,6 +251,7 @@ export function createSequenceDebugCollector(): SequenceDebugCollector {
         pendingToolCall.completed = true;
       } else {
         sequenceDebug.toolCalls.push({
+          toolCallId: event.toolCallId,
           toolName: event.toolName,
           input: "",
           output: event.output,
