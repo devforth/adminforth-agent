@@ -25,7 +25,7 @@
 
     <div 
       v-for="message in props.messages" :key="message.id"
-      class="flex flex-col"
+      class="flex flex-col w-full"
       :class="message.role === 'user' ? 'self-end' : 'self-start'"
     >
       <template 
@@ -128,8 +128,9 @@ const formatToolCallTextPart = ((part: IPart, currentMessage: IMessage) => {
           toolCallId: part.data!.toolCallId,
           toolName: part.data!.toolName,
           phase: finishedPart ? 'end' : 'start',
-          // input: part.data!.input,
-          // output: finishedPart ? finishedPart.data!.output : undefined,
+          durationMs: finishedPart ? finishedPart.data?.durationMs : undefined,
+          input: part.data!.input,
+          output: finishedPart ? finishedPart.data!.output : undefined,
         }          
       }
     }

@@ -4,6 +4,7 @@ export interface IPartData {
   phase: 'start' | 'end';
   input?: any;
   output?: any;
+  durationMs?: number;
 }
 export interface IPart {
   type: string;

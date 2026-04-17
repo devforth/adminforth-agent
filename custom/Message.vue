@@ -21,6 +21,7 @@
     >
       <div class="flex items-center gap-1 hover:underline cursor-pointer text-lightListTableHeadingText hover:text-lightListTableHeadingText  dark:text-darkListTableHeadingText dark:hover:text-darkListTableHeadingText" @click="isThoughtsExpanded = !isThoughtsExpanded">
         <IconAngleDownOutline 
+          v-if="content"
           :class="isThoughtsExpanded ? 'rotate-180' : 'rotate-0'"
           class="transition-transform duration-200"
         />
