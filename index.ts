@@ -282,15 +282,15 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       path: `/agent/get-sessions`,
       handler: async ({body, adminUser }) => {
         const userId = adminUser.pk;
-        const sessions = await this.adminforth.resource(this.pluginOptions.sessionResource.resource_id).list(
-          [Filters.EQ(this.pluginOptions.sessionResource.asker_id_field, userId)], undefined, undefined, [Sorts.DESC(this.pluginOptions.sessionResource.created_at_field)]
+        const sessions = await this.adminforth.resource(this.pluginOptions.sessionResource.resourceId).list(
+          [Filters.EQ(this.pluginOptions.sessionResource.askerIdField, userId)], undefined, undefined, [Sorts.DESC(this.pluginOptions.sessionResource.createdAtField)]
         );
         const sessionsToReturn = [];
         for (const session of sessions) {
          sessionsToReturn.push({
-          sessionId: session[this.pluginOptions.sessionResource.id_field],
-          title: session[this.pluginOptions.sessionResource.title_field],
-          timestamp: session[this.pluginOptions.sessionResource.created_at_field],
+          sessionId: session[this.pluginOptions.sessionResource.idField],
+          title: session[this.pluginOptions.sessionResource.titleField],
+          timestamp: session[this.pluginOptions.sessionResource.createdAtField],
          })
         }
         return {
@@ -304,23 +304,23 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       handler: async ({body, adminUser }) => {
         const userId = adminUser.pk;
         const sessionId = body.sessionId;
-        const session = await this.adminforth.resource(this.pluginOptions.sessionResource.resource_id).get(
-          [Filters.EQ(this.pluginOptions.sessionResource.id_field, sessionId)]
+        const session = await this.adminforth.resource(this.pluginOptions.sessionResource.resourceId).get(
+          [Filters.EQ(this.pluginOptions.sessionResource.idField, sessionId)]
         );
         if (!session) {
           return {
             error: 'Session not found'
           };
         }
-        if (session[this.pluginOptions.sessionResource.asker_id_field] !== userId) {
+        if (session[this.pluginOptions.sessionResource.askerIdField] !== userId) {
           return {
             error: 'Unauthorized'
           };
         }
         const sessionToReturn = {
-          sessionId: session[this.pluginOptions.sessionResource.id_field],
-          title: session[this.pluginOptions.sessionResource.title_field],
-          timestamp: session[this.pluginOptions.sessionResource.created_at_field],
+          sessionId: session[this.pluginOptions.sessionResource.idField],
+          title: session[this.pluginOptions.sessionResource.titleField],
+          timestamp: session[this.pluginOptions.sessionResource.createdAtField],
           messages: []
         }
         return {
@@ -336,15 +336,15 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         const userId = adminUser.pk;
         const title = triggerMessage ? (triggerMessage.length > 40 ? triggerMessage.slice(0, 40) + '...' : triggerMessage) : 'New Session';
         const newSession = {
-          [this.pluginOptions.sessionResource.id_field]: randomUUID(),
-          [this.pluginOptions.sessionResource.title_field]: title,
-          [this.pluginOptions.sessionResource.asker_id_field]: userId,
+          [this.pluginOptions.sessionResource.idField]: randomUUID(),
+          [this.pluginOptions.sessionResource.titleField]: title,
+          [this.pluginOptions.sessionResource.askerIdField]: userId,
         };
-        await this.adminforth.resource(this.pluginOptions.sessionResource.resource_id).create(newSession);
+        await this.adminforth.resource(this.pluginOptions.sessionResource.resourceId).create(newSession);
         return {
-          sessionId: newSession[this.pluginOptions.sessionResource.id_field],
-          title: newSession[this.pluginOptions.sessionResource.title_field],
-          timestamp: newSession[this.pluginOptions.sessionResource.created_at_field],
+          sessionId: newSession[this.pluginOptions.sessionResource.idField],
+          title: newSession[this.pluginOptions.sessionResource.titleField],
+          timestamp: newSession[this.pluginOptions.sessionResource.createdAtField],
           messages: []
         };
       }
@@ -355,20 +355,20 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       handler: async ({body, adminUser }) => {
         const sessionId = body.sessionId;
         const userId = adminUser.pk;
-        const session = await this.adminforth.resource(this.pluginOptions.sessionResource.resource_id).get(
-          [Filters.EQ(this.pluginOptions.sessionResource.id_field, sessionId)]
+        const session = await this.adminforth.resource(this.pluginOptions.sessionResource.resourceId).get(
+          [Filters.EQ(this.pluginOptions.sessionResource.idField, sessionId)]
         );
         if (!session) {
           return {
             error: 'Session not found'
           };
         }
-        if (session[this.pluginOptions.sessionResource.asker_id_field] !== userId) {
+        if (session[this.pluginOptions.sessionResource.askerIdField] !== userId) {
           return {
             error: 'Unauthorized'
           };
         }
-        await this.adminforth.resource(this.pluginOptions.sessionResource.resource_id).delete(sessionId);
+        await this.adminforth.resource(this.pluginOptions.sessionResource.resourceId).delete(sessionId);
         return {
           ok: true
         };

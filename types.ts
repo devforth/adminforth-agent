@@ -2,21 +2,21 @@ import  {type PluginsCommonOptions } from "adminforth";
 import { type CompletionAdapter } from "adminforth";
 
 interface ISessionResource {
-  resource_id: string;
-  id_field: string;
-  title_field: string;
-  turns_field: string;
-  asker_id_field: string;
-  created_at_field: string;
+  resourceId: string;
+  idField: string;
+  titleField: string;
+  turnsField: string;
+  askerIdField: string;
+  createdAtField: string;
 }
 
 interface ITurnResource {
-  resource_id: string;
-  id_field: string;
-  session_id_field: string;
-  created_at_field: string;
-  prompt_field: string;
-  response_field: string;
+  resourceId: string;
+  idField: string;
+  sessionIdField: string;
+  createdAtField: string;
+  promptField: string;
+  responseField: string;
 }
 
 export interface PluginOptions extends PluginsCommonOptions {
