@@ -55,6 +55,15 @@ type ToolHttpResponse = IAdminForthHttpResponse & {
   message?: string;
 };
 
+const WIPE_FRONTEND_SPECIFIC_DATA_BY_TOOL_NAME: Record<string, readonly string[]> = {
+  get_resource: [
+    'resource.columns[].filterOptions',
+    'resource.columns[].components',
+    'resource.options.actions[].customComponent',
+    'resource.options.pageInjections',
+  ],
+};
+
 export type ApiBasedToolCallParams = {
   adminUser?: AdminUser;
   adminuser?: AdminUser;
@@ -150,6 +159,57 @@ export function serializeUnknownError(error: unknown): Record<string, unknown> {
     type: typeof error,
     value: error,
   };
+}
+
+function wipePath(target: unknown, pathParts: string[]): void {
+  if (!target || typeof target !== 'object' || pathParts.length === 0) {
+    return;
+  }
+
+  const [currentPart, ...rest] = pathParts;
+  const isArrayTraversal = currentPart.endsWith('[]');
+  const key = isArrayTraversal ? currentPart.slice(0, -2) : currentPart;
+  const targetRecord = target as Record<string, unknown>;
+
+  if (!(key in targetRecord)) {
+    return;
+  }
+
+  if (rest.length === 0) {
+    delete targetRecord[key];
+    return;
+  }
+
+  const nextValue = targetRecord[key];
+
+  if (isArrayTraversal) {
+    if (!Array.isArray(nextValue)) {
+      return;
+    }
+
+    for (const item of nextValue) {
+      wipePath(item, rest);
+    }
+
+    return;
+  }
+
+  wipePath(nextValue, rest);
+}
+
+function wipeFrontendSpecificData(toolName: string, output: unknown): unknown {
+  const sanitizedOutput = sanitizeForYaml(output);
+  const pathsToWipe = WIPE_FRONTEND_SPECIFIC_DATA_BY_TOOL_NAME[toolName];
+
+  if (!pathsToWipe) {
+    return sanitizedOutput;
+  }
+
+  for (const path of pathsToWipe) {
+    wipePath(sanitizedOutput, path.split('.'));
+  }
+
+  return sanitizedOutput;
 }
 
 function endpointPathToToolName(path: string) {
@@ -356,7 +416,7 @@ export function prepareApiBasedTools(adminforth: IAdminForth): Record<string, Ap
           httpExtra,
         });
 
-        return YAML.stringify(sanitizeForYaml(output));
+        return YAML.stringify(wipeFrontendSpecificData(toolName, output));
       },
     };
   }
