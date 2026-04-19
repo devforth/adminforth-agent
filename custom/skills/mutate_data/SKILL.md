@@ -92,6 +92,7 @@ For decimal fields please use string values with dot as decimal separator.
 
 After creation of new record also show user a link to this record. If several records record were created, show links to all of them in list.
 
+Omit any pictures or file paths, you are not capable of doing it. If they are not required all is good, if they are required, explain to user that you are not able to create record because of this reason.
 
 ### Example
 
