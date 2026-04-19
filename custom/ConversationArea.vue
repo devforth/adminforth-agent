@@ -138,6 +138,19 @@ const formatToolCallTextPart = ((part: IPart, currentMessage: IMessage) => {
   return null;  
 });
 
+// const groupToolCallParts = (parts: IPart[], message: IMessage) => {
+//   const groupedParts = [];
+//   const formatedToolParts = parts.map(part => {
+//     return formatToolCallTextPart(part, message)
+//   });
+//   for( const[index, part] of formatedToolParts.entries()){
+//     if(!part?.toolInfo) {
+//       continue;
+//     }
+    
+//   }  
+// }
+
 const props = defineProps<{
   messages: IMessage[]
 }>();
