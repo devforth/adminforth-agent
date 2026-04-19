@@ -81,4 +81,8 @@ Are you sure?
 
 ## Creating
 
-To create new record you can use `create_record` tool. To create record `allowedActions.create` should be set to true.
+To create new record you can use tool `create_record`. To create record `allowedActions.create` should be set to true.
+
+When calling `create_record` tool pass only columns which have `showIn.create` set to true.
+
+After creation of new record also show user a link to this record. If several records record were created, show links to all of them in list.
