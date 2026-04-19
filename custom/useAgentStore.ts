@@ -93,7 +93,8 @@ export const useAgentStore = defineStore('agent', () => {
             const message = lastMessage.value;
             const body = {
               message,
-              sessionId
+              sessionId,
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             };
 
             return {

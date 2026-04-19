@@ -1,13 +1,20 @@
-import type {
-  AdminUser,
-  HttpExtra,
-  IAdminForth,
-  IAdminForthHttpResponse,
-  IHttpServer,
+import {
+  AdminForthDataTypes,
+  type AdminUser,
+  type HttpExtra,
+  type IAdminForth,
+  type IAdminForthHttpResponse,
+  type IHttpServer,
 } from 'adminforth';
+import dayjs from 'dayjs';
+import timezone from 'dayjs/plugin/timezone.js';
+import utc from 'dayjs/plugin/utc.js';
 import { PassThrough } from 'stream';
 import { inspect } from 'util';
 import YAML from 'yaml';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 type CookieItem = {
   key: string;
@@ -55,11 +62,79 @@ type ToolHttpResponse = IAdminForthHttpResponse & {
   message?: string;
 };
 
+type ToolOverrideCallParams = Pick<ApiBasedToolCallParams, 'httpExtra' | 'inputs' | 'userTimeZone'>;
+
+type ToolOverrideContext = {
+  output: unknown;
+  adminUser?: AdminUser;
+  httpExtra?: Partial<HttpExtra>;
+  inputs?: Record<string, unknown>;
+  userTimeZone?: string;
+  invokeTool: (toolName: string, params?: ToolOverrideCallParams) => Promise<unknown>;
+};
+
+type ToolOverride = {
+  wipe_frontend_specific_data?: readonly string[];
+  post_process_response?: (params: ToolOverrideContext) => Promise<unknown> | unknown;
+};
+
+type GetResourceToolResponse = {
+  resource: {
+    columns: Array<{
+      name: string;
+      type?: string;
+    }>;
+  };
+};
+
+type GetResourceDataToolResponse = {
+  data: Array<Record<string, unknown>>;
+  total?: number;
+  options?: Record<string, unknown>;
+};
+
+const DEFAULT_USER_TIME_ZONE = 'UTC';
+
+const TOOL_OVERRIDES: Record<string, ToolOverride> = {
+  get_resource: {
+    wipe_frontend_specific_data: [
+      'resource.columns[].filterOptions',
+      'resource.columns[].components',
+      'resource.options.actions[].customComponent',
+      'resource.options.pageInjections',
+    ],
+  },
+  get_resource_data: {
+    post_process_response: async ({ output, inputs, invokeTool, userTimeZone }) => {
+      if (hasToolError(output)) {
+        return output;
+      }
+
+      const resourceId = inputs?.resourceId as string;
+      const getResourceOutput = await invokeTool('get_resource', {
+        inputs: { resourceId },
+      });
+      const dateTimeColumnNames = getDateTimeColumnNames(getResourceOutput);
+
+      if (dateTimeColumnNames.length === 0) {
+        return output;
+      }
+
+      const localizedTimeZone = userTimeZone ?? DEFAULT_USER_TIME_ZONE;
+      const response = output as GetResourceDataToolResponse;
+      formatDateTimeColumns(response.data, dateTimeColumnNames, localizedTimeZone);
+
+      return response;
+    },
+  },
+};
+
 export type ApiBasedToolCallParams = {
   adminUser?: AdminUser;
   adminuser?: AdminUser;
   inputs?: Record<string, unknown>;
   httpExtra?: Partial<HttpExtra>;
+  userTimeZone?: string;
 };
 
 export type ApiBasedTool = {
@@ -150,6 +225,163 @@ export function serializeUnknownError(error: unknown): Record<string, unknown> {
     type: typeof error,
     value: error,
   };
+}
+
+function wipePath(target: unknown, pathParts: string[]): void {
+  if (!target || typeof target !== 'object' || pathParts.length === 0) {
+    return;
+  }
+
+  const [currentPart, ...rest] = pathParts;
+  const isArrayTraversal = currentPart.endsWith('[]');
+  const key = isArrayTraversal ? currentPart.slice(0, -2) : currentPart;
+  const targetRecord = target as Record<string, unknown>;
+
+  if (!(key in targetRecord)) {
+    return;
+  }
+
+  if (rest.length === 0) {
+    delete targetRecord[key];
+    return;
+  }
+
+  const nextValue = targetRecord[key];
+
+  if (isArrayTraversal) {
+    if (!Array.isArray(nextValue)) {
+      return;
+    }
+
+    for (const item of nextValue) {
+      wipePath(item, rest);
+    }
+
+    return;
+  }
+
+  wipePath(nextValue, rest);
+}
+
+function hasToolError(output: unknown): output is { error: unknown } {
+  return typeof output === 'object' && output !== null && 'error' in output;
+}
+
+function getDateTimeColumnNames(output: unknown): string[] {
+  const resource = (output as GetResourceToolResponse).resource;
+
+  return resource.columns
+    .filter((column) => column.type === AdminForthDataTypes.DATETIME)
+    .map((column) => column.name);
+}
+
+function formatGmtOffset(offsetMinutes: number): string {
+  const sign = offsetMinutes >= 0 ? '+' : '-';
+  const absoluteOffsetMinutes = Math.abs(offsetMinutes);
+  const hours = Math.floor(absoluteOffsetMinutes / 60);
+  const minutes = absoluteOffsetMinutes % 60;
+
+  if (minutes === 0) {
+    return `GMT${sign}${hours}`;
+  }
+
+  return `GMT${sign}${hours}:${String(minutes).padStart(2, '0')}`;
+}
+
+function formatDateTimeValue(value: string, userTimeZone: string): string {
+  const localizedValue = dayjs.utc(value).tz(userTimeZone);
+  return `${localizedValue.format('DD MMM YYYY, HH:mm:ss.SSS')} (${formatGmtOffset(localizedValue.utcOffset())})`;
+}
+
+function formatDateTimeColumns(
+  rows: Array<Record<string, unknown>>,
+  dateTimeColumnNames: string[],
+  userTimeZone: string,
+): void {
+  for (const row of rows) {
+    for (const columnName of dateTimeColumnNames) {
+      const value = row[columnName];
+
+      if (typeof value === 'string' && value) {
+        row[columnName] = formatDateTimeValue(value, userTimeZone);
+      }
+    }
+  }
+}
+
+async function applyToolOverride(params: {
+  adminforth: IAdminForth;
+  adminUser?: AdminUser;
+  capturedEndpointsByToolName: Record<string, CapturedEndpoint>;
+  httpExtra?: Partial<HttpExtra>;
+  inputs?: Record<string, unknown>;
+  output: unknown;
+  toolName: string;
+  userTimeZone?: string;
+}): Promise<unknown> {
+  const {
+    adminforth,
+    adminUser,
+    capturedEndpointsByToolName,
+    httpExtra,
+    inputs,
+    output,
+    toolName,
+    userTimeZone,
+  } = params;
+  const sanitizedOutput = sanitizeForYaml(output);
+  const override = TOOL_OVERRIDES[toolName];
+
+  if (!override) {
+    return sanitizedOutput;
+  }
+
+  for (const path of override.wipe_frontend_specific_data ?? []) {
+    wipePath(sanitizedOutput, path.split('.'));
+  }
+
+  if (!override.post_process_response) {
+    return sanitizedOutput;
+  }
+
+  const postProcessedOutput = await override.post_process_response({
+    output: sanitizedOutput,
+    adminUser,
+    httpExtra,
+    inputs,
+    userTimeZone,
+    invokeTool: async (nestedToolName, nestedParams = {}) => {
+      const nestedEndpoint = capturedEndpointsByToolName[nestedToolName];
+
+      if (!nestedEndpoint) {
+        throw new Error(`Tool ${nestedToolName} is not registered`);
+      }
+
+      const nestedInputs = nestedParams.inputs ?? inputs;
+      const nestedHttpExtra = nestedParams.httpExtra ?? httpExtra;
+      const nestedUserTimeZone = nestedParams.userTimeZone ?? userTimeZone;
+      const nestedOutput = await callCapturedEndpoint({
+        adminforth,
+        endpoint: nestedEndpoint,
+        adminUser,
+        inputs: nestedInputs,
+        httpExtra: nestedHttpExtra,
+      });
+
+      return applyToolOverride({
+        adminforth,
+        adminUser,
+        capturedEndpointsByToolName,
+        httpExtra: nestedHttpExtra,
+        inputs: nestedInputs,
+        output: nestedOutput,
+        toolName: nestedToolName,
+        userTimeZone: nestedUserTimeZone,
+      });
+    },
+  });
+
+  return sanitizeForYaml(postProcessedOutput);
 }
 
 function endpointPathToToolName(path: string) {
@@ -339,6 +571,9 @@ export function prepareApiBasedTools(adminforth: IAdminForth): Record<string, Ap
   adminforth.setupEndpoints(captureServer);
 
   const apiBasedTools: Record<string, ApiBasedTool> = {};
+  const capturedEndpointsByToolName = Object.fromEntries(
+    capturedEndpoints.map((endpoint) => [endpointPathToToolName(endpoint.path), endpoint]),
+  );
 
   for (const endpoint of capturedEndpoints) {
     const toolName = endpointPathToToolName(endpoint.path);
@@ -347,7 +582,7 @@ export function prepareApiBasedTools(adminforth: IAdminForth): Record<string, Ap
       input_schema: endpoint.request_schema,
       input_schma: endpoint.request_schema,
       output_schema: endpoint.normalizedResponseSchema,
-      call: async ({ adminUser, adminuser, inputs, httpExtra } = {}) => {
+      call: async ({ adminUser, adminuser, inputs, httpExtra, userTimeZone } = {}) => {
         const output = await callCapturedEndpoint({
           adminforth,
           endpoint,
@@ -356,7 +591,18 @@ export function prepareApiBasedTools(adminforth: IAdminForth): Record<string, Ap
           httpExtra,
         });
 
-        return YAML.stringify(sanitizeForYaml(output));
+        const processedOutput = await applyToolOverride({
+          adminforth,
+          adminUser: adminUser ?? adminuser,
+          capturedEndpointsByToolName,
+          httpExtra,
+          inputs,
+          output,
+          toolName,
+          userTimeZone,
+        });
+
+        return YAML.stringify(processedOutput);
       },
     };
   }

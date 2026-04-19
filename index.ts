@@ -147,6 +147,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         const res = _raw_express_res;
         const messageId = randomUUID();
         const prompt = body.message;
+        const userTimeZone = (body.timeZone as string | undefined) ?? 'UTC';
         const sessionId = body.sessionId || adminUser?.pk || adminUser?.username || 'default';
         const turnId = await this.createNewTurn(sessionId, prompt);
         let fullResponse = "";
@@ -259,12 +260,13 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             customComponentsDir: this.adminforth.config.customization.customComponentsDir,
             sessionId,
             turnId,
+            userTimeZone,
             emitToolCallEvent,
             sequenceDebugSink: sequenceDebugCollector,
           });
 
           for await (const rawChunk of stream as AsyncIterable<[any, any]>) {
-            const [msgChunk, metadata] = rawChunk;
+            const [token, metadata] = rawChunk;
 
             const nodeName =
               typeof metadata?.langgraph_node === "string"
@@ -275,10 +277,10 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
               continue;
             }
 
-            const blocks = Array.isArray(msgChunk?.contentBlocks)
-              ? msgChunk.contentBlocks
-              : Array.isArray(msgChunk?.content)
-                ? msgChunk.content
+            const blocks = Array.isArray(token?.contentBlocks)
+              ? token.contentBlocks
+              : Array.isArray(token?.content)
+                ? token.content
                 : [];
 
             const reasoningDelta = blocks
@@ -420,18 +422,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         };
       }
     });
-    /**
-     * 
-     * 
-     * 
-     * 
-     *    TODO: Implement turns deletion when session is deleted
-     * 
-     * 
-     * 
-     * 
-     *
-     */
     server.endpoint({
       method: 'POST',
       path: `/agent/delete-session`,
@@ -452,6 +442,12 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           };
         }
         await this.adminforth.resource(this.pluginOptions.sessionResource.resourceId).delete(sessionId);
+        const turns = await this.adminforth.resource(this.pluginOptions.turnResource.resourceId).list(
+          [Filters.EQ(this.pluginOptions.turnResource.sessionIdField, sessionId)]
+        );
+        for (const turn of turns) {
+          await this.adminforth.resource(this.pluginOptions.turnResource.resourceId).delete(turn[this.pluginOptions.turnResource.idField]);
+        }
         return {
           ok: true
         };
