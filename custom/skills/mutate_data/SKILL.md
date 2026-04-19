@@ -9,11 +9,14 @@ description:  Create/update/delete some record of resource or call actions on on
 ## Confirmation
 
 Before performing any state mutation including action calls edit/delete please fetch record which is going to be edited/deleted and show user record in format field → value (show several most important fields which can help user to understand what exactly record he is going to edit or delete). 
+
 For field values with long texts show only several first words and add "..." at the end.
 Also please add related link to record with will be changed. For example /{BASE_URL}/resource/{resourceId}/show/{primary key}. Use _label from `get_resource_data` as anchor text for link (use markdown link).
 And in the same message ask user for final confirmation.
 
 When creating new record, show user all data which you gona create and in same message ask for confirmation.
+
+Accept any positive confirmation from user like "yes", "sure", "+", anything non-negative call to action, can be considered as confirmation. 
 
 # Calling actions
 
@@ -83,6 +86,22 @@ Are you sure?
 
 To create new record you can use tool `create_record`. To create record `allowedActions.create` should be set to true.
 
-When calling `create_record` tool pass only columns which have `showIn.create` set to true.
+When calling `create_record` tool pass only columns which have `showIn.create` set to true and `backendOnly` is not set to true.
+
+For decimal fields please use string values with dot as decimal separator.
 
 After creation of new record also show user a link to this record. If several records record were created, show links to all of them in list.
+
+
+### Example
+
+
+```
+I am going to create user:
+* Username: john_doe
+* Email: john_doe@example.com
+
+View [John Doe](/admin/resource/users/show/421) # 421 is id of new created record
+
+Are you sure?
+```
