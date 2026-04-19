@@ -231,7 +231,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             messageId,
           });
 
-          const maxTokens = this.options.maxTokens ?? 1000;
+          const maxTokens = this.options.maxTokens ?? 10000;
           const reasoning = this.options.reasoning ?? 'low';
           const summaryReasoning = 'low';
 

@@ -81,4 +81,4 @@ Are you sure?
 
 ## Creating
 
-To create new record you can use `create_resource` tool. To create record `allowedActions.create` should be set to true.
+To create new record you can use `create_record` tool. To create record `allowedActions.create` should be set to true.
