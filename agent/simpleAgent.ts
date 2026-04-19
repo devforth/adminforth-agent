@@ -16,6 +16,7 @@ const checkpointer = new MemorySaver();
 
 export const contextSchema = z.object({
   adminUser: z.custom<AdminUser>(),
+  userTimeZone: z.string(),
   sessionId: z.string(),
   turnId: z.string(),
   emitToolCallEvent: z.custom<ToolCallEventSink>(),
@@ -100,6 +101,7 @@ export async function callAgent(params: {
   customComponentsDir: string;
   sessionId: string;
   turnId: string;
+  userTimeZone: string;
   emitToolCallEvent: ToolCallEventSink;
   sequenceDebugSink: SequenceDebugModelCallSink;
 }) {
@@ -113,6 +115,7 @@ export async function callAgent(params: {
     customComponentsDir,
     sessionId,
     turnId,
+    userTimeZone,
     emitToolCallEvent,
     sequenceDebugSink,
   } = params;
@@ -150,6 +153,7 @@ export async function callAgent(params: {
     },
     context: {
       adminUser,
+      userTimeZone,
       sessionId,
       turnId,
       emitToolCallEvent,

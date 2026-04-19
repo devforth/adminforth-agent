@@ -65,6 +65,7 @@ export function createApiTool(toolName: string, apiBasedTool: ApiBasedTool) {
         const output = await apiBasedTool.call({
           adminUser: runtime.context.adminUser,
           inputs: normalizedInput,
+          userTimeZone: runtime.context.userTimeZone,
         });
 
         runtime.context.emitToolCallEvent({

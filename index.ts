@@ -147,6 +147,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         const res = _raw_express_res;
         const messageId = randomUUID();
         const prompt = body.message;
+        const userTimeZone = (body.timeZone as string | undefined) ?? 'UTC';
         const sessionId = body.sessionId || adminUser?.pk || adminUser?.username || 'default';
         const turnId = await this.createNewTurn(sessionId, prompt);
         let fullResponse = "";
@@ -259,6 +260,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             customComponentsDir: this.adminforth.config.customization.customComponentsDir,
             sessionId,
             turnId,
+            userTimeZone,
             emitToolCallEvent,
             sequenceDebugSink: sequenceDebugCollector,
           });
