@@ -273,51 +273,46 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             sequenceDebugSink: sequenceDebugCollector,
           });
 
-          for await (const rawChunk of stream as AsyncIterable<[any, any]>) {
-            const [token, metadata] = rawChunk;
+          for await (const [mode, chunk] of stream) {
+            if (mode === "messages") {
+              const [token, metadata] = chunk;
+              if (metadata.langgraph_node && !["model", "model_request"].includes(metadata.langgraph_node)) {
+                continue;
+              }
+              const blocks = Array.isArray(token.content) ? token.content : [];
 
-            const nodeName =
-              typeof metadata?.langgraph_node === "string"
-                ? metadata.langgraph_node
-                : "";
+              const reasoningDelta = blocks
+                .filter((block: any) => block?.type === "reasoning")
+                .map((block: any) => String(block.reasoning ?? ""))
+                .join("");
 
-            if (nodeName && !["model", "model_request"].includes(nodeName)) {
-              continue;
-            }
+              const textDelta = blocks
+                .filter((block: any) => block?.type === "text")
+                .map((block: any) => String(block.text ?? ""))
+                .join("");
 
-            const blocks = Array.isArray(token?.contentBlocks)
-              ? token.contentBlocks
-              : Array.isArray(token?.content)
-                ? token.content
-                : [];
-
-            const reasoningDelta = blocks
-              .filter((b: any) => b?.type === "reasoning")
-              .map((b: any) => String(b.reasoning ?? ""))
-              .join("");
-
-            const textDelta = blocks
-              .filter((b: any) => b?.type === "text")
-              .map((b: any) => String(b.text ?? ""))
-              .join("");
-
-            if (reasoningDelta) {
-              const reasoningId = startBlock('reasoning');
+              if (reasoningDelta) {
+                const reasoningId = startBlock('reasoning');
                 send({
                   type: 'reasoning-delta',
                   id: reasoningId,
                   delta: reasoningDelta,
                 });
+              }
+              if (textDelta) {
+                const textId = startBlock('text');
+                fullResponse += textDelta;
+                send({
+                  type: 'text-delta',
+                  id: textId,
+                  delta: textDelta,
+                });
+              }
             }
-
-            if (textDelta) {
-              const textId = startBlock('text');
-              fullResponse += textDelta;
-              send({
-                type: 'text-delta',
-                id: textId,
-                delta: textDelta,
-              });
+            if (mode === "updates") {
+              if ("__interrupt__" in chunk) {
+                console.log(`\n\nInterrupt: ${JSON.stringify(chunk.__interrupt__)}`);
+              }
             }
           }
         } catch (error) {
