@@ -12,4 +12,4 @@ To find specific data record you should use filters. ILIKE filters are preferred
 
 For long texts show only several first words and add "..." at the end (only if user did not request this field specifically).
 
-Also when you communicate with user about record, add related link to this record. For example /{BASE_URL}/resource/{resourceId}/show/{primary key}. Use _label from `get_resource_data` as anchor text for link (use markdown link).
+Also when you communicate with user about record, add related link to this record. For example /{BASE_URL}/resource/{resourceId}/show/{primary key}. Use _label from `get_resource_data` as anchor text for link (use markdown link). Links shoudl be always relative path, starting with slash.
