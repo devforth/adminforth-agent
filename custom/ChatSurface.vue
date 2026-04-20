@@ -78,13 +78,49 @@
             v-model="agentStore.userMessageInput"
             ref="textInput"
             @input="autoResize"
-            class="min-h-12 p-4 pr-12 w-full resize-none overflow-hidden border text-lightInputText dark:text-darkInputText rounded-md bg-transparent  text-sm bg-gray-50 dark:bg-gray-700 dark:border-gray-600 focus:outline-none"
+            :class="[
+              'min-h-12 w-full resize-none overflow-hidden border text-lightInputText dark:text-darkInputText rounded-md bg-transparent text-sm bg-gray-50 dark:bg-gray-700 dark:border-gray-600 focus:outline-none',
+              agentStore.availableModes.length > 1 ? 'p-4 pr-12 pb-12' : 'p-4 pr-12',
+            ]"
             placeholder="Type a message..."
-            @keydown.enter.exact.prevent="async () => {await agentStore.sendMessage(); autoResize();}"
+            @keydown.enter.exact.prevent="sendMessage"
           />
+          <div
+            v-if="agentStore.availableModes.length > 1"
+            ref="modeMenu"
+            class="absolute bottom-2 left-4"
+          >
+            <button
+              aria-label="Select mode"
+              class="flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 bg-white text-lightNavbarIcons transition-colors duration-200 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-darkNavbarIcons dark:hover:bg-gray-700"
+              :class="isModeMenuOpen ? 'bg-gray-100 dark:bg-gray-700' : ''"
+              :disabled="agentStore.isResponseInProgress"
+              title="Select mode"
+              type="button"
+              @click="toggleModeMenu"
+            >
+              <IconBrainOutline class="h-4 w-4" />
+            </button>
+
+            <div
+              v-if="isModeMenuOpen"
+              class="absolute bottom-full left-0 mb-2 min-w-40 overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-600 dark:bg-gray-800"
+            >
+              <button
+                v-for="mode in agentStore.availableModes"
+                :key="mode.name"
+                class="block w-full px-3 py-2 text-left text-sm text-lightInputText transition-colors duration-150 hover:bg-gray-100 dark:text-darkInputText dark:hover:bg-gray-700"
+                :class="mode.name === agentStore.activeModeName ? 'bg-gray-100 dark:bg-gray-700' : ''"
+                type="button"
+                @click="selectMode(mode.name)"
+              >
+                {{ mode.name }}
+              </button>
+            </div>
+          </div>
           <Button 
             class="absolute right-4 bottom-2 !p-0 h-[34px] w-[34px]"                    
-            @click="async () => {await agentStore.sendMessage(); autoResize();}" 
+            @click="sendMessage" 
             :disabled="!agentStore.trimmedUserMessage || agentStore.isResponseInProgress"
           >
             <IconArrowUpOutline 
@@ -101,8 +137,8 @@
 
 <script setup lang="ts">
 import { IconChatBubbleLeft20Solid, IconSparklesSolid } from '@iconify-prerendered/vue-heroicons';
-import { IconCloseOutline, IconBarsOutline, IconArrowUpOutline, IconCloseSidebarSolid, IconOpenSidebarSolid } from '@iconify-prerendered/vue-flowbite';
-import { useTemplateRef, onMounted, ref, computed } from 'vue';
+import { IconCloseOutline, IconBarsOutline, IconArrowUpOutline, IconCloseSidebarSolid, IconOpenSidebarSolid, IconBrainOutline } from '@iconify-prerendered/vue-flowbite';
+import { useTemplateRef, onMounted, ref } from 'vue';
 import { onClickOutside } from '@vueuse/core'
 import ConversationArea from './ConversationArea.vue';
 import { useAgentStore } from './useAgentStore';
@@ -112,13 +148,19 @@ import { useCoreStore } from '@/stores/core';
 const props = defineProps<{
   meta: {
     pluginInstanceId: string;
+    modes: Array<{
+      name: string;
+    }>;
+    defaultModeName: string | null;
   }
 }>();
 
 const chatSurface = useTemplateRef('chatSurface');
 const textInput = useTemplateRef('textInput');
+const modeMenu = useTemplateRef('modeMenu');
 const agentStore = useAgentStore();
 const coreStore = useCoreStore();
+const isModeMenuOpen = ref(false);
 
 const MAX_WIDTH = 800;
 const MIN_WIDTH = 382; //w-96
@@ -158,8 +200,10 @@ const stopResize = () => {
 }
 
 onClickOutside(chatSurface, () => {if (!agentStore.isTeleportedToBody) agentStore.setIsChatOpen(false);});
+onClickOutside(modeMenu, () => { isModeMenuOpen.value = false; });
 
 onMounted(async () => {
+  agentStore.setAvailableModes(props.meta.modes, props.meta.defaultModeName);
   agentStore.regisrerTextInput(textInput.value);
   textInput.value?.focus();
   await agentStore.fetchSessionsList();
@@ -179,6 +223,21 @@ function autoResize() {
     el.style.height = el.scrollHeight + 'px'
     el.style.overflowY = 'hidden'
   }
+}
+
+function toggleModeMenu() {
+  isModeMenuOpen.value = !isModeMenuOpen.value;
+}
+
+function selectMode(modeName: string) {
+  agentStore.setActiveMode(modeName);
+  isModeMenuOpen.value = false;
+}
+
+async function sendMessage() {
+  isModeMenuOpen.value = false;
+  await agentStore.sendMessage();
+  autoResize();
 }
 
 </script>

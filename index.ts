@@ -1,6 +1,5 @@
 import type {
   AdminForthResource,
-  AdminUser,
   IAdminForth,
   IHttpServer
 } from "adminforth";
@@ -115,6 +114,9 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
 
   async modifyResourceConfig(adminforth: IAdminForth, resourceConfig: AdminForthResource) {
     super.modifyResourceConfig(adminforth, resourceConfig);
+    if (!this.options.modes?.length) {
+      throw new Error("modes is required for AdminForthAgentPlugin");
+    }
     if (!this.adminforth.config.customization.globalInjections.header) {
       this.adminforth.config.customization.globalInjections.header = [];
     }
@@ -122,12 +124,10 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       file: this.componentPath("ChatSurface.vue"),
       meta: {
         pluginInstanceId: this.pluginInstanceId,
+        modes: this.options.modes.map((mode) => ({ name: mode.name })),
+        defaultModeName: this.options.modes[0].name,
       }
     });
-
-    if (!this.pluginOptions.completionAdapter) {
-      throw new Error("CompletionAdapter is required for AdminForthAgentPlugin");
-    }
     if (!this.pluginOptions.sessionResource) {
       throw new Error("sessionResource is required for AdminForthAgentPlugin");
     }
@@ -244,19 +244,15 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           });
 
           const maxTokens = this.options.maxTokens ?? 10000;
-          const reasoning = this.options.reasoning ?? 'low';
-          const summaryReasoning = 'low';
-
+          const selectedMode = this.options.modes.find((mode) => mode.name === body.mode) ?? this.options.modes[0];
           const model = createAgentChatModel({
-            adapter: this.options.completionAdapter,
+            adapter: selectedMode.completionAdapter,
             maxTokens,
-            reasoning,
           });
 
           const summaryModel = createAgentChatModel({
-            adapter: this.options.completionAdapter,
+            adapter: selectedMode.completionAdapter,
             maxTokens,
-            reasoning: summaryReasoning,
           });
           const systemPrompt = await this.agentSystemPromptPromise;
           const stream = await callAgent({

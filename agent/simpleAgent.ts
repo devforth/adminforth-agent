@@ -170,21 +170,9 @@ function createAgentLlmMetricsLogger() {
   return new AgentLlmMetricsLogger();
 }
 
-function normalizeReasoning(reasoning: AgentReasoning) {
-  if (reasoning === "none") {
-    return undefined;
-  }
-
-  return {
-    effort: reasoning as "minimal" | "low" | "medium" | "high" | "xhigh",
-    summary: "auto" as const,
-  };
-}
-
 export function createAgentChatModel(params: {
   adapter: CompletionAdapter;
   maxTokens: number;
-  reasoning: AgentReasoning;
   modelName?: string;
 }) {
   const adapter = params.adapter as OpenAIBackedCompletionAdapter;
@@ -198,7 +186,7 @@ export function createAgentChatModel(params: {
 
   const model = params.modelName ?? options.model ?? "gpt-5-nano";
   const baseURL = options.baseURL ?? options.baseUrl;
-  const reasoning = normalizeReasoning(params.reasoning);
+  const reasoning = options.extraRequestBodyParameters?.reasoning;
 
   // @ts-ignore
   return new ChatOpenAI({

@@ -1,5 +1,4 @@
-import  {type PluginsCommonOptions } from "adminforth";
-import { type CompletionAdapter } from "adminforth";
+import { type PluginsCommonOptions, type CompletionAdapter } from "adminforth";
 
 interface ISessionResource {
   resourceId: string;
@@ -22,11 +21,14 @@ interface ITurnResource {
 
 export interface PluginOptions extends PluginsCommonOptions {
   /**
-   * Adapter instance that will be used to generate responses. 
-   * You can use any adapter that implements the CompletionAdapter interface, for example the OpenAIAdapter included in adminforth, 
-   * or create your own that fetches responses from your custom backend.
+   * Modes for the plugin.
+   * Each mode can have its own configuration.
+   * Each mode uses its own completion adapter instance.
    */
-  completionAdapter: CompletionAdapter;
+  modes: {
+    name: string;
+    completionAdapter: CompletionAdapter;
+  }[];
 
   /**
    * Max tokens for the generation.
@@ -40,6 +42,13 @@ export interface PluginOptions extends PluginsCommonOptions {
    */
   reasoning?: "none" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
+  /**
+   * Resource configuration for sessions.
+   */
   sessionResource: ISessionResource;
+  
+  /**
+   * Resource configuration for turns.
+   */
   turnResource: ITurnResource;
 }
