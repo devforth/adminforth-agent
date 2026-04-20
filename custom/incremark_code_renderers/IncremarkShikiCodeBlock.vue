@@ -255,6 +255,7 @@ function clearVega() {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.96));
   box-shadow: 0 14px 30px -24px rgba(15, 23, 42, 0.45);
+  margin: 16px 0 ;
 }
 
 .dark .incremark-shiki-code {
