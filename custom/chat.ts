@@ -1,3 +1,16 @@
+/**
+ * This file is used to fix circular module initialization between ai and @ai-sdk/vue
+ * These files are depending on each other, but vite put them in different chunks, so they are not initialized at the same time, which causes the circular module initialization issue
+ * So I get rid of the @ai-sdk/vue only fixes are:
+ * 1) Change vite config to put these files in the same chunk
+ * 2) Get rid of the circular module initialization by moving the Chat class to this file
+ * 
+ * Maybe there is a better way to fix this issue
+ * 
+ * If you were updating "ai" package and plugin broke, probably you need to update this file as well
+ * Or resolve the circular module initialization issue in a better way
+ */
+
 import {
   AbstractChat,
   ChatInit as BaseChatInit,
