@@ -28,6 +28,7 @@
       class="flex flex-col w-full"
       :class="message.role === 'user' ? 'self-end' : 'self-start'"
     >
+      <ToolsGroup :toolGroup="groupToolCallParts(message)" />
       <template 
         v-for="part in getParts(message)"
         :key="part.type"
@@ -42,7 +43,6 @@
           @toggle-thoughts="() => clicks++"
         >
         </Message>
-        <ToolRenderer v-else :data="formatToolCallTextPart(part, message)" />
       </template>
     </div>
     <!-- Show a placeholder message if the last message is not of type 'text' or 'reasoning' -->
@@ -72,6 +72,7 @@ import { IconArrowDownOutline } from '@iconify-prerendered/vue-flowbite';
 import SessionsHistory from './SessionsHistory.vue';
 import { useAgentStore } from './useAgentStore';
 import ToolRenderer from './ToolRenderer.vue';
+import ToolsGroup from './ToolsGroup.vue';
 
 const scrollContainer = useTemplateRef('scrollContainer');
 const showScrollToBottomButton = ref(false);
@@ -138,18 +139,34 @@ const formatToolCallTextPart = ((part: IPart, currentMessage: IMessage) => {
   return null;  
 });
 
-// const groupToolCallParts = (parts: IPart[], message: IMessage) => {
-//   const groupedParts = [];
-//   const formatedToolParts = parts.map(part => {
-//     return formatToolCallTextPart(part, message)
-//   });
-//   for( const[index, part] of formatedToolParts.entries()){
-//     if(!part?.toolInfo) {
-//       continue;
-//     }
-    
-//   }  
-// }
+const groupToolCallParts = (message: IMessage) => {
+  const groupedParts = [];
+  let currentToolName = null;
+  const parts = getParts(message);
+  if (!parts) return [];
+  const formatedToolParts = parts.map(part => {
+    return formatToolCallTextPart(part as IPart, message)
+  });
+  for( const[index, part] of formatedToolParts.entries()){
+    if(!part?.toolInfo) {
+      continue;
+    }
+    console.log('part', part);
+    if (part.toolInfo.toolName === currentToolName) {
+      console.log('grouping part with tool name', currentToolName);
+      groupedParts[groupedParts.length - 1].groupedTools.push(part);
+      continue;
+    }
+    currentToolName = part.toolInfo.toolName;
+    console.log('starting new group with tool name', currentToolName);
+    groupedParts.push({
+      title: currentToolName,
+      groupedTools: [part]
+    });
+  }  
+  console.log('groupedParts', groupedParts);
+  return groupedParts;
+}
 
 const props = defineProps<{
   messages: IMessage[]

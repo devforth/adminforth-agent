@@ -23,7 +23,7 @@
       <button
         v-for="session in group.sessions"
         :key="session.sessionId"
-        class="flex items-center justify-between w-full px-4 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200 ease-in-out text-gray-800 dark:text-gray-200"
+        class="flex items-center justify-between w-full px-4 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200 ease-in-out text-gray-800 dark:text-gray-200 overflow-hidden text-nowrap"
         :class="{'bg-lightPrimary/20 hover:bg-lightPrimary/20 dark:bg-darkPrimary/20 dark:hover:bg-darkPrimary/20': agentStore.activeSessionId === session.sessionId, 'cursor-default opacity-50 pointer-events-none': agentStore.isResponseInProgress}"
         @click="agentStore.setActiveSession(session.sessionId)"
         :disabled="agentStore.isResponseInProgress"
