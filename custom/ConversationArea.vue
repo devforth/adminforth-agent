@@ -17,9 +17,10 @@
 
   </div>
   <AutoScrollContainer
-    enabled 
+    :enabled="!showScrollToBottomButton" 
     class="flex flex-col overflow-y-auto border-t border-gray-200 dark:border-gray-700"
     ref="scrollContainer"
+    :threshold="10"
     behavior="smooth"
   > 
 
@@ -57,8 +58,8 @@
       v-if="props.messages.length === 0"
       class="flex-1 flex flex-col items-center justify-center text-gray-400 tracking-widest text-xl font-medium"
     >
-      <p>Start the conversation</p>
-      <p class="tracking-normal text-base text">Give any input to begin</p>
+      <p>{{ $t('Start the conversation') }}</p>
+      <p class="tracking-normal text-base text">{{ $t('Give any input to begin') }}</p>
     </div>
   </AutoScrollContainer>
 </template>
@@ -151,20 +152,16 @@ const groupToolCallParts = (message: IMessage) => {
     if(!part?.toolInfo) {
       continue;
     }
-    console.log('part', part);
     if (part.toolInfo.toolName === currentToolName) {
-      console.log('grouping part with tool name', currentToolName);
       groupedParts[groupedParts.length - 1].groupedTools.push(part);
       continue;
     }
     currentToolName = part.toolInfo.toolName;
-    console.log('starting new group with tool name', currentToolName);
     groupedParts.push({
       title: currentToolName,
       groupedTools: [part]
     });
   }  
-  console.log('groupedParts', groupedParts);
   return groupedParts;
 }
 

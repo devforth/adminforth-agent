@@ -6,14 +6,14 @@
     "
   >
     <h3 :class="h3Style">{{ $t('Chat history') }}</h3>
-    <Button @click="agentStore.createPreSession()" :disabled="agentStore.isResponseInProgress" class="w-[360px] mx-4 my-2 mb-4 rounded-3xl text-gray-800 dark:text-gray-200">
+    <Button @click="agentStore.createPreSession(); agentStore.setSessionHistoryOpen(false)" :disabled="agentStore.isResponseInProgress" class="w-[360px] mx-4 my-2 mb-4 rounded-3xl text-gray-800 dark:text-gray-200">
       <IconPlusOutline class="w-5 h-5" />
       {{ $t('New chat') }}
     </Button>
     <div class="w-full border-b border-gray-200 dark:border-gray-700"/>
     <div class="absolute w-full h-full flex flex-col items-center justify-center bg-gray-100/50 dark:bg-gray-700/50 z-10" v-if="agentStore.isResponseInProgress">
       <Spinner class="w-8 h-8" v-if="agentStore.isResponseInProgress" />
-      <p class="mt-2 text-gray-800 dark:text-gray-200">generation in progress...</p>
+      <p class="mt-2 text-gray-800 dark:text-gray-200">{{ $t('Generation in progress...') }}</p>
     </div>
     <div v-for="group in groupedSessions" :key="group.dayKey" class="w-full py-2">
       <div class="px-4 pb-2 text-xs font-semibold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
@@ -38,7 +38,7 @@
       v-if="!groupedSessions || groupedSessions.length === 0"
       class="w-full h-full flex items-center justify-center text-gray-800 dark:text-gray-200"
     >
-      There is no previous chat sessions
+      {{ $t('There are no previous chat sessions') }}
     </p>
   </div>
 </template>

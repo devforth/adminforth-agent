@@ -1,5 +1,8 @@
 <template>
-  <div v-if="props.data?.toolInfo" class="inline-flex m-2 max-w-[80%] flex-col gap-3 rounded-xl p-2 text-lightListTableHeadingText dark:text-darkListTableHeadingText">
+  <div 
+    class="inline-flex m-2 max-w-[80%] flex-col gap-3 rounded-xl p-2 cursor-pointer text-lightListTableHeadingText dark:text-darkListTableHeadingText hover:opacity-75"         
+    @click="isInputOutputExpanded = !isInputOutputExpanded"
+  >
     <div class="flex items-center gap-3">
       <div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/70 dark:bg-blue-700/20">
         <Spinner v-if="isRunning" class="h-4 w-4" />
@@ -18,8 +21,7 @@
       <IconAngleDownOutline
         v-if="hasToolSections"
         :class="isInputOutputExpanded ? 'rotate-180' : 'rotate-0'"
-        class="cursor-pointer transition-transform duration-200 hover:scale-105 hover:opacity-75"
-        @click="isInputOutputExpanded = !isInputOutputExpanded"
+        class="cursor-pointer transition-transform duration-200 hover:scale-105"
       />
     </div>
     <transition name="expand">

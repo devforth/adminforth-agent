@@ -1,6 +1,6 @@
 <template>
   <div 
-    class="max-w-[80%] flex px-4 py-2 m-2 rounded-xl border border-gray-200 dark:border-gray-700"
+    class="max-w-[80%] flex px-4 m-2 rounded-xl border border-gray-200 dark:border-gray-700"
     @click="handleMarkdownLinkClick"
     :class="props.role === 'user' ? 'bg-lightListTableHeading dark:bg-darkListTableHeading self-end' 
       : isTypeReasoning || isTypeToolCall ? 'bg-transparent border-none self-start' 
