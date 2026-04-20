@@ -70,7 +70,7 @@ let vegaResult: { finalize: () => void } | null = null;
 
 const sourceCode = computed(() => props.node.value ?? '');
 const language = computed(() => props.node.lang?.trim().toLowerCase() || 'text');
-const languageLabel = computed(() => props.node.lang?.trim() || 'text');
+const languageLabel = computed(() => language.value === 'vega-lite' ? '' : props.node.lang?.trim() || 'text');
 const shouldRenderVega = computed(() => language.value === 'vega-lite' && props.blockStatus === 'completed');
 const codeTheme = computed<IncremarkCodeTheme>(() => {
   const requestedTheme = props.theme ?? (prefersDarkMode.value ? props.darkTheme : props.lightTheme);
