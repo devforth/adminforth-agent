@@ -6,6 +6,11 @@ import { parse as parseYaml } from "yaml";
 const PLUGIN_SKILLS_DIRECTORY_PATH = fileURLToPath(
   new URL("../../custom/skills/", import.meta.url),
 );
+const USER_PLUGIN_SKILLS_DIRECTORY_PATH_SEGMENTS = [
+  "plugins",
+  "adminforth-agent",
+  "skills",
+];
 const SKILL_MARKDOWN_FILENAME = "SKILL.md";
 const SKILL_FRONTMATTER_SEPARATOR = "\n---\n";
 
@@ -78,13 +83,31 @@ export function getProjectSkillsDirectoryPath(customComponentsDir: string) {
   return path.resolve(customComponentsDir, "skills");
 }
 
+export function getProjectPluginSkillsDirectoryPath(customComponentsDir: string) {
+  return path.resolve(
+    customComponentsDir,
+    ...USER_PLUGIN_SKILLS_DIRECTORY_PATH_SEGMENTS,
+  );
+}
+
+function getProjectSkillDirectoryPaths(customComponentsDir: string) {
+  return [
+    getProjectSkillsDirectoryPath(customComponentsDir),
+    getProjectPluginSkillsDirectoryPath(customComponentsDir),
+  ];
+}
+
 export async function listBundledSkillManifests() {
   return await listDirectorySkillManifests(PLUGIN_SKILLS_DIRECTORY_PATH);
 }
 
 export async function listProjectSkillManifests(customComponentsDir: string) {
-  return await listDirectorySkillManifests(
-    getProjectSkillsDirectoryPath(customComponentsDir),
+  return mergeSkillManifests(
+    await Promise.all(
+      getProjectSkillDirectoryPaths(customComponentsDir).map(
+        listDirectorySkillManifests,
+      ),
+    ),
   );
 }
 
@@ -114,7 +137,7 @@ export async function loadSkillMarkdown(skillName: string, customComponentsDir: 
   }
 
   const directories = [
-    getProjectSkillsDirectoryPath(customComponentsDir),
+    ...getProjectSkillDirectoryPaths(customComponentsDir),
     PLUGIN_SKILLS_DIRECTORY_PATH,
   ];
 
