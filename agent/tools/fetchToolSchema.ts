@@ -43,7 +43,7 @@ export async function createFetchToolSchemaTool(
     {
       name: "fetch_tool_schema",
       description:
-        "Fetch the schema for an API-based AdminForth tool by name and load it for later use.",
+        "Fetch the schema for an API-based AdminForth tool by name and load it for later use. Use this right after fetch_skill when the skill mentions non-base tools.",
       schema: fetchToolSchemaSchema,
     },
   );

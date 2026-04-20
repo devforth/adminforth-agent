@@ -2,6 +2,16 @@ name: mutate_data
 description:  Create/update/delete some record of resource or call actions on one or multiple records
 ---
 
+# Involved tools
+
+Use `create_record` for creating records.
+
+Use `update_record` for editing records.
+
+Use `delete_record` for deleting records.
+
+Use `start_custom_action` and `start_custom_bulk_action` for resource actions.
+
 # General rules
 
 - if there is a dedicated action for some routine (result of `get_resource` tool call, field actions), prefer this to manual updating of records, for example, if you want to approve some comment, prefer calling `approve` action instead of updating `approved` field of comment record (because in action there might be some additional logic like sending notification to user, updating some counters and so on)
@@ -16,7 +26,19 @@ And in the same message ask user for final confirmation.
 
 When creating new record, show user all data which you gona create and in same message ask for confirmation.
 
-Accept any positive confirmation from user like "yes", "sure", "+", anything non-negative call to action, can be considered as confirmation. 
+Accept any positive confirmation from user like "yes", "sure", "+", anything non-negative call to action, can be considered as confirmation.
+
+A confirmation is valid only for the exact mutation plan from the immediately previous assistant message.
+
+Never reuse an older confirmation for a later mutation.
+
+After one mutation is executed, confirmation is consumed and reset.
+
+If you want to perform another create/update/delete/action after that, ask for confirmation again even if the user previously said "yes".
+
+If the mutation plan changes in any way (different record, different fields, different values, different number of records, different action), the old confirmation is invalid and you must ask again.
+
+If you are creating or deleting multiple records in one batch, you may ask once only for that exact batch, but you must list the whole batch explicitly in the confirmation message. Any extra record outside that described batch requires a new confirmation.
 
 # Calling actions
 
