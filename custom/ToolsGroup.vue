@@ -21,7 +21,6 @@
 </template>
 
 <script setup lang="ts">
-import { Tool } from 'langchain';
 import ToolRenderer from './ToolRenderer.vue';
 import type { IPart } from './types';
 import { ref } from 'vue';
