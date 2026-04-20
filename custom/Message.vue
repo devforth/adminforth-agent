@@ -208,3 +208,43 @@
 }
 
 </style>
+
+<style lang="scss">
+.incremark a.incremark-link,
+.incremark a.incremark-link:visited {
+  display: inline-block;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-style:dotted;
+  color: rgb(0, 0, 0);
+  transition: color 0.2s ease;
+}
+
+.incremark a.incremark-link:hover {
+  color: rgb(74, 74, 255);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-style:dotted;
+}
+
+html[data-theme="dark"] .incremark a.incremark-link,
+html[data-theme="dark"] .incremark a.incremark-link:visited {
+  color: rgb(220, 220, 220);
+}
+
+html[data-theme="dark"] .incremark a.incremark-link:hover {
+  color: rgb(147, 147, 255);
+}
+
+a.incremark-link::after {
+  content: "";
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  rotate: -45deg;
+  background-color: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='currentColor' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M13 12H2m12 0l-4 4m4-4l-4-4'/%3E%3C/svg%3E") no-repeat center;
+  mask-size: contain;
+}
+</style>
