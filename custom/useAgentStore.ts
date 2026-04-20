@@ -3,7 +3,7 @@ import { IAgentSession, ISessionsListItem, IMessage } from './types';
 import { ref, nextTick, computed, watch, onMounted, shallowRef } from 'vue';
 import { callAdminForthApi } from '@/utils';
 import { useAdminforth } from '@/adminforth';
-import { Chat } from "@ai-sdk/vue";
+import { Chat } from './chat';
 import { DefaultChatTransport } from 'ai';
 import { useCoreStore } from '@/stores/core';
 
@@ -79,8 +79,8 @@ export const useAgentStore = defineStore('agent', () => {
       }
     }
   })
-  const chats = new Map<string, Chat>();
-  const currentChat = shallowRef<Chat>(null);
+  const chats = new Map<string, Chat<any>>();
+  const currentChat = shallowRef<Chat<any>>();
   function setCurrentChat(sessionId: string) {
     if (chats.has(sessionId)) {
       currentChat.value = chats.get(sessionId) || null;
@@ -132,7 +132,7 @@ export const useAgentStore = defineStore('agent', () => {
     if (!currentSession.value || currentSession.value.sessionId === 'pre-session') {
       await createNewSession(message);
     }
-    currentSession.value.timestamp = new Date().toISOString();
+    currentSession.value!.timestamp = new Date().toISOString();
     sessionList.value = sortSessionsListByTimestamp(sessionList.value.map((s: ISessionsListItem) => s.sessionId === currentSession.value?.sessionId ? {
       ...s,
       timestamp: currentSession.value?.timestamp || s.timestamp,
