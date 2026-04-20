@@ -80,8 +80,8 @@
 
   const props = defineProps<{
     type: string,
-    message: string
-    state: string
+    message: string | undefined,
+    state: string | undefined,
     data?: any
     role: 'user' | 'assistant'
   }>();
