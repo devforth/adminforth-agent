@@ -25,14 +25,6 @@ export const contextSchema = z.object({
   emitToolCallEvent: z.custom<ToolCallEventSink>(),
 });
 
-type AgentReasoning =
-  | "none"
-  | "minimal"
-  | "low"
-  | "medium"
-  | "high"
-  | "xhigh";
-
 type OpenAIBackedCompletionAdapter = CompletionAdapter & {
   options?: {
     openAiApiKey?: string;
