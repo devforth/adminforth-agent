@@ -21,8 +21,11 @@ export type SequenceDebug = {
   sequenceId: number;
   startedAt: string;
   prompt: string;
+  promptTokens: number;
   reasoning: string;
+  reasoningTokens: number;
   text: string;
+  textTokens: number;
   cachedTokens: number;
   responseId: string | null;
   toolCalls: SequenceDebugToolCall[];
@@ -37,14 +40,18 @@ type PendingSequenceDebug = Omit<SequenceDebug, "toolCalls" | "endedAt" | "resul
 };
 
 type SequenceDebugModelCall = {
+  promptTokens: number;
   reasoning: string;
+  reasoningTokens: number;
   text: string;
+  textTokens: number;
   cachedTokens: number;
   responseId: string | null;
   resultType: SequenceDebugResultType;
 };
 
 type OpenAiUsageMetadata = {
+  input_tokens?: number;
   input_token_details?: {
     cache_read?: number;
   };
@@ -70,8 +77,11 @@ function createPendingSequenceDebug(sequenceId: number): PendingSequenceDebug {
     sequenceId,
     startedAt: new Date().toISOString(),
     prompt: "",
+    promptTokens: 0,
     reasoning: "",
+    reasoningTokens: 0,
     text: "",
+    textTokens: 0,
     cachedTokens: 0,
     responseId: null,
     toolCalls: [],
@@ -97,8 +107,11 @@ function finalizeSequenceDebug(sequence: PendingSequenceDebug): SequenceDebug {
     sequenceId: sequence.sequenceId,
     startedAt: sequence.startedAt,
     prompt: sequence.prompt,
+    promptTokens: sequence.promptTokens,
     reasoning: sequence.reasoning,
+    reasoningTokens: sequence.reasoningTokens,
     text: sequence.text,
+    textTokens: sequence.textTokens,
     cachedTokens: sequence.cachedTokens,
     responseId: sequence.responseId,
     toolCalls: sequence.toolCalls.map(({ completed: _completed, ...toolCall }) => toolCall),
@@ -176,6 +189,29 @@ function hasToolCallSignal(message: {
   );
 }
 
+function hasTokenCounter(model: unknown): model is {
+  getNumTokens: (content: string) => Promise<number>;
+} {
+  return (
+    typeof model === "object" &&
+    model !== null &&
+    "getNumTokens" in model &&
+    typeof model.getNumTokens === "function"
+  );
+}
+
+async function countTokens(model: unknown, content: string) {
+  if (!content) {
+    return 0;
+  }
+
+  if (!hasTokenCounter(model)) {
+    return 0;
+  }
+
+  return await model.getNumTokens(content);
+}
+
 function extractSequenceResponseDebug(message: AIMessage): SequenceDebugModelCall {
   const blocks = getMessageBlocks(message);
   const reasoning = blocks
@@ -188,8 +224,13 @@ function extractSequenceResponseDebug(message: AIMessage): SequenceDebugModelCal
     .join("");
 
   return {
+    promptTokens:
+      (message.usage_metadata as OpenAiUsageMetadata | undefined)?.input_tokens ??
+      0,
     reasoning,
+    reasoningTokens: 0,
     text: textFromBlocks || (typeof message.content === "string" ? message.content : ""),
+    textTokens: 0,
     cachedTokens:
       (message.usage_metadata as OpenAiUsageMetadata | undefined)
         ?.input_token_details?.cache_read ?? 0,
@@ -238,8 +279,11 @@ export function createSequenceDebugCollector(): SequenceDebugCollector {
     },
     handleModelCallComplete(params) {
       const sequenceDebug = ensureSequenceDebug();
+      sequenceDebug.promptTokens = params.promptTokens;
       sequenceDebug.reasoning = params.reasoning;
+      sequenceDebug.reasoningTokens = params.reasoningTokens;
       sequenceDebug.text = params.text;
+      sequenceDebug.textTokens = params.textTokens;
       sequenceDebug.cachedTokens = params.cachedTokens;
       sequenceDebug.responseId = params.responseId;
       sequenceDebug.resultType = params.resultType;
@@ -311,17 +355,31 @@ export function createSequenceDebugMiddleware(
   return createMiddleware({
     name: "SequenceDebugMiddleware",
     async wrapModelCall(request, handler) {
+      const prompt = stringifyPromptForDebug({
+        systemMessage: request.systemMessage,
+        messages: request.messages,
+        tools: request.tools,
+        modelSettings: request.modelSettings,
+      });
+
       sink.handleModelCallStart(
-        stringifyPromptForDebug({
-          systemMessage: request.systemMessage,
-          messages: request.messages,
-          tools: request.tools,
-          modelSettings: request.modelSettings,
-        }),
+        prompt,
       );
 
       const response = await handler(request) as AIMessage;
-      sink.handleModelCallComplete(extractSequenceResponseDebug(response));
+      const debug = extractSequenceResponseDebug(response);
+      const [promptTokens, reasoningTokens, textTokens] = await Promise.all([
+        debug.promptTokens || countTokens(request.model, prompt),
+        countTokens(request.model, debug.reasoning),
+        countTokens(request.model, debug.text),
+      ]);
+
+      sink.handleModelCallComplete({
+        ...debug,
+        promptTokens,
+        reasoningTokens,
+        textTokens,
+      });
       return response;
     },
   });
