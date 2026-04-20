@@ -6,7 +6,7 @@
     "
   >
     <h3 :class="h3Style">{{ $t('Chat history') }}</h3>
-    <Button @click="agentStore.createPreSession(); agentStore.setSessionHistoryOpen(false)" :disabled="agentStore.isResponseInProgress" class="w-[360px] mx-4 my-2 mb-4 rounded-3xl text-gray-800 dark:text-gray-200">
+    <Button @click="agentStore.createPreSession(); agentStore.setSessionHistoryOpen(false); agentStore.focusTextInput();" :disabled="agentStore.isResponseInProgress" class="w-[360px] mx-4 my-2 mb-4 rounded-3xl text-gray-800 dark:text-gray-200">
       <IconPlusOutline class="w-5 h-5" />
       {{ $t('New chat') }}
     </Button>

@@ -155,8 +155,12 @@ export const useAgentStore = defineStore('agent', () => {
   function openChat() {
     isChatOpen.value = true;
     nextTick(() => {
-      textInput.value?.focus();
+      focusTextInput();
     });
+  }
+
+  function focusTextInput() {
+      textInput.value?.focus();
   }
 
   function setIsChatOpen(isOpen: boolean) {
@@ -354,5 +358,6 @@ export const useAgentStore = defineStore('agent', () => {
     setIsTeleportedToBody,
     chatWidth,
     setChatWidth,
+    focusTextInput
   }
 })
