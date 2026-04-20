@@ -284,7 +284,7 @@ export async function callAgent(params: {
   });
 
   return await agent.stream({ messages } as any, {
-    streamMode: "messages",
+    streamMode: ["messages", "updates"],
     recursionLimit: 50,
     callbacks: [createAgentLlmMetricsLogger()],
     configurable: {
