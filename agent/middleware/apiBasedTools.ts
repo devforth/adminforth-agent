@@ -1,7 +1,11 @@
 import { ToolMessage } from "@langchain/core/messages";
 import { createMiddleware } from "langchain";
 import { logger } from "adminforth";
-import type { ApiBasedTool } from "../../apiBasedTools.js";
+import { type ApiBasedTool } from "../../apiBasedTools.js";
+import {
+  createToolCallTracker,
+  type ToolCallEventSink,
+} from "../toolCallEvents.js";
 import { ALWAYS_AVAILABLE_API_TOOL_NAMES } from "../tools/index.js";
 import { createApiTool } from "../tools/apiTool.js";
 
@@ -67,30 +71,46 @@ export function createApiBasedToolsMiddleware(
     async wrapToolCall(request, handler) {
       const startedAt = Date.now();
       const toolInput = JSON.stringify(request.toolCall.args ?? {});
+      const { emitToolCallEvent } = request.runtime.context as {
+        emitToolCallEvent: ToolCallEventSink;
+      };
+      const toolCallTracker = createToolCallTracker({
+        emit: emitToolCallEvent,
+        toolCallId: request.toolCall.id,
+        toolName: request.toolCall.name,
+        input: (request.toolCall.args ?? {}) as Record<string, unknown>,
+        startedAt,
+      });
+      toolCallTracker.start();
       logger.info(
         `Invoking tool "${request.toolCall.name}" with input: ${toolInput}`,
       );
 
       try {
+        let result;
+
         if (request.tool) {
-          return await handler(request);
+          result = await handler(request);
+        } else {
+          const enabledApiToolNames = getEnabledApiToolNames(request.state.messages);
+
+          if (enabledApiToolNames.has(request.toolCall.name)) {
+            result = await handler({
+              ...request,
+              tool: dynamicTools[request.toolCall.name],
+            });
+          } else {
+            result = new ToolMessage({
+              content: `Tool "${request.toolCall.name}" is not loaded. Call fetch_tool_schema first.`,
+              tool_call_id: request.toolCall.id ?? "",
+              name: request.toolCall.name,
+              status: "error",
+            });
+          }
         }
 
-        const enabledApiToolNames = getEnabledApiToolNames(request.state.messages);
-
-        if (enabledApiToolNames.has(request.toolCall.name)) {
-          return await handler({
-            ...request,
-            tool: dynamicTools[request.toolCall.name],
-          });
-        }
-
-        return new ToolMessage({
-          content: `Tool "${request.toolCall.name}" is not loaded. Call fetch_tool_schema first.`,
-          tool_call_id: request.toolCall.id ?? "",
-          name: request.toolCall.name,
-          status: "error",
-        });
+        toolCallTracker.finishSuccess(result);
+        return result;
       } catch (error) {
         const errorDetails =
           error instanceof Error ? error.stack ?? error.message : String(error);
@@ -98,6 +118,7 @@ export function createApiBasedToolsMiddleware(
         logger.error(
           `Tool "${request.toolCall.name}" failed after ${Date.now() - startedAt}ms with input: ${toolInput}\n${errorDetails}`,
         );
+        toolCallTracker.finishError(error);
         throw error;
       } finally {
         logger.info(

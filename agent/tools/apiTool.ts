@@ -1,8 +1,5 @@
 import { tool } from "langchain";
-import { randomUUID } from "crypto";
-import YAML from "yaml";
 import type { ApiBasedTool } from "../../apiBasedTools.js";
-import { serializeUnknownError } from "../../apiBasedTools.js";
 
 const emptyToolSchema = {
   type: "object",
@@ -52,43 +49,11 @@ export function createApiTool(toolName: string, apiBasedTool: ApiBasedTool) {
   return tool(
     async (input, runtime) => {
       const normalizedInput = (input ?? {}) as Record<string, unknown>;
-      const toolCallId = randomUUID();
-      const startedAt = Date.now();
-      runtime.context.emitToolCallEvent({
-        toolCallId,
-        toolName,
-        phase: "start",
-        input: YAML.stringify(normalizedInput),
+      return apiBasedTool.call({
+        adminUser: runtime.context.adminUser,
+        inputs: normalizedInput,
+        userTimeZone: runtime.context.userTimeZone,
       });
-
-      try {
-        const output = await apiBasedTool.call({
-          adminUser: runtime.context.adminUser,
-          inputs: normalizedInput,
-          userTimeZone: runtime.context.userTimeZone,
-        });
-
-        runtime.context.emitToolCallEvent({
-          toolCallId,
-          toolName,
-          phase: "end",
-          durationMs: Date.now() - startedAt,
-          output,
-          error: null,
-        });
-
-        return output;
-      } catch (error) {
-        runtime.context.emitToolCallEvent({
-          toolCallId,
-          toolName,
-          phase: "end",
-          durationMs: Date.now() - startedAt,
-          output: null,
-          error: YAML.stringify(serializeUnknownError(error)),
-        });
-        throw error;
-      }
     },
     {
       name: toolName,
