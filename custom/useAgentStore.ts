@@ -120,6 +120,10 @@ export const useAgentStore = defineStore('agent', () => {
   });
   const blockCloseOfChat = ref(false);
 
+  function sortSessionsListByTimestamp(sessionsList: ISessionsListItem[]) {
+    return [...sessionsList].sort((a: ISessionsListItem, b: ISessionsListItem) => b.timestamp.localeCompare(a.timestamp));
+  }
+
   async function sendMessage() {
     const message = trimmedUserMessage.value;
     if (!message || isResponseInProgress.value) {
@@ -128,6 +132,11 @@ export const useAgentStore = defineStore('agent', () => {
     if (!currentSession.value || currentSession.value.sessionId === 'pre-session') {
       await createNewSession(message);
     }
+    currentSession.value.timestamp = new Date().toISOString();
+    sessionList.value = sortSessionsListByTimestamp(sessionList.value.map((s: ISessionsListItem) => s.sessionId === currentSession.value?.sessionId ? {
+      ...s,
+      timestamp: currentSession.value?.timestamp || s.timestamp,
+    } : s));
     lastMessage.value = message;
     currentChat.value?.sendMessage({
       text: message,

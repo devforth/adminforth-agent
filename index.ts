@@ -87,6 +87,13 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     return {ok: true};
   }
 
+  private async updateSessionDate(sessionId: string) {
+    await this.adminforth.resource(this.options.sessionResource.resourceId).update(sessionId, {
+      [this.options.sessionResource.createdAtField]: new Date().toISOString(),
+    });
+    return {ok: true};
+  }
+
   private async getSessionTurns(sessionId: string) {
     const turns = await this.adminforth.resource(this.options.turnResource.resourceId).list(
       [Filters.EQ(this.options.turnResource.sessionIdField, sessionId)],
@@ -150,6 +157,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         const userTimeZone = (body.timeZone as string | undefined) ?? 'UTC';
         const sessionId = body.sessionId || adminUser?.pk || adminUser?.username || 'default';
         const turnId = await this.createNewTurn(sessionId, prompt);
+        await this.updateSessionDate(sessionId);
         let fullResponse = "";
         let isStreamClosed = false;
         const sequenceDebugCollector = createSequenceDebugCollector();
