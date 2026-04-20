@@ -26,6 +26,7 @@ export const useAgentStore = defineStore('agent', () => {
   const coreStore = useCoreStore();
   const appRoot = ref<HTMLElement | null>(null);
   const header = ref<HTMLElement | null>(null);
+  const lastSessionId = ref<string | null>(null);
   const chatWidth = ref(600);
   function setLocalStorageItem(key: string, value: string) {
     window.localStorage.setItem(`${coreStore.config.brandName || 'adminforth'}-${key}`, value);
@@ -42,9 +43,18 @@ export const useAgentStore = defineStore('agent', () => {
   watch(chatWidth, (newVal: number) => {
     setLocalStorageItem('chatWidth', newVal.toString());
   })
+  watch(activeSessionId, (newVal: string | null) => {
+    if (newVal) {
+      setLocalStorageItem('lastSessionId', newVal);
+    }
+  })
   onMounted(() => {
     chatWidth.value = parseInt(getLocalStorageItem('chatWidth') || '600', 10);
     isTeleportedToBody.value = getLocalStorageItem('isTeleportedToBody') === 'true';
+    lastSessionId.value = getLocalStorageItem('lastSessionId');
+    if (lastSessionId.value && lastSessionId.value !== 'pre-session') {
+      setActiveSession(lastSessionId.value);
+    }
     if (isTeleportedToBody.value) {
       isChatOpen.value = getLocalStorageItem('isChatOpen') === 'true';
     }
