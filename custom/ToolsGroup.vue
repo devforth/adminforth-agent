@@ -1,8 +1,9 @@
 <template>
   <template v-for="group in props.toolGroup" :key="group.title">
-    <div v-if="group.groupedTools.length > 1" class="mb-4 flex flex-col">
-      <div class="flex items-center gap-2 p-2 m-2 cursor-pointer hover:opacity-75 break-all font-mono text-sm leading-5" @click="toggleGroup(group.title)">
-        - {{ group.title }} {{ 'x' + group.groupedTools.length }} 
+    <div v-if="group.groupedTools.length > 1" class="flex flex-col">
+      <div class="flex items-center gap-2 p-2 m-2 cursor-pointer hover:opacity-75 break-all font-mono text-sm leading-5 text-lightListTableHeadingText dark:text-darkListTableHeadingText" @click="toggleGroup(group.title)">
+        <IconMinusOutline  class="w-6 h-6 p-1"/> 
+        {{ group.title }} {{ 'x' + group.groupedTools.length }} 
         <IconAngleDownOutline 
           class="transition-transform duration-200 hover:scale-105 hover:opacity-75"
           :class="expandedGroups.includes(group.title) ? 'rotate-180' : 'rotate-0'"
@@ -10,7 +11,7 @@
       </div>
       <transition name="expand">
         <div v-show="expandedGroups.includes(group.title)" class="flex flex-col"> 
-        <ToolRenderer v-for="part in group.groupedTools" :key="part.text + part.type" :data="part" />
+        <ToolRenderer v-for="part in group.groupedTools" :key="part.text + part.type" :data="part" class="ml-8"/>
         </div>
       </transition>
     </div>
@@ -24,7 +25,7 @@ import { Tool } from 'langchain';
 import ToolRenderer from './ToolRenderer.vue';
 import type { IPart } from './types';
 import { ref } from 'vue';
-import { IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
+import { IconAngleDownOutline, IconMinusOutline } from '@iconify-prerendered/vue-flowbite';
 
 const props = defineProps<{
   toolGroup: {
