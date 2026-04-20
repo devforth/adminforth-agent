@@ -273,7 +273,7 @@ export async function callAgent(params: {
 
   return await agent.stream({ messages } as any, {
     streamMode: "messages",
-    recursionLimit: 50,
+    recursionLimit: 100,
     callbacks: [createAgentLlmMetricsLogger()],
     configurable: {
       thread_id: sessionId,
