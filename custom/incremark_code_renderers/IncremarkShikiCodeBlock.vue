@@ -18,7 +18,13 @@
 
     <div class="incremark-shiki-body">
       <div
-        v-if="renderedHtml"
+        v-if="shouldRenderVega && !renderedHtml"
+        ref="vegaContainer"
+        class="incremark-vega"
+      />
+
+      <div
+        v-else-if="renderedHtml"
         class="incremark-shiki-html"
         v-html="renderedHtml"
       />
@@ -31,6 +37,7 @@
 <script setup lang="ts">
 import type { Code } from 'mdast';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import embed from 'vega-embed';
 
 import { highlightCodeSnippetHtml, type IncremarkCodeTheme } from './incremarkCodeHighlight';
 
@@ -53,15 +60,18 @@ const props = withDefaults(defineProps<{
 const renderedHtml = ref('');
 const copied = ref(false);
 const prefersDarkMode = ref(isDarkDocument());
+const vegaContainer = ref<HTMLDivElement | null>(null);
 
 let copyResetTimeout: number | null = null;
 let renderRequestId = 0;
 let scheduledFrameId: number | null = null;
 let themeObserver: MutationObserver | null = null;
+let vegaResult: { finalize: () => void } | null = null;
 
 const sourceCode = computed(() => props.node.value ?? '');
 const language = computed(() => props.node.lang?.trim().toLowerCase() || 'text');
 const languageLabel = computed(() => props.node.lang?.trim() || 'text');
+const shouldRenderVega = computed(() => language.value === 'vega-lite' && props.blockStatus === 'completed');
 const codeTheme = computed<IncremarkCodeTheme>(() => {
   const requestedTheme = props.theme ?? (prefersDarkMode.value ? props.darkTheme : props.lightTheme);
 
@@ -77,7 +87,7 @@ const codeTheme = computed<IncremarkCodeTheme>(() => {
 });
 
 watch(
-  [sourceCode, language, codeTheme, () => props.disableHighlight],
+  [sourceCode, language, codeTheme, () => props.disableHighlight, () => props.blockStatus],
   () => {
     scheduleHighlight();
   },
@@ -86,6 +96,7 @@ watch(
 
 onMounted(() => {
   if (typeof MutationObserver === 'undefined' || typeof document === 'undefined') {
+    scheduleHighlight();
     return;
   }
 
@@ -97,10 +108,13 @@ onMounted(() => {
     attributes: true,
     attributeFilter: ['class'],
   });
+
+  scheduleHighlight();
 });
 
 onBeforeUnmount(() => {
   renderRequestId += 1;
+  clearVega();
 
   if (copyResetTimeout !== null) {
     window.clearTimeout(copyResetTimeout);
@@ -154,6 +168,45 @@ function scheduleHighlight() {
 async function renderHighlight() {
   const requestId = ++renderRequestId;
 
+  if (shouldRenderVega.value) {
+    renderedHtml.value = '';
+
+    if (!sourceCode.value || !vegaContainer.value) {
+      return;
+    }
+
+    try {
+      clearVega();
+      const spec = JSON.parse(sourceCode.value);
+
+      if (spec.width == null) {
+        spec.width = 'container';
+      }
+
+      if (spec.autosize == null) {
+        spec.autosize = { type: 'fit-x', contains: 'padding' };
+      }
+
+      const result = await embed(vegaContainer.value, spec, {
+        actions: false,
+        renderer: 'svg',
+      });
+
+      if (requestId !== renderRequestId) {
+        result.finalize();
+        return;
+      }
+
+      vegaResult = result;
+      return;
+    } catch (error) {
+      clearVega();
+      console.error('Failed to render Vega-Lite block', error);
+    }
+  } else {
+    clearVega();
+  }
+
   if (!sourceCode.value || props.disableHighlight) {
     renderedHtml.value = '';
     return;
@@ -176,6 +229,15 @@ async function renderHighlight() {
 
 function isDarkDocument(): boolean {
   return typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+}
+
+function clearVega() {
+  vegaResult?.finalize();
+  vegaResult = null;
+
+  if (vegaContainer.value) {
+    vegaContainer.value.innerHTML = '';
+  }
 }
 </script>
 
@@ -265,6 +327,11 @@ function isDarkDocument(): boolean {
   overflow-x: auto;
 }
 
+.incremark-vega {
+  padding: 18px;
+  width: 100%;
+}
+
 .incremark-shiki-fallback {
   margin: 0;
   padding: 18px;
@@ -297,5 +364,13 @@ function isDarkDocument(): boolean {
 
 :deep(.incremark-shiki-html .line) {
   min-height: 1.65em;
+}
+
+:deep(.incremark-vega .vega-embed) {
+  width: 100%;
+}
+
+:deep(.incremark-vega){
+  padding: 0;
 }
 </style>

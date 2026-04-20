@@ -2,12 +2,15 @@
   <div 
     class="max-w-[80%] flex px-4 m-2 rounded-xl border border-gray-200 dark:border-gray-700"
     @click="handleMarkdownLinkClick"
-    :class="props.role === 'user' ? 'bg-lightListTableHeading dark:bg-darkListTableHeading self-end' 
+    :class="[
+      hasVegaLite ? 'w-full' : '',
+      props.role === 'user' ? 'bg-lightListTableHeading dark:bg-darkListTableHeading self-end' 
       : isTypeReasoning || isTypeToolCall ? 'bg-transparent border-none self-start' 
-        : 'bg-blue-100 dark:bg-blue-700/10 self-start'"
+        : 'bg-blue-100 dark:bg-blue-700/10 self-start'
+    ]"
   >
     <IncremarkContent
-      class="text-wrap break-words max-w-full"
+      class="text-wrap break-words w-full max-w-full"
       v-if="content && props.type === 'text'"
       :content="content" 
       :is-finished="isFinished" 
@@ -88,6 +91,7 @@
   const content = computed(() => props.message)
   const isFinished = computed(() => props.state === 'done')
   const isThoughtsExpanded = ref(false)
+  const hasVegaLite = computed(() => props.type === 'text' && props.message.includes('```vega-lite'))
 
   const isTypeReasoning = computed(() => props.type === 'reasoning')
   const isTypeToolCall = computed(() => props.type === 'data-tool-call')
