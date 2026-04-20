@@ -23,6 +23,8 @@ export type SequenceDebug = {
   prompt: string;
   reasoning: string;
   text: string;
+  cachedTokens: number;
+  responseId: string | null;
   toolCalls: SequenceDebugToolCall[];
   endedAt: string;
   resultType: SequenceDebugResultType;
@@ -37,7 +39,19 @@ type PendingSequenceDebug = Omit<SequenceDebug, "toolCalls" | "endedAt" | "resul
 type SequenceDebugModelCall = {
   reasoning: string;
   text: string;
+  cachedTokens: number;
+  responseId: string | null;
   resultType: SequenceDebugResultType;
+};
+
+type OpenAiUsageMetadata = {
+  input_token_details?: {
+    cache_read?: number;
+  };
+};
+
+type OpenAiResponseMetadata = {
+  id?: string;
 };
 
 export type SequenceDebugModelCallSink = {
@@ -58,6 +72,8 @@ function createPendingSequenceDebug(sequenceId: number): PendingSequenceDebug {
     prompt: "",
     reasoning: "",
     text: "",
+    cachedTokens: 0,
+    responseId: null,
     toolCalls: [],
     pendingToolCalls: 0,
     resultType: null,
@@ -83,6 +99,8 @@ function finalizeSequenceDebug(sequence: PendingSequenceDebug): SequenceDebug {
     prompt: sequence.prompt,
     reasoning: sequence.reasoning,
     text: sequence.text,
+    cachedTokens: sequence.cachedTokens,
+    responseId: sequence.responseId,
     toolCalls: sequence.toolCalls.map(({ completed: _completed, ...toolCall }) => toolCall),
     endedAt: new Date().toISOString(),
     resultType: sequence.resultType ?? "final_text",
@@ -172,6 +190,12 @@ function extractSequenceResponseDebug(message: AIMessage): SequenceDebugModelCal
   return {
     reasoning,
     text: textFromBlocks || (typeof message.content === "string" ? message.content : ""),
+    cachedTokens:
+      (message.usage_metadata as OpenAiUsageMetadata | undefined)
+        ?.input_token_details?.cache_read ?? 0,
+    responseId:
+      (message.response_metadata as OpenAiResponseMetadata | undefined)?.id ??
+      null,
     resultType: hasToolCallSignal(message) ? "tool_calls" : "final_text",
   };
 }
@@ -216,6 +240,8 @@ export function createSequenceDebugCollector(): SequenceDebugCollector {
       const sequenceDebug = ensureSequenceDebug();
       sequenceDebug.reasoning = params.reasoning;
       sequenceDebug.text = params.text;
+      sequenceDebug.cachedTokens = params.cachedTokens;
+      sequenceDebug.responseId = params.responseId;
       sequenceDebug.resultType = params.resultType;
 
       if (

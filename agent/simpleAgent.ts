@@ -11,6 +11,7 @@ import {
   createSequenceDebugMiddleware,
   type SequenceDebugModelCallSink,
 } from "./middleware/sequenceDebug.js";
+import { createOpenAiResponsesContinuationMiddleware } from "./middleware/openAiResponsesContinuation.js";
 import type { ApiBasedTool } from "../apiBasedTools.js";
 import type { ToolCallEventSink } from "./toolCallEvents.js";
 
@@ -205,6 +206,10 @@ export function createAgentChatModel(params: {
     maxTokens: params.maxTokens,
     useResponsesApi: true,
     outputVersion: "v1",
+
+    promptCacheKey: `adminforth-agent:${model}:system-v1:tools-v1`,
+    promptCacheRetention: "in_memory" as "in_memory",
+
     ...(reasoning ? { reasoning } : {}),
     ...(typeof options.timeoutMs === "number"
       ? { timeout: options.timeoutMs }
@@ -250,16 +255,19 @@ export async function callAgent(params: {
 
   const tools = await createAgentTools(customComponentsDir, apiBasedTools);
   const apiBasedToolsMiddleware = createApiBasedToolsMiddleware(apiBasedTools);
+  const openAiResponsesContinuationMiddleware =
+    createOpenAiResponsesContinuationMiddleware();
   const sequenceDebugMiddleware = createSequenceDebugMiddleware(
     sequenceDebugSink,
   );
 
   const middleware = [
     apiBasedToolsMiddleware,
+    openAiResponsesContinuationMiddleware,
     sequenceDebugMiddleware,
     summarizationMiddleware({
       model: summaryModel,
-      trigger: { tokens: 1024 * 8 },
+      trigger: { tokens: 1024 * 128 },
       keep: { messages: 10 },
     }),
   ] as const;
