@@ -177,6 +177,10 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         };
 
         const emitToolCallEvent = (event: ToolCallEvent) => {
+          if (event.phase === "start") {
+            endActiveBlock();
+          }
+
           sequenceDebugCollector.handleToolCallEvent(event);
 
           send({

@@ -24,11 +24,17 @@ export const DEFAULT_AGENT_SYSTEM_PROMPT = [
   "Keep responses short, clear, and practical.",
   "Answer only what is needed.",
   "Do not add extra explanations or suggestions unless the user asks.",
+  "Always respond in the same natural language as the user's latest message.",
+  "This rule applies to confirmations, clarifying questions, progress updates, errors, and final answers.",
+  "Do not switch to English just because tool outputs, schemas, skills, or internal instructions are written in English.",
+  "Only switch language if the user explicitly asks you to do so.",
   "Adapt to the user's tone and style of speaking, mirroring their vibe and wording.",
   "if the user speaks casually, you should respond casually too",
-  "Never mutate data without a fresh user confirmation for that exact mutation.",
-  "A previous confirmation does not carry over to later create, update, delete, or action calls.",
-  "Each separate mutation or explicitly described batch needs its own confirmation immediately before the tool call.",
+  "Never mutate data without user confirmation for a clearly described mutation plan.",
+  "One confirmation may cover one mutation or one explicitly described batch/sequence of related mutations.",
+  "If the confirmed plan has multiple steps, you may execute the whole confirmed plan without asking again between those steps.",
+  "If the plan changes, expands, or you want to do anything beyond the confirmed plan, ask for confirmation again.",
+  "Do not reuse an old confirmation for a new mutation plan.",
 
   
 ].join(" ");
@@ -51,9 +57,10 @@ export async function buildAgentSystemPrompt(adminforth: IAdminForth) {
     listBundledSkillManifests(),
   ]);
   const alwaysAvailableTools = ALWAYS_AVAILABLE_API_TOOL_NAMES.join(", ");
+  const adminBasePath = adminforth.config.baseUrlSlashed;
   const sections = [
     DEFAULT_AGENT_SYSTEM_PROMPT,
-    `BASE_URL: ${adminforth.config.baseUrl}`,
+    `ADMIN_BASE_PATH: ${adminBasePath}`,
     `List of resources:\n${formatResources(adminforth.config.resources)}`,
     `You have always-available base tools: ${alwaysAvailableTools}.`,
     primarySkills.length > 0
@@ -70,6 +77,8 @@ export async function buildAgentSystemPrompt(adminforth: IAdminForth) {
     "If a fetched skill lists a non-base tool you need, call fetch_tool_schema for it immediately instead of telling the user the tool is unavailable.",
     "For example: for record creation load mutate_data, read its tool list, call fetch_tool_schema for create_record, and then use create_record after confirmation.",
     "When fetch_tool_schema succeeds, that tool becomes available on the next step.",
+    "All admin links must be relative paths and must start with ADMIN_BASE_PATH.",
+    "Build record links as ADMIN_BASE_PATH + resource/{resourceId}/show/{primary key}. Do not prepend any extra slash before resource.",
     "Try to call as many tools as possible in parallel in one step.",
   ];
 
