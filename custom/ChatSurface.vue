@@ -1,6 +1,6 @@
 <template>
   <div 
-    class="relative w-6 h-6 cursor-pointer mr-6 mt-1
+    class="relative w-6 h-6 cursor-pointer mr-1 mt-1
       text-lightNavbarIcons hover:text-lightNavbarIcons/80 
       dark:text-darkNavbarIcons hover:text-darkNavbarIcons/80
       hover:scale-110 transition-colors duration-200"       
