@@ -200,6 +200,7 @@ export function createAgentChatModel(params: {
   const baseURL = options.baseURL ?? options.baseUrl;
   const reasoning = normalizeReasoning(params.reasoning);
 
+  // @ts-ignore
   return new ChatOpenAI({
     apiKey: options.openAiApiKey,
     model,
@@ -208,7 +209,8 @@ export function createAgentChatModel(params: {
     outputVersion: "v1",
 
     promptCacheKey: `adminforth-agent:${model}:system-v1:tools-v1`,
-    promptCacheRetention: "in_memory" as "in_memory",
+
+    promptCacheRetention: "in_memory", 
 
     ...(reasoning ? { reasoning } : {}),
     ...(typeof options.timeoutMs === "number"
