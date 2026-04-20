@@ -21,7 +21,7 @@ Use `start_custom_action` and `start_custom_bulk_action` for resource actions.
 Before performing any state mutation including action calls edit/delete please fetch record which is going to be edited/deleted and show user record in format field → value (show several most important fields which can help user to understand what exactly record he is going to edit or delete). 
 
 For field values with long texts show only several first words and add "..." at the end.
-Also please add related link to record with will be changed. For example /{BASE_URL}/resource/{resourceId}/show/{primary key}. Use _label from `get_resource_data` as anchor text for link (use markdown link). Links shoudl be always relative path, starting with slash.
+Also please add related link to record with will be changed. Build it as `{ADMIN_BASE_PATH}resource/{resourceId}/show/{primary key}`. Use _label from `get_resource_data` as anchor text for link (use markdown link). Links should always be relative paths and must start with `ADMIN_BASE_PATH`. Do not add an extra slash after `ADMIN_BASE_PATH`.
 
 And in the same message ask user for final confirmation.
 
@@ -62,7 +62,7 @@ If you want to block some user you can confirm that this action by saying:
 * IP Country: USA
 * Currently blocked: No // show this field only if it exists in user record
 
-View [John Doe](/resource/users/show/123)
+View [John Doe]({ADMIN_BASE_PATH}resource/users/show/123)
 Are you sure?
 ```
 
@@ -85,7 +85,7 @@ I am going to update user:
 * IP Country: USA
 I am going to change email from john_doe@example.com to new_email@example.com
 
-View [John Doe](/admin/resource/users/show/123)
+View [John Doe]({ADMIN_BASE_PATH}resource/users/show/123)
 
 Are you sure?
 ```
@@ -105,7 +105,7 @@ If you gonna delete user record, in confirmation please share full user info (no
 * Signed up: 2024 Jan 1
 * IP Country: USA
 
-View [John Doe](/admin/resource/users/show/123)
+View [John Doe]({ADMIN_BASE_PATH}resource/users/show/123)
 
 Are you sure?
 ```
@@ -130,7 +130,7 @@ I am going to create user:
 * Username: john_doe
 * Email: john_doe@example.com
 
-View [John Doe](/admin/resource/users/show/421) # 421 is id of new created record
+View [John Doe]({ADMIN_BASE_PATH}resource/users/show/421) # 421 is id of new created record
 
 Are you sure?
 ```

@@ -57,9 +57,10 @@ export async function buildAgentSystemPrompt(adminforth: IAdminForth) {
     listBundledSkillManifests(),
   ]);
   const alwaysAvailableTools = ALWAYS_AVAILABLE_API_TOOL_NAMES.join(", ");
+  const adminBasePath = adminforth.config.baseUrlSlashed;
   const sections = [
     DEFAULT_AGENT_SYSTEM_PROMPT,
-    `BASE_URL: ${adminforth.config.baseUrl}`,
+    `ADMIN_BASE_PATH: ${adminBasePath}`,
     `List of resources:\n${formatResources(adminforth.config.resources)}`,
     `You have always-available base tools: ${alwaysAvailableTools}.`,
     primarySkills.length > 0
@@ -76,6 +77,8 @@ export async function buildAgentSystemPrompt(adminforth: IAdminForth) {
     "If a fetched skill lists a non-base tool you need, call fetch_tool_schema for it immediately instead of telling the user the tool is unavailable.",
     "For example: for record creation load mutate_data, read its tool list, call fetch_tool_schema for create_record, and then use create_record after confirmation.",
     "When fetch_tool_schema succeeds, that tool becomes available on the next step.",
+    "All admin links must be relative paths and must start with ADMIN_BASE_PATH.",
+    "Build record links as ADMIN_BASE_PATH + resource/{resourceId}/show/{primary key}. Do not prepend any extra slash before resource.",
     "Try to call as many tools as possible in parallel in one step.",
   ];
 
