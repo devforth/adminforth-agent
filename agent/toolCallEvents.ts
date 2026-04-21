@@ -20,6 +20,28 @@ export type ToolCallEvent =
 
 export type ToolCallEventSink = (event: ToolCallEvent) => void;
 
+const TOOL_MESSAGE_DEBUG_KEYS = new Set([
+  "metadata",
+  "additional_kwargs",
+  "response_metadata",
+]);
+
+function sanitizeToolCallOutputForDebug(output: unknown) {
+  if (typeof output !== "object" || output === null) {
+    return output;
+  }
+
+  const outputRecord = output as Record<string, unknown>;
+
+  if (!("tool_call_id" in outputRecord)) {
+    return output;
+  }
+
+  return Object.fromEntries(
+    Object.entries(outputRecord).filter(([key]) => !TOOL_MESSAGE_DEBUG_KEYS.has(key)),
+  );
+}
+
 export function createToolCallTracker(params: {
   emit: ToolCallEventSink;
   toolCallId?: string;
@@ -45,7 +67,7 @@ export function createToolCallTracker(params: {
         toolName: params.toolName,
         phase: "end",
         durationMs: Date.now() - startedAt,
-        output: YAML.stringify(output).trimEnd(),
+        output: YAML.stringify(sanitizeToolCallOutputForDebug(output)).trimEnd(),
         error: null,
       });
     },
