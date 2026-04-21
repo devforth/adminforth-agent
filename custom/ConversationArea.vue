@@ -24,7 +24,7 @@
     :threshold="10"
     behavior="smooth"
     :style="{ 
-      maxWidth: agentStore.isFullScreen ? agentStore.MAX_WIDTH+'px' : '100%',
+      maxWidth: agentStore.isFullScreen ? agentStore.MAX_WIDTH+'rem' : '100%',
       transition: `
         max-width ${agentTransitions.TRANSITION_DURATION}ms ease-in-out,
         transform ${agentTransitions.TRANSITION_DURATION}ms ease-in-out
