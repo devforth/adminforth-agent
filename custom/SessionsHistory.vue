@@ -6,10 +6,16 @@
     "
   >
     <h3 :class="h3Style">{{ $t('Chat history') }}</h3>
-    <Button @click="agentStore.createPreSession(); agentStore.setSessionHistoryOpen(false); agentStore.focusTextInput();" :disabled="agentStore.isResponseInProgress" class="w-[360px] mx-4 my-2 mb-4 rounded-3xl text-gray-800 dark:text-gray-200">
-      <IconPlusOutline class="w-5 h-5" />
-      {{ $t('New chat') }}
-    </Button>
+    <div class="w-full flex items-center justify-center">
+      <Button 
+        @click="agentStore.createPreSession(); agentStore.setSessionHistoryOpen(false); agentStore.focusTextInput();" 
+        :disabled="agentStore.isResponseInProgress" 
+        class="w-[90%] my-2 mb-4 rounded-3xl text-gray-800 dark:text-gray-200"
+      >
+        <IconPlusOutline class="w-5 h-5" />
+        {{ $t('New chat') }}
+      </Button>
+    </div>
     <div class="w-full border-b border-gray-200 dark:border-gray-700"/>
     <div class="absolute w-full h-full flex flex-col items-center justify-center bg-gray-100/50 dark:bg-gray-700/50 z-10" v-if="agentStore.isResponseInProgress">
       <Spinner class="w-8 h-8" v-if="agentStore.isResponseInProgress" />
@@ -23,11 +29,12 @@
       <button
         v-for="session in group.sessions"
         :key="session.sessionId"
-        class="flex items-center justify-between w-full px-4 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200 ease-in-out text-gray-800 dark:text-gray-200"
+        class=" flex items-center justify-between w-full px-4 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200 ease-in-out text-gray-800 dark:text-gray-200"
         :class="{
           'bg-lightPrimary/20 hover:bg-lightPrimary/20 dark:bg-darkPrimary/20 dark:hover:bg-darkPrimary/20': agentStore.activeSessionId === session.sessionId, 
-          'cursor-default opacity-50 pointer-events-none': agentStore.isResponseInProgress
-        }"
+          'cursor-default opacity-50 pointer-events-none': agentStore.isResponseInProgress,
+          'pl-8': agentStore.isFullScreen
+         }"
         @click="agentStore.setActiveSession(session.sessionId); agentStore.setSessionHistoryOpen(false);"
         :disabled="agentStore.isResponseInProgress"
       >
