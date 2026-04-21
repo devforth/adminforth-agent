@@ -47,6 +47,7 @@ export const useAgentStore = defineStore('agent', () => {
   const chatWidth = ref(DEFAULT_CHAT_WIDTH);
   const availableModes = ref<AgentMode[]>([]);
   const activeModeName = ref<string | null>(null);
+  const hasTypedMessageInPageSession = ref(false);
   let placeholderAnimationTimer: ReturnType<typeof setTimeout> | null = null;
 
   function setLocalStorageItem(key: string, value: string) {
@@ -67,6 +68,16 @@ export const useAgentStore = defineStore('agent', () => {
   watch(activeSessionId, (newVal: string | null) => {
     if (newVal) {
       setLocalStorageItem('lastSessionId', newVal);
+    }
+  })
+  watch(userMessageInput, (newVal: unknown) => {
+    if (hasTypedMessageInPageSession.value) {
+      return;
+    }
+
+    if (typeof newVal === 'string' && newVal.trim() !== '') {
+      hasTypedMessageInPageSession.value = true;
+      stopPlaceholderAnimation();
     }
   })
   onMounted(() => {
@@ -201,6 +212,10 @@ export const useAgentStore = defineStore('agent', () => {
     userMessagePlaceholder.value = DEFAULT_TEXTAREA_PLACEHOLDER;
   }
 
+  function stopPlaceholderAnimation() {
+    resetPlaceholder();
+  }
+
   function startPlaceholderAnimation(messages: string[]) {
     clearPlaceholderAnimationTimer();
 
@@ -311,6 +326,11 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   async function fetchPlaceholderMessages() {
+    if (hasTypedMessageInPageSession.value) {
+      stopPlaceholderAnimation();
+      return;
+    }
+
     try {
       const res = await callAdminForthApi({
         method: 'POST',
@@ -513,6 +533,7 @@ export const useAgentStore = defineStore('agent', () => {
     //____________________________________________
     regisrerTextInput,
     fetchPlaceholderMessages,
+    stopPlaceholderAnimation,
     isChatOpen,
     setIsChatOpen,
     isSessionHistoryOpen,
