@@ -33,11 +33,13 @@
 
       <div 
         class="w-full h-full flex flex-col"
-        :class="{ 'ml-4': agentStore.isFullScreen }"
       >
-        <div class="flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
+        <div 
+          class="flex items-center justify-between h-14 border-b border-gray-200 dark:border-gray-700"         
+          :class="{ 'pl-4': agentStore.isFullScreen }"
+        >
           <div 
-            class="flex items-center h-[55px]"
+            class="flex items-center"
           >
             <IconBarsOutline 
               class="m-2 w-8 h-8 p-1 cursor-pointer hover:scale-110 rounded transition-colors duration-200
@@ -99,9 +101,11 @@
           />
 
           <div 
-            class="w-full mb-2 flex items-center justify-center px-2 bg-transparent relative"
-            :class="agentStore.isFullScreen ? 'mx-auto' : ''"
-            :style="{ maxWidth: agentStore.isFullScreen ? agentStore.MAX_WIDTH+'px' : '100%' }"            
+            class="w-full mb-2 flex items-center justify-center px-2 bg-transparent relative translate-x-[-50%] left-1/2"
+            :style="{ 
+              maxWidth: agentStore.isFullScreen ? agentStore.MAX_WIDTH+'px' : '100%',
+              transition: `transform ${agentTransitions.TRANSITION_DURATION}ms ease-in-out`
+            }"            
           >
             <textarea
               v-model="agentStore.userMessageInput"
@@ -121,14 +125,20 @@
             >
               <button
                 aria-label="Select mode"
-                class="flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 bg-white text-lightNavbarIcons transition-colors duration-200 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-darkNavbarIcons dark:hover:bg-gray-700"
+                class="flex px-2 py-1 items-center text-sm justify-center 
+                  rounded-md bg-white text-lightListTableHeadingText 
+                  transition-colors duration-200 hover:bg-gray-100 
+                  dark:text-darkListTableHeadingText dark:bg-gray-700 dark:hover:bg-gray-800"
                 :class="isModeMenuOpen ? 'bg-gray-100 dark:bg-gray-700' : ''"
                 :disabled="agentStore.isResponseInProgress"
                 title="Select mode"
                 type="button"
                 @click="toggleModeMenu"
               >
-                <IconBrainOutline class="h-4 w-4" />
+                {{ agentStore.activeModeName }}
+                <IconAngleDownOutline 
+                  class="w-4 h-4 ml-1" 
+                />
               </button>
 
               <div
@@ -148,7 +158,7 @@
               </div>
             </div>
             <Button 
-              class="absolute right-4 bottom-2 !p-0 h-[34px] w-[34px]"                    
+              class="absolute right-4 bottom-2 !p-0 h-9 w-9"                    
               @click="sendMessage" 
               :disabled="!agentStore.trimmedUserMessage || agentStore.isResponseInProgress"
             >
@@ -167,7 +177,7 @@
 
 <script setup lang="ts">
 import { IconChatBubbleLeft20Solid, IconSparklesSolid, IconArrowsPointingOut, IconArrowsPointingIn } from '@iconify-prerendered/vue-heroicons';
-import { IconCloseOutline, IconBarsOutline, IconArrowUpOutline, IconCloseSidebarSolid, IconOpenSidebarSolid, IconBrainOutline } from '@iconify-prerendered/vue-flowbite';
+import { IconCloseOutline, IconBarsOutline, IconArrowUpOutline, IconCloseSidebarSolid, IconOpenSidebarSolid, IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
 import { useTemplateRef, onMounted, ref,computed } from 'vue';
 import { onClickOutside } from '@vueuse/core'
 import ConversationArea from './ConversationArea.vue';
@@ -183,6 +193,7 @@ const props = defineProps<{
       name: string;
     }>;
     defaultModeName: string | null;
+    stickByDefault: boolean;
   }
 }>();
 
@@ -193,7 +204,6 @@ const agentStore = useAgentStore();
 const agentTransitions = useAgentTransitions();
 const coreStore = useCoreStore();
 const isModeMenuOpen = ref(false);
-
 let startX = 0
 let startWidth = 0
 
@@ -236,6 +246,7 @@ onMounted(async () => {
   agentStore.setAvailableModes(props.meta.modes, props.meta.defaultModeName);
   agentStore.regisrerTextInput(textInput.value);
   textInput.value?.focus();
+  agentStore.setIsTeleportedToBody(props.meta.stickByDefault);
   await agentStore.fetchSessionsList();
 });
 

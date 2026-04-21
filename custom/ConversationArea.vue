@@ -1,5 +1,12 @@
 <template>
-
+  <button @click="scrollContainer.scrollToBottom()">
+    <IconArrowDownOutline 
+      class="absolute z-10 bottom-32 left-1/2 bg-lightPrimary dark:bg-darkPrimary text-white p-2 w-10 h-10 rounded-full transition-opacity duration-100 ease-in" 
+      :class="showScrollToBottomButton ? 'opacity-100' : 'opacity-0 pointer-events-none'"
+      :disabled="!showScrollToBottomButton"
+    />
+  </button>
+  
   <SessionsHistory 
     :class="agentStore.isSessionHistoryOpen ? 'translate-x-0' : '-translate-x-full'"
   />
@@ -12,24 +19,19 @@
   </div>
   <AutoScrollContainer
     :enabled="!showScrollToBottomButton" 
-    class="relative flex flex-col overflow-y-auto"
+    class="relative flex flex-col overflow-y-auto translate-x-[-50%] left-1/2"
     ref="scrollContainer"
     :threshold="10"
     behavior="smooth"
-    :class="agentStore.isFullScreen ? 'mx-auto' : ''"
     :style="{ 
       maxWidth: agentStore.isFullScreen ? agentStore.MAX_WIDTH+'px' : '100%',
-      transition: `max-width ${agentTransitions.TRANSITION_DURATION}ms ease-in-out`
+      transition: `
+        max-width ${agentTransitions.TRANSITION_DURATION}ms ease-in-out,
+        transform ${agentTransitions.TRANSITION_DURATION}ms ease-in-out
+      `
     }"
   > 
 
-    <button @click="scrollContainer.scrollToBottom()">
-      <IconArrowDownOutline 
-        class="fixed bottom-32 left-1/2 bg-lightPrimary dark:bg-darkPrimary text-white p-2 w-10 h-10 rounded-full transition-opacity duration-100 ease-in" 
-        :class="showScrollToBottomButton ? 'opacity-100' : 'opacity-0 pointer-events-none'"
-        :disabled="!showScrollToBottomButton"
-      />
-    </button>
     <div 
       v-for="message in props.messages" :key="message.id"
       class="flex flex-col w-full"

@@ -89,6 +89,11 @@ export interface PluginOptions extends PluginsCommonOptions {
   turnResource: ITurnResource;
 
   /**
+   * Makes chat sticky by default. By default this prop is false
+   */
+  stickByDefault?: boolean;
+
+  /**
    * Optional resource configuration for a persistent LangGraph checkpointer.
    * Falls back to an in-memory MemorySaver when omitted.
    */

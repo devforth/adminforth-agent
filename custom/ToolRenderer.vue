@@ -1,6 +1,6 @@
 <template>
   <div 
-    class="inline-flex m-2 max-w-[80%] flex-col gap-3 rounded-xl p-2 cursor-pointer text-lightListTableHeadingText dark:text-darkListTableHeadingText hover:opacity-75"         
+    class="inline-flex m-2 max-w-[80%] flex-col gap-3 rounded-xl px-2 cursor-pointer text-lightListTableHeadingText dark:text-darkListTableHeadingText hover:opacity-75"         
     @click="isInputOutputExpanded = !isInputOutputExpanded"
   >
     <div class="flex items-center gap-3">
@@ -25,7 +25,7 @@
       />
     </div>
     <transition name="expand">
-      <div v-show="isInputOutputExpanded" class="max-h-72 space-y-3 overflow-y-auto pr-1">
+      <div v-if="isInputOutputExpanded" v-show="isInputOutputExpanded" class="max-h-72 space-y-3 overflow-y-auto pr-1">
         <section
           v-for="section in toolSections"
           :key="section.label"
