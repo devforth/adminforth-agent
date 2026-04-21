@@ -125,7 +125,7 @@
             >
               <button
                 aria-label="Select mode"
-                class="flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 bg-white text-lightNavbarIcons transition-colors duration-200 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-darkNavbarIcons dark:hover:bg-gray-700"
+                class="flex h-9 w-9 items-center justify-center rounded-md border border-gray-200 bg-white text-lightNavbarIcons transition-colors duration-200 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-darkNavbarIcons dark:hover:bg-gray-700"
                 :class="isModeMenuOpen ? 'bg-gray-100 dark:bg-gray-700' : ''"
                 :disabled="agentStore.isResponseInProgress"
                 title="Select mode"
@@ -152,7 +152,7 @@
               </div>
             </div>
             <Button 
-              class="absolute right-4 bottom-2 !p-0 h-[34px] w-[34px]"                    
+              class="absolute right-4 bottom-2 !p-0 h-9 w-9"                    
               @click="sendMessage" 
               :disabled="!agentStore.trimmedUserMessage || agentStore.isResponseInProgress"
             >
