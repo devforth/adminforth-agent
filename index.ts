@@ -149,6 +149,33 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
   setupEndpoints(server: IHttpServer) {
     server.endpoint({
       method: 'POST',
+      path: `/agent/get-placeholder-messages`,
+      handler: async ({ body, query, headers, cookies, adminUser, response, requestUrl }) => {
+        if (!this.options.placeholderMessages) {
+          return {
+            messages: [],
+          };
+        }
+
+        const messages = await this.options.placeholderMessages({
+          adminUser,
+          httpExtra: {
+            body,
+            query,
+            headers,
+            cookies,
+            requestUrl,
+            response,
+          },
+        });
+
+        return {
+          messages,
+        };
+      }
+    });
+    server.endpoint({
+      method: 'POST',
       path: `/agent/response`,
       handler: async ({ body, adminUser, _raw_express_res }) => {
         const res = _raw_express_res;
