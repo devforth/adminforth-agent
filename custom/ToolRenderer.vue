@@ -25,7 +25,7 @@
       />
     </div>
     <transition name="expand">
-      <div v-show="isInputOutputExpanded" class="max-h-72 space-y-3 overflow-y-auto pr-1">
+      <div v-if="isInputOutputExpanded" v-show="isInputOutputExpanded" class="max-h-72 space-y-3 overflow-y-auto pr-1">
         <section
           v-for="section in toolSections"
           :key="section.label"
