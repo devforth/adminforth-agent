@@ -16,6 +16,7 @@ import {
 } from './apiBasedTools.js';
 import type { ApiBasedTool } from './apiBasedTools.js';
 import {
+  appendCustomSystemPrompt,
   buildAgentSystemPrompt,
   DEFAULT_AGENT_SYSTEM_PROMPT,
 } from "./agent/systemPrompt.js";
@@ -67,7 +68,7 @@ function assertRequiredApiTool(
 export default class AdminForthAgentPlugin extends AdminForthPlugin {
   options: PluginOptions;
   apiBasedTools: Record<string, ApiBasedTool> = {};
-  agentSystemPromptPromise = Promise.resolve(DEFAULT_AGENT_SYSTEM_PROMPT);
+  agentSystemPromptPromise: Promise<string>;
 
   private async createNewTurn(sessionId: string, prompt: string, response?: string) {
     const turnId = randomUUID();
@@ -109,6 +110,9 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
   constructor(options: PluginOptions) {
     super(options, import.meta.url);
     this.options = options;
+    this.agentSystemPromptPromise = Promise.resolve(
+      appendCustomSystemPrompt(DEFAULT_AGENT_SYSTEM_PROMPT, this.options.systemPrompt),
+    );
     this.shouldHaveSingleInstancePerWholeApp = () => false;
   }
 
@@ -139,7 +143,8 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       assertRequiredApiTool(this.apiBasedTools, toolName);
     }
     assertRequiredApiTool(this.apiBasedTools, "update_record");
-    this.agentSystemPromptPromise = buildAgentSystemPrompt(adminforth);
+    this.agentSystemPromptPromise = buildAgentSystemPrompt(adminforth)
+      .then((systemPrompt) => appendCustomSystemPrompt(systemPrompt, this.options.systemPrompt));
   }
 
   instanceUniqueRepresentation(pluginOptions: any) : string {
@@ -147,6 +152,33 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
   }
 
   setupEndpoints(server: IHttpServer) {
+    server.endpoint({
+      method: 'POST',
+      path: `/agent/get-placeholder-messages`,
+      handler: async ({ body, query, headers, cookies, adminUser, response, requestUrl }) => {
+        if (!this.options.placeholderMessages) {
+          return {
+            messages: [],
+          };
+        }
+
+        const messages = await this.options.placeholderMessages({
+          adminUser,
+          httpExtra: {
+            body,
+            query,
+            headers,
+            cookies,
+            requestUrl,
+            response,
+          },
+        });
+
+        return {
+          messages,
+        };
+      }
+    });
     server.endpoint({
       method: 'POST',
       path: `/agent/response`,

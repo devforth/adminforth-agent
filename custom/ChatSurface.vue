@@ -115,7 +115,7 @@
                 'min-h-12 w-full resize-none overflow-hidden border text-lightInputText dark:text-darkInputText rounded-md bg-transparent text-sm bg-gray-50 dark:bg-gray-700 dark:border-gray-600 focus:outline-none',
                 agentStore.availableModes.length > 1 ? 'p-4 pr-12 pb-12' : 'p-4 pr-12',
               ]"
-              placeholder="Type a message..."
+              :placeholder="agentStore.userMessagePlaceholder"
               @keydown.enter.exact.prevent="sendMessage"
             />
             <div

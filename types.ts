@@ -1,4 +1,9 @@
-import { type PluginsCommonOptions, type CompletionAdapter } from "adminforth";
+import {
+  type PluginsCommonOptions,
+  type CompletionAdapter,
+  type AdminUser,
+  type HttpExtra,
+} from "adminforth";
 
 interface ISessionResource {
   resourceId: string;
@@ -21,6 +26,15 @@ interface ITurnResource {
 
 export interface PluginOptions extends PluginsCommonOptions {
   /**
+   * Optional placeholder examples to preload for the chat textarea.
+   * They are resolved once when the chat frontend loads.
+   */
+  placeholderMessages?: ((input: {
+    adminUser: AdminUser;
+    httpExtra: HttpExtra;
+  }) => string[] | Promise<string[]>);
+
+  /**
    * Modes for the plugin.
    * Each mode can have its own configuration.
    * Each mode uses its own completion adapter instance.
@@ -35,6 +49,11 @@ export interface PluginOptions extends PluginsCommonOptions {
    * Default is 1000
    */
   maxTokens?: number;
+
+  /**
+   * Optional custom system prompt appended to the built-in agent system prompt.
+   */
+  systemPrompt?: string;
 
   /**
    * Response generation level.

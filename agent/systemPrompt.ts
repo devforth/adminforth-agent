@@ -35,9 +35,20 @@ export const DEFAULT_AGENT_SYSTEM_PROMPT = [
   "If the confirmed plan has multiple steps, you may execute the whole confirmed plan without asking again between those steps.",
   "If the plan changes, expands, or you want to do anything beyond the confirmed plan, ask for confirmation again.",
   "Do not reuse an old confirmation for a new mutation plan.",
-
-  
 ].join(" ");
+
+export function appendCustomSystemPrompt(
+  systemPrompt: string,
+  customSystemPrompt?: string,
+) {
+  const normalizedCustomSystemPrompt = customSystemPrompt?.trim();
+
+  if (!normalizedCustomSystemPrompt) {
+    return systemPrompt;
+  }
+
+  return `${systemPrompt}\n\n${normalizedCustomSystemPrompt}`;
+}
 
 function formatResources(resources: AdminForthResource[]) {
   return resources
