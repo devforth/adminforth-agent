@@ -1,11 +1,5 @@
 <template>
-  <button @click="scrollContainer.scrollToBottom()">
-    <IconArrowDownOutline 
-      class="absolute bottom-32 right-4 bg-lightPrimary dark:bg-darkPrimary text-white p-2 w-10 h-10 rounded-full transition-opacity duration-100 ease-in" 
-      :class="showScrollToBottomButton ? 'opacity-100' : 'opacity-0 pointer-events-none'"
-      :disabled="!showScrollToBottomButton"
-    />
-  </button>
+
   <SessionsHistory 
     :class="agentStore.isSessionHistoryOpen ? 'translate-x-0' : '-translate-x-full'"
   />
@@ -18,12 +12,24 @@
   </div>
   <AutoScrollContainer
     :enabled="!showScrollToBottomButton" 
-    class="flex flex-col overflow-y-auto border-t border-gray-200 dark:border-gray-700"
+    class="relative flex flex-col overflow-y-auto"
     ref="scrollContainer"
     :threshold="10"
     behavior="smooth"
+    :class="agentStore.isFullScreen ? 'mx-auto' : ''"
+    :style="{ 
+      maxWidth: agentStore.isFullScreen ? agentStore.MAX_WIDTH+'px' : '100%',
+      transition: `max-width ${agentTransitions.TRANSITION_DURATION}ms ease-in-out`
+    }"
   > 
 
+    <button @click="scrollContainer.scrollToBottom()">
+      <IconArrowDownOutline 
+        class="fixed bottom-32 left-1/2 bg-lightPrimary dark:bg-darkPrimary text-white p-2 w-10 h-10 rounded-full transition-opacity duration-100 ease-in" 
+        :class="showScrollToBottomButton ? 'opacity-100' : 'opacity-0 pointer-events-none'"
+        :disabled="!showScrollToBottomButton"
+      />
+    </button>
     <div 
       v-for="message in props.messages" :key="message.id"
       class="flex flex-col w-full"
@@ -71,15 +77,16 @@ import type { IMessage, IPart } from './types';
 import { useTemplateRef, ref, defineAsyncComponent, onMounted, watch, computed } from 'vue';
 import { IconArrowDownOutline } from '@iconify-prerendered/vue-flowbite';
 import SessionsHistory from './SessionsHistory.vue';
-import { useAgentStore } from './useAgentStore';
-import ToolRenderer from './ToolRenderer.vue';
+import { useAgentStore } from './composables/useAgentStore';
 import ToolsGroup from './ToolsGroup.vue';
+import { useAgentTransitions } from './composables/useAgentTransitions';
 
 const scrollContainer = useTemplateRef('scrollContainer');
 const showScrollToBottomButton = ref(false);
 const innerScrollContainerRef = ref(null);
 const AutoScrollContainer = defineAsyncComponent(() => import('@incremark/vue').then(module => module.AutoScrollContainer))
 const agentStore = useAgentStore();
+const agentTransitions = useAgentTransitions();
 const clicks = ref(0);
 
 function recalculateScroll() {

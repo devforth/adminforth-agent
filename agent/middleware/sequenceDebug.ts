@@ -1,4 +1,5 @@
 import { AIMessage } from "@langchain/core/messages";
+import { convertMessagesToResponsesInput } from "@langchain/openai";
 import { createMiddleware } from "langchain";
 import YAML from "yaml";
 import type { ToolCallEvent } from "../toolCallEvents.js";
@@ -120,44 +121,36 @@ function finalizeSequenceDebug(sequence: PendingSequenceDebug): SequenceDebug {
   };
 }
 
+type OpenAiResponsesDebugModel = {
+  model: string;
+  zdrEnabled?: boolean;
+  invocationParams: (options?: Record<string, unknown>) => Record<string, unknown>;
+};
+
 function stringifyPromptForDebug(params: {
-  systemMessage: { toDict(): unknown };
-  messages: Array<{ toDict(): unknown }>;
+  model: OpenAiResponsesDebugModel;
+  systemMessage: { text: string };
+  messages: unknown[];
   tools: unknown[];
+  toolChoice?: unknown;
   modelSettings?: Record<string, unknown>;
 }) {
-  const { systemMessage, messages, tools, modelSettings } = params;
+  const { model, systemMessage, messages, tools, toolChoice, modelSettings } = params;
 
   return YAML.stringify({
-    systemMessage: systemMessage.toDict(),
-    messages: messages.map((message) => message.toDict()),
-    tools: tools.map((tool) => {
-      if (
-        typeof tool === "object" &&
-        tool !== null &&
-        "name" in tool &&
-        typeof tool.name === "string"
-      ) {
-        return tool.name;
-      }
-
-      if (
-        typeof tool === "object" &&
-        tool !== null &&
-        "schema" in tool &&
-        typeof tool.schema === "object" &&
-        tool.schema !== null &&
-        "name" in tool.schema &&
-        typeof tool.schema.name === "string"
-      ) {
-        return tool.schema.name;
-      }
-
-      return "";
+    input: convertMessagesToResponsesInput({
+      messages: [
+        ...(systemMessage.text === "" ? [] : [systemMessage]),
+        ...messages,
+      ] as any[],
+      zdrEnabled: model.zdrEnabled ?? false,
+      model: model.model,
     }),
-    ...(modelSettings && Object.keys(modelSettings).length > 0
-      ? { modelSettings }
-      : {}),
+    ...model.invocationParams({
+    ...(modelSettings ?? {}),
+    ...(tools.length > 0 ? { tools } : {}),
+    ...(toolChoice !== undefined ? { tool_choice: toolChoice } : {}),
+    }),
   });
 }
 
@@ -356,9 +349,11 @@ export function createSequenceDebugMiddleware(
     name: "SequenceDebugMiddleware",
     async wrapModelCall(request, handler) {
       const prompt = stringifyPromptForDebug({
+        model: request.model as unknown as OpenAiResponsesDebugModel,
         systemMessage: request.systemMessage,
         messages: request.messages,
         tools: request.tools,
+        toolChoice: request.toolChoice,
         modelSettings: request.modelSettings,
       });
 
