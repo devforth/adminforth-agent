@@ -26,19 +26,37 @@ const TOOL_MESSAGE_DEBUG_KEYS = new Set([
   "response_metadata",
 ]);
 
+function getToolCallDebugPayload(outputRecord: Record<string, unknown>) {
+  const lcKwargs =
+    typeof outputRecord.lc_kwargs === "object" && outputRecord.lc_kwargs !== null
+      ? outputRecord.lc_kwargs as Record<string, unknown>
+      : null;
+
+  if (lcKwargs && "tool_call_id" in lcKwargs) {
+    return lcKwargs;
+  }
+
+  if ("tool_call_id" in outputRecord) {
+    return outputRecord;
+  }
+
+  return null;
+}
+
 function sanitizeToolCallOutputForDebug(output: unknown) {
   if (typeof output !== "object" || output === null) {
     return output;
   }
 
   const outputRecord = output as Record<string, unknown>;
+  const debugPayload = getToolCallDebugPayload(outputRecord);
 
-  if (!("tool_call_id" in outputRecord)) {
+  if (!debugPayload) {
     return output;
   }
 
   return Object.fromEntries(
-    Object.entries(outputRecord).filter(([key]) => !TOOL_MESSAGE_DEBUG_KEYS.has(key)),
+    Object.entries(debugPayload).filter(([key]) => !TOOL_MESSAGE_DEBUG_KEYS.has(key)),
   );
 }
 
