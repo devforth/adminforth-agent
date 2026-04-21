@@ -49,7 +49,7 @@ import { Button, Spinner } from '@/afcl'
 import { computed } from 'vue';
 import { IconPlusOutline } from '@iconify-prerendered/vue-flowbite';
 import type { ISessionsListItem } from './types';
-import { useAgentStore } from './useAgentStore';
+import { useAgentStore } from './composables/useAgentStore';
 
 const agentStore = useAgentStore();
 
