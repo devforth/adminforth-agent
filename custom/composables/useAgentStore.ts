@@ -12,6 +12,11 @@ type AgentMode = {
   name: string;
 };
 
+const DEFAULT_TEXTAREA_PLACEHOLDER = 'Type a message...';
+const PLACEHOLDER_TYPING_DELAY_MS = 60;
+const PLACEHOLDER_DELETING_DELAY_MS = 35;
+const PLACEHOLDER_HOLD_DELAY_MS = 3000;
+
 export const useAgentStore = defineStore('agent', () => {
   const DEFAULT_CHAT_WIDTH = 600;
   const MAX_WIDTH = 800;
@@ -25,8 +30,10 @@ export const useAgentStore = defineStore('agent', () => {
   const adminforth = useAdminforth();
   const isChatOpen = ref(false);
   const isSessionHistoryOpen = ref(false);
-  const textInput = ref<HTMLInputElement | null>(null);
+  const textInput = ref<HTMLTextAreaElement | null>(null);
   const userMessageInput = ref();
+  const userMessagePlaceholder = ref(DEFAULT_TEXTAREA_PLACEHOLDER);
+  const placeholderMessages = ref<string[]>([]);
   const trimmedUserMessage = computed(() => userMessageInput.value ? userMessageInput.value.trim() : '');
   const lastMessage = ref('');
   const isTeleportedToBody = ref(false);
@@ -40,6 +47,9 @@ export const useAgentStore = defineStore('agent', () => {
   const chatWidth = ref(DEFAULT_CHAT_WIDTH);
   const availableModes = ref<AgentMode[]>([]);
   const activeModeName = ref<string | null>(null);
+  const hasTypedMessageInPageSession = ref(false);
+  let placeholderAnimationTimer: ReturnType<typeof setTimeout> | null = null;
+
   function setLocalStorageItem(key: string, value: string) {
     window.localStorage.setItem(`${coreStore.config.brandName || 'adminforth'}-${key}`, value);
   }
@@ -58,6 +68,16 @@ export const useAgentStore = defineStore('agent', () => {
   watch(activeSessionId, (newVal: string | null) => {
     if (newVal) {
       setLocalStorageItem('lastSessionId', newVal);
+    }
+  })
+  watch(userMessageInput, (newVal: unknown) => {
+    if (hasTypedMessageInPageSession.value) {
+      return;
+    }
+
+    if (typeof newVal === 'string' && newVal.trim() !== '') {
+      hasTypedMessageInPageSession.value = true;
+      stopPlaceholderAnimation();
     }
   })
   onMounted(() => {
@@ -130,14 +150,14 @@ export const useAgentStore = defineStore('agent', () => {
   function setAvailableModes(modes: AgentMode[], defaultModeName?: string | null) {
     availableModes.value = modes;
     activeModeName.value =
-      modes.find((mode) => mode.name === activeModeName.value)?.name
+      modes.find((mode: AgentMode) => mode.name === activeModeName.value)?.name
       ?? defaultModeName
       ?? modes[0]?.name
       ?? null;
   }
 
   function setActiveMode(modeName: string) {
-    if (!availableModes.value.some((mode) => mode.name === modeName)) {
+    if (!availableModes.value.some((mode: AgentMode) => mode.name === modeName)) {
       return;
     }
 
@@ -179,6 +199,73 @@ export const useAgentStore = defineStore('agent', () => {
     }
 
   }
+
+  function clearPlaceholderAnimationTimer() {
+    if (placeholderAnimationTimer !== null) {
+      clearTimeout(placeholderAnimationTimer);
+      placeholderAnimationTimer = null;
+    }
+  }
+
+  function resetPlaceholder() {
+    clearPlaceholderAnimationTimer();
+    userMessagePlaceholder.value = DEFAULT_TEXTAREA_PLACEHOLDER;
+  }
+
+  function stopPlaceholderAnimation() {
+    resetPlaceholder();
+  }
+
+  function startPlaceholderAnimation(messages: string[]) {
+    clearPlaceholderAnimationTimer();
+
+    if (!messages.length) {
+      userMessagePlaceholder.value = DEFAULT_TEXTAREA_PLACEHOLDER;
+      return;
+    }
+
+    let messageIndex = 0;
+    let visibleLength = 0;
+    let isDeleting = false;
+
+    const animate = () => {
+      const currentMessage = messages[messageIndex];
+
+      if (!currentMessage) {
+        resetPlaceholder();
+        return;
+      }
+
+      if (!isDeleting) {
+        visibleLength += 1;
+        userMessagePlaceholder.value = currentMessage.slice(0, visibleLength);
+
+        if (visibleLength >= currentMessage.length) {
+          isDeleting = true;
+          placeholderAnimationTimer = setTimeout(animate, PLACEHOLDER_HOLD_DELAY_MS);
+          return;
+        }
+
+        placeholderAnimationTimer = setTimeout(animate, PLACEHOLDER_TYPING_DELAY_MS);
+        return;
+      }
+
+      visibleLength -= 1;
+      userMessagePlaceholder.value = currentMessage.slice(0, Math.max(visibleLength, 0));
+
+      if (visibleLength <= 0) {
+        isDeleting = false;
+        messageIndex = (messageIndex + 1) % messages.length;
+        placeholderAnimationTimer = setTimeout(animate, PLACEHOLDER_TYPING_DELAY_MS);
+        return;
+      }
+
+      placeholderAnimationTimer = setTimeout(animate, PLACEHOLDER_DELETING_DELAY_MS);
+    };
+
+    animate();
+  }
+
   const isResponseInProgress = computed( () => {
     return currentChat.value?.status === 'streaming';
   });
@@ -234,8 +321,44 @@ export const useAgentStore = defineStore('agent', () => {
   function setSessionHistoryOpen(isOpen: boolean) {
     isSessionHistoryOpen.value = isOpen;
   }
-  function regisrerTextInput(el: HTMLInputElement | null) {
+  function regisrerTextInput(el: HTMLTextAreaElement | null) {
     textInput.value = el;
+  }
+
+  async function fetchPlaceholderMessages() {
+    if (hasTypedMessageInPageSession.value) {
+      stopPlaceholderAnimation();
+      return;
+    }
+
+    try {
+      const res = await callAdminForthApi({
+        method: 'POST',
+        path: '/agent/get-placeholder-messages',
+      });
+
+      if (res.error) {
+        console.error('Error fetching placeholder messages:', res.error);
+        placeholderMessages.value = [];
+        resetPlaceholder();
+        return;
+      }
+
+      placeholderMessages.value = Array.isArray(res.messages)
+        ? res.messages.filter((message: unknown): message is string => typeof message === 'string' && message.length > 0)
+        : [];
+
+      if (!placeholderMessages.value.length) {
+        resetPlaceholder();
+        return;
+      }
+
+      startPlaceholderAnimation(placeholderMessages.value);
+    } catch (error) {
+      console.error('Error fetching placeholder messages', error);
+      placeholderMessages.value = [];
+      resetPlaceholder();
+    }
   }
 
 
@@ -409,12 +532,15 @@ export const useAgentStore = defineStore('agent', () => {
     createPreSession,
     //____________________________________________
     regisrerTextInput,
+    fetchPlaceholderMessages,
+    stopPlaceholderAnimation,
     isChatOpen,
     setIsChatOpen,
     isSessionHistoryOpen,
     setSessionHistoryOpen,
     sendMessage,
     userMessageInput,
+    userMessagePlaceholder,
     chatMessages: computed(() => currentChat.value?.messages || []),
     trimmedUserMessage,
     isResponseInProgress,

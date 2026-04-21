@@ -74,7 +74,7 @@
 <script setup lang="ts">
 import Message from './Message.vue';
 import type { IMessage, IPart } from './types';
-import { useTemplateRef, ref, defineAsyncComponent, onMounted, watch, computed } from 'vue';
+import { useTemplateRef, ref, defineAsyncComponent, onMounted, onUnmounted, watch, computed } from 'vue';
 import { IconArrowDownOutline } from '@iconify-prerendered/vue-flowbite';
 import SessionsHistory from './SessionsHistory.vue';
 import { useAgentStore } from './composables/useAgentStore';
@@ -98,6 +98,11 @@ function recalculateScroll() {
 
 onMounted(async () => {
   await import('@incremark/theme/styles.css')
+  await agentStore.fetchPlaceholderMessages()
+});
+
+onUnmounted(() => {
+  agentStore.stopPlaceholderAnimation();
 });
 
 watch(scrollContainer, () => {
