@@ -125,14 +125,20 @@
             >
               <button
                 aria-label="Select mode"
-                class="flex h-9 w-9 items-center justify-center rounded-md border border-gray-200 bg-white text-lightNavbarIcons transition-colors duration-200 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-darkNavbarIcons dark:hover:bg-gray-700"
+                class="flex px-2 py-1 items-center text-sm justify-center 
+                  rounded-md bg-white text-lightListTableHeadingText 
+                  transition-colors duration-200 hover:bg-gray-100 
+                  dark:text-darkListTableHeadingText dark:bg-gray-700 dark:hover:bg-gray-800"
                 :class="isModeMenuOpen ? 'bg-gray-100 dark:bg-gray-700' : ''"
                 :disabled="agentStore.isResponseInProgress"
                 title="Select mode"
                 type="button"
                 @click="toggleModeMenu"
               >
-                <IconBrainOutline class="h-4 w-4" />
+                {{ agentStore.activeModeName }}
+                <IconAngleDownOutline 
+                  class="w-4 h-4 ml-1" 
+                />
               </button>
 
               <div
@@ -171,7 +177,7 @@
 
 <script setup lang="ts">
 import { IconChatBubbleLeft20Solid, IconSparklesSolid, IconArrowsPointingOut, IconArrowsPointingIn } from '@iconify-prerendered/vue-heroicons';
-import { IconCloseOutline, IconBarsOutline, IconArrowUpOutline, IconCloseSidebarSolid, IconOpenSidebarSolid, IconBrainOutline } from '@iconify-prerendered/vue-flowbite';
+import { IconCloseOutline, IconBarsOutline, IconArrowUpOutline, IconCloseSidebarSolid, IconOpenSidebarSolid, IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
 import { useTemplateRef, onMounted, ref,computed } from 'vue';
 import { onClickOutside } from '@vueuse/core'
 import ConversationArea from './ConversationArea.vue';
