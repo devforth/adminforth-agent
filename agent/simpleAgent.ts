@@ -187,7 +187,7 @@ export function createAgentChatModel(params: {
     maxTokens: params.maxTokens,
     useResponsesApi: true,
     outputVersion: "v1",
-
+    streaming: true,
     promptCacheKey: `adminforth-agent:${model}:system-v1:tools-v1`,
 
     promptCacheRetention: "in_memory", 
