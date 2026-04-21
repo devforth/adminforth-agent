@@ -7,6 +7,10 @@ import { Chat } from './chat';
 import { cosineSimilarity, DefaultChatTransport } from 'ai';
 import { useCoreStore } from '@/stores/core';
 
+type AgentMode = {
+  name: string;
+};
+
 export const useAgentStore = defineStore('agent', () => {
   const activeSessionId = ref<string | null>(null);
   const currentSession = ref<IAgentSession | null>(null);
@@ -28,6 +32,8 @@ export const useAgentStore = defineStore('agent', () => {
   const header = ref<HTMLElement | null>(null);
   const lastSessionId = ref<string | null>(null);
   const chatWidth = ref(600);
+  const availableModes = ref<AgentMode[]>([]);
+  const activeModeName = ref<string | null>(null);
   function setLocalStorageItem(key: string, value: string) {
     window.localStorage.setItem(`${coreStore.config.brandName || 'adminforth'}-${key}`, value);
   }
@@ -105,6 +111,24 @@ export const useAgentStore = defineStore('agent', () => {
   })
   const chats = new Map<string, Chat<any>>();
   const currentChat = shallowRef<Chat<any>>();
+
+  function setAvailableModes(modes: AgentMode[], defaultModeName?: string | null) {
+    availableModes.value = modes;
+    activeModeName.value =
+      modes.find((mode) => mode.name === activeModeName.value)?.name
+      ?? defaultModeName
+      ?? modes[0]?.name
+      ?? null;
+  }
+
+  function setActiveMode(modeName: string) {
+    if (!availableModes.value.some((mode) => mode.name === modeName)) {
+      return;
+    }
+
+    activeModeName.value = modeName;
+  }
+
   function setCurrentChat(sessionId: string) {
     if (chats.has(sessionId)) {
       currentChat.value = chats.get(sessionId) || null;
@@ -119,6 +143,7 @@ export const useAgentStore = defineStore('agent', () => {
               message,
               sessionId,
               timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              mode: activeModeName.value,
             };
 
             return {
@@ -384,6 +409,10 @@ export const useAgentStore = defineStore('agent', () => {
     setChatWidth,
     focusTextInput,
     setFullScreen,
-    isFullScreen
+    isFullScreen,
+    availableModes,
+    activeModeName,
+    setAvailableModes,
+    setActiveMode,
   }
 })
