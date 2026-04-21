@@ -1,17 +1,23 @@
 import { defineStore } from 'pinia';
-import { IAgentSession, ISessionsListItem, IMessage } from './types';
+import { IAgentSession, ISessionsListItem, IMessage } from '../types';
 import { ref, nextTick, computed, watch, onMounted, shallowRef } from 'vue';
 import { callAdminForthApi } from '@/utils';
 import { useAdminforth } from '@/adminforth';
-import { Chat } from './chat';
-import { cosineSimilarity, DefaultChatTransport } from 'ai';
+import { Chat } from '../chat';
+import { DefaultChatTransport } from 'ai';
 import { useCoreStore } from '@/stores/core';
+import { useAgentTransitions } from './useAgentTransitions';
 
 type AgentMode = {
   name: string;
 };
 
 export const useAgentStore = defineStore('agent', () => {
+  const DEFAULT_CHAT_WIDTH = 600;
+  const MAX_WIDTH = 800;
+  const MIN_WIDTH = 382; //w-96
+  const agentTransitions = useAgentTransitions();
+
   const activeSessionId = ref<string | null>(null);
   const currentSession = ref<IAgentSession | null>(null);
   const sessionList = ref<ISessionsListItem[]>([]);
@@ -31,7 +37,7 @@ export const useAgentStore = defineStore('agent', () => {
   const appRoot = ref<HTMLElement | null>(null);
   const header = ref<HTMLElement | null>(null);
   const lastSessionId = ref<string | null>(null);
-  const chatWidth = ref(600);
+  const chatWidth = ref(DEFAULT_CHAT_WIDTH);
   const availableModes = ref<AgentMode[]>([]);
   const activeModeName = ref<string | null>(null);
   function setLocalStorageItem(key: string, value: string) {
@@ -55,7 +61,12 @@ export const useAgentStore = defineStore('agent', () => {
     }
   })
   onMounted(() => {
-    chatWidth.value = parseInt(getLocalStorageItem('chatWidth') || '600', 10);
+    const chatWidthBeforeFullScreen = parseInt(getLocalStorageItem('chatWidthBeforeFullScreen') || '0', 10);
+    if (chatWidthBeforeFullScreen) {
+      chatWidth.value = chatWidthBeforeFullScreen;
+    } else {
+      chatWidth.value = parseInt(getLocalStorageItem('chatWidth') || DEFAULT_CHAT_WIDTH.toString(), 10);
+    }
     isTeleportedToBody.value = getLocalStorageItem('isTeleportedToBody') === 'true';
     lastSessionId.value = getLocalStorageItem('lastSessionId');
     if (lastSessionId.value && lastSessionId.value !== 'pre-session') {
@@ -71,29 +82,33 @@ export const useAgentStore = defineStore('agent', () => {
     header.value = document.getElementById('af-header-nav');
     if (appRoot.value && header.value) {
       nextTick(() => {
-        appRoot.value.style.transition = 'padding-right 200ms ease-in-out';
-        header.value.style.transition = 'padding-right 200ms ease-in-out';
+        agentTransitions.setAppRootTransition(false);
       });
     }  
   })
+
   const isFullScreen = ref(false);
   function setFullScreen(fullScreen: boolean) {
     isFullScreen.value = fullScreen;
-    console.log('setFullScreen', fullScreen);
     if (fullScreen) {
-      setChatWidth(window.innerWidth, true);
+      setLocalStorageItem('chatWidthBeforeFullScreen', chatWidth.value.toString());
+      setLocalStorageItem('isTeleportedToBodyBeforeFullScreen', isTeleportedToBody.value ? 'true' : 'false');
+      setIsTeleportedToBody(false);
+      useAgentTransitions().setChatSurfaceTransition(false);
+      setChatWidth(window.innerWidth, false);
     } else {
-      console.log('setChatWidth to default');
-      chatWidth.value = 600;
+      const lastChatWidth = parseInt(getLocalStorageItem('chatWidthBeforeFullScreen') || DEFAULT_CHAT_WIDTH.toString(), 10);
+      const isTeleportedBeforeFullScreen = getLocalStorageItem('isTeleportedToBodyBeforeFullScreen') === 'true';
+      agentTransitions.setAppRootTransition(true);
+      setIsTeleportedToBody(isTeleportedBeforeFullScreen);
+      setChatWidth(lastChatWidth, false);
+      setTimeout(() => agentTransitions.setAppRootTransition(false), agentTransitions.TRANSITION_DURATION);
     }
   }
 
-  function setChatWidth(width: number, blockTransition = false) {
-    if (appRoot.value && header.value) {
-      if (blockTransition) {
-        appRoot.value.style.transition = '';
-        header.value.style.transition = '';
-      }
+  function setChatWidth(width: number, blockTransition = true) {
+    if (blockTransition) {
+      agentTransitions.setAppRootTransition(true);
     }
     chatWidth.value = width;
 
@@ -414,5 +429,8 @@ export const useAgentStore = defineStore('agent', () => {
     activeModeName,
     setAvailableModes,
     setActiveMode,
+    DEFAULT_CHAT_WIDTH,
+    MAX_WIDTH,
+    MIN_WIDTH,
   }
 })
