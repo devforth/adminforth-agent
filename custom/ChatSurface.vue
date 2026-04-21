@@ -33,9 +33,11 @@
 
       <div 
         class="w-full h-full flex flex-col"
-        :class="{ 'ml-4': agentStore.isFullScreen }"
       >
-        <div class="flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
+        <div 
+          class="flex items-center justify-between border-b border-gray-200 dark:border-gray-700"         
+          :class="{ 'pl-4': agentStore.isFullScreen }"
+        >
           <div 
             class="flex items-center h-[55px]"
           >
@@ -99,9 +101,11 @@
           />
 
           <div 
-            class="w-full mb-2 flex items-center justify-center px-2 bg-transparent relative"
-            :class="agentStore.isFullScreen ? 'mx-auto' : ''"
-            :style="{ maxWidth: agentStore.isFullScreen ? agentStore.MAX_WIDTH+'px' : '100%' }"            
+            class="w-full mb-2 flex items-center justify-center px-2 bg-transparent relative translate-x-[-50%] left-1/2"
+            :style="{ 
+              maxWidth: agentStore.isFullScreen ? agentStore.MAX_WIDTH+'px' : '100%',
+              transition: `transform ${agentTransitions.TRANSITION_DURATION}ms ease-in-out`
+            }"            
           >
             <textarea
               v-model="agentStore.userMessageInput"
@@ -193,7 +197,6 @@ const agentStore = useAgentStore();
 const agentTransitions = useAgentTransitions();
 const coreStore = useCoreStore();
 const isModeMenuOpen = ref(false);
-
 let startX = 0
 let startWidth = 0
 

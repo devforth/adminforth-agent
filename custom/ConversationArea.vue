@@ -12,14 +12,16 @@
   </div>
   <AutoScrollContainer
     :enabled="!showScrollToBottomButton" 
-    class="relative flex flex-col overflow-y-auto"
+    class="relative flex flex-col overflow-y-auto translate-x-[-50%] left-1/2"
     ref="scrollContainer"
     :threshold="10"
     behavior="smooth"
-    :class="agentStore.isFullScreen ? 'mx-auto' : ''"
     :style="{ 
       maxWidth: agentStore.isFullScreen ? agentStore.MAX_WIDTH+'px' : '100%',
-      transition: `max-width ${agentTransitions.TRANSITION_DURATION}ms ease-in-out`
+      transition: `
+        max-width ${agentTransitions.TRANSITION_DURATION}ms ease-in-out,
+        transform ${agentTransitions.TRANSITION_DURATION}ms ease-in-out
+      `
     }"
   > 
 

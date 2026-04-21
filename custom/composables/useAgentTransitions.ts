@@ -4,7 +4,7 @@ import { useAgentStore } from './useAgentStore';
 
 
 export const useAgentTransitions = defineStore('agentTransitions', () => {
-  const TRANSITION_DURATION = 200;
+  const TRANSITION_DURATION = 300;
 
   const agentStore = useAgentStore();
   const appRoot = ref<HTMLElement | null>(null);
