@@ -70,4 +70,9 @@ export interface PluginOptions extends PluginsCommonOptions {
    * Resource configuration for turns.
    */
   turnResource: ITurnResource;
+
+  /**
+   * Makes chat sticky by default. By default this prop is false
+   */
+  stickByDefault?: boolean;
 }

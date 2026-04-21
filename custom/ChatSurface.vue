@@ -193,6 +193,7 @@ const props = defineProps<{
       name: string;
     }>;
     defaultModeName: string | null;
+    stickByDefault: boolean;
   }
 }>();
 
@@ -245,6 +246,7 @@ onMounted(async () => {
   agentStore.setAvailableModes(props.meta.modes, props.meta.defaultModeName);
   agentStore.regisrerTextInput(textInput.value);
   textInput.value?.focus();
+  agentStore.setIsTeleportedToBody(props.meta.stickByDefault);
   await agentStore.fetchSessionsList();
 });
 

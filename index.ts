@@ -130,6 +130,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         pluginInstanceId: this.pluginInstanceId,
         modes: this.options.modes.map((mode) => ({ name: mode.name })),
         defaultModeName: this.options.modes[0].name,
+        stickByDefault: this.options.stickByDefault ?? false,
       }
     });
     if (!this.pluginOptions.sessionResource) {
