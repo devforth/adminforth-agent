@@ -24,6 +24,23 @@ interface ITurnResource {
   debugField?: string;
 }
 
+interface ICheckpointResource {
+  resourceId: string;
+  idField: string;
+  threadIdField: string;
+  checkpointNamespaceField: string;
+  checkpointIdField: string;
+  parentCheckpointIdField: string;
+  rowKindField: string;
+  taskIdField: string;
+  sequenceField: string;
+  createdAtField: string;
+  checkpointPayloadField: string;
+  metadataPayloadField: string;
+  writesPayloadField: string;
+  schemaVersionField: string;
+}
+
 export interface PluginOptions extends PluginsCommonOptions {
   /**
    * Optional placeholder examples to preload for the chat textarea.
@@ -75,4 +92,10 @@ export interface PluginOptions extends PluginsCommonOptions {
    * Makes chat sticky by default. By default this prop is false
    */
   stickByDefault?: boolean;
+
+  /**
+   * Optional resource configuration for a persistent LangGraph checkpointer.
+   * Falls back to an in-memory MemorySaver when omitted.
+   */
+  checkpointResource?: ICheckpointResource;
 }

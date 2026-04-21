@@ -1,7 +1,7 @@
 import { createAgent, summarizationMiddleware } from "langchain";
 import { logger, type AdminUser, type CompletionAdapter } from "adminforth";
 import { BaseCallbackHandler } from "@langchain/core/callbacks/base";
-import { MemorySaver, type Messages } from "@langchain/langgraph";
+import {type BaseCheckpointSaver, type Messages } from "@langchain/langgraph";
 import type { LLMResult } from "@langchain/core/outputs";
 import { z } from "zod";
 import { ChatOpenAI } from "@langchain/openai";
@@ -14,8 +14,6 @@ import {
 import { createOpenAiResponsesContinuationMiddleware } from "./middleware/openAiResponsesContinuation.js";
 import type { ApiBasedTool } from "../apiBasedTools.js";
 import type { ToolCallEventSink } from "./toolCallEvents.js";
-
-const checkpointer = new MemorySaver();
 
 export const contextSchema = z.object({
   adminUser: z.custom<AdminUser>(),
@@ -35,6 +33,8 @@ type OpenAIBackedCompletionAdapter = CompletionAdapter & {
     extraRequestBodyParameters?: Record<string, unknown>;
   };
 };
+
+type OpenAiReasoningConfig = Record<string, unknown>;
 
 type LlmOutputTokenUsage = {
   promptTokens?: unknown;
@@ -178,7 +178,14 @@ export function createAgentChatModel(params: {
 
   const model = params.modelName ?? options.model ?? "gpt-5-nano";
   const baseURL = options.baseURL ?? options.baseUrl;
-  const reasoning = options.extraRequestBodyParameters?.reasoning;
+  const reasoning = options.extraRequestBodyParameters
+    ?.reasoning as OpenAiReasoningConfig | undefined;
+  const reasoningConfig = reasoning
+    ? {
+        ...reasoning,
+        summary: "auto",
+      }
+    : undefined;
 
   // @ts-ignore
   return new ChatOpenAI({
@@ -192,7 +199,7 @@ export function createAgentChatModel(params: {
 
     promptCacheRetention: "in_memory", 
 
-    ...(reasoning ? { reasoning } : {}),
+    ...(reasoningConfig ? { reasoning: reasoningConfig } : {}),
     ...(typeof options.timeoutMs === "number"
       ? { timeout: options.timeoutMs }
       : {}),
@@ -210,6 +217,7 @@ export async function callAgent(params: {
   name: string;
   model: ChatOpenAI;
   summaryModel: ChatOpenAI;
+  checkpointer?: BaseCheckpointSaver;
   messages: Messages;
   adminUser: AdminUser;
   apiBasedTools: Record<string, ApiBasedTool>;
@@ -224,6 +232,7 @@ export async function callAgent(params: {
     name,
     model,
     summaryModel,
+    checkpointer,
     messages,
     adminUser,
     apiBasedTools,
