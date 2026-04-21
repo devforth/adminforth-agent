@@ -4,7 +4,7 @@ import { ref, nextTick, computed, watch, onMounted, shallowRef } from 'vue';
 import { callAdminForthApi } from '@/utils';
 import { useAdminforth } from '@/adminforth';
 import { Chat } from './chat';
-import { DefaultChatTransport } from 'ai';
+import { cosineSimilarity, DefaultChatTransport } from 'ai';
 import { useCoreStore } from '@/stores/core';
 
 export const useAgentStore = defineStore('agent', () => {
@@ -70,10 +70,24 @@ export const useAgentStore = defineStore('agent', () => {
       });
     }  
   })
-  function setChatWidth(width: number) {
+  const isFullScreen = ref(false);
+  function setFullScreen(fullScreen: boolean) {
+    isFullScreen.value = fullScreen;
+    console.log('setFullScreen', fullScreen);
+    if (fullScreen) {
+      setChatWidth(window.innerWidth, true);
+    } else {
+      console.log('setChatWidth to default');
+      chatWidth.value = 600;
+    }
+  }
+
+  function setChatWidth(width: number, blockTransition = false) {
     if (appRoot.value && header.value) {
-      appRoot.value.style.transition = '';
-      header.value.style.transition = '';
+      if (blockTransition) {
+        appRoot.value.style.transition = '';
+        header.value.style.transition = '';
+      }
     }
     chatWidth.value = width;
 
@@ -188,14 +202,14 @@ export const useAgentStore = defineStore('agent', () => {
   //create a pre-session, until user will type something, so we can save session
   async function createPreSession() {
     saveCurrentSessionInCache();
-    if (sessionList.value.some((s: ISessionsListItem) => s.sessionId === 'pre-session')) {
-      return;
+    if (!sessionList.value.some((s: ISessionsListItem) => s.sessionId === 'pre-session')) {
+        sessionList.value.unshift({
+        sessionId: 'pre-session',
+        title: 'New Session',
+        timestamp: new Date().toISOString(),
+      });
     }
-    sessionList.value.unshift({
-      sessionId: 'pre-session',
-      title: 'New Session',
-      timestamp: new Date().toISOString(),
-    })
+
     activeSessionId.value = 'pre-session';
     currentSession.value = {
       sessionId: 'pre-session',
@@ -368,6 +382,8 @@ export const useAgentStore = defineStore('agent', () => {
     setIsTeleportedToBody,
     chatWidth,
     setChatWidth,
-    focusTextInput
+    focusTextInput,
+    setFullScreen,
+    isFullScreen
   }
 })
