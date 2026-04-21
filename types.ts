@@ -37,6 +37,11 @@ export interface PluginOptions extends PluginsCommonOptions {
   maxTokens?: number;
 
   /**
+   * Optional custom system prompt appended to the built-in agent system prompt.
+   */
+  systemPrompt?: string;
+
+  /**
    * Response generation level.
    * Default is low
    */
