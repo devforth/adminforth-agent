@@ -35,11 +35,11 @@
         class="w-full h-full flex flex-col"
       >
         <div 
-          class="flex items-center justify-between border-b border-gray-200 dark:border-gray-700"         
+          class="flex items-center justify-between h-14 border-b border-gray-200 dark:border-gray-700"         
           :class="{ 'pl-4': agentStore.isFullScreen }"
         >
           <div 
-            class="flex items-center h-[55px]"
+            class="flex items-center"
           >
             <IconBarsOutline 
               class="m-2 w-8 h-8 p-1 cursor-pointer hover:scale-110 rounded transition-colors duration-200
