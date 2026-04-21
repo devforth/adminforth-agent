@@ -1,8 +1,8 @@
 <template>
   <template v-for="group in props.toolGroup" :key="group.title">
     <div v-if="group.groupedTools.length > 1" class="flex flex-col">
-      <div class="flex items-center gap-2 p-2 m-2 cursor-pointer hover:opacity-75 break-all font-mono text-sm leading-5 text-lightListTableHeadingText dark:text-darkListTableHeadingText" @click="toggleGroup(group.title)">
-        <IconMinusOutline  class="w-6 h-6 p-1"/> 
+      <div class="flex items-center gap-2 px-2 m-2 cursor-pointer hover:opacity-75 break-all font-mono text-sm leading-5 text-lightListTableHeadingText dark:text-darkListTableHeadingText" @click="toggleGroup(group.title)">
+        <IconCheckOutline  class="w-6 h-6 p-1"/> 
         {{ group.title }} {{ 'x' + group.groupedTools.length }} 
         <IconAngleDownOutline 
           class="transition-transform duration-200 hover:scale-105 hover:opacity-75"
@@ -24,7 +24,7 @@
 import ToolRenderer from './ToolRenderer.vue';
 import type { IPart } from './types';
 import { ref } from 'vue';
-import { IconAngleDownOutline, IconMinusOutline } from '@iconify-prerendered/vue-flowbite';
+import { IconAngleDownOutline, IconCheckOutline } from '@iconify-prerendered/vue-flowbite';
 
 const props = defineProps<{
   toolGroup: {

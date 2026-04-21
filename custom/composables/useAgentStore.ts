@@ -7,6 +7,7 @@ import { Chat } from '../chat';
 import { DefaultChatTransport } from 'ai';
 import { useCoreStore } from '@/stores/core';
 import { useAgentTransitions } from './useAgentTransitions';
+import { useWindowSize } from '@vueuse/core';
 
 type AgentMode = {
   name: string;
@@ -48,6 +49,7 @@ export const useAgentStore = defineStore('agent', () => {
   const availableModes = ref<AgentMode[]>([]);
   const activeModeName = ref<string | null>(null);
   const hasTypedMessageInPageSession = ref(false);
+  const { width: windowWidth } = useWindowSize();
   let placeholderAnimationTimer: ReturnType<typeof setTimeout> | null = null;
 
   function setLocalStorageItem(key: string, value: string) {
@@ -56,6 +58,11 @@ export const useAgentStore = defineStore('agent', () => {
   function getLocalStorageItem(key: string) {
     return window.localStorage.getItem(`${coreStore.config.brandName || 'adminforth'}-${key}`);
   }
+  watch(windowWidth, (newWidth: number) => {
+    if (isFullScreen.value) {
+      setChatWidth(newWidth, false);
+    }
+  })
   watch(isTeleportedToBody, (newVal: boolean) => {
     setLocalStorageItem('isTeleportedToBody', newVal ? 'true' : 'false');
   })
@@ -85,7 +92,14 @@ export const useAgentStore = defineStore('agent', () => {
     if (chatWidthBeforeFullScreen) {
       chatWidth.value = chatWidthBeforeFullScreen;
     } else {
-      chatWidth.value = parseInt(getLocalStorageItem('chatWidth') || DEFAULT_CHAT_WIDTH.toString(), 10);
+      const savedChatWidth = parseInt(getLocalStorageItem('chatWidth') || '0', 10);
+      if (savedChatWidth) {
+        if (savedChatWidth > MAX_WIDTH || savedChatWidth < MIN_WIDTH) {
+          chatWidth.value = DEFAULT_CHAT_WIDTH;
+        } else {
+          chatWidth.value = savedChatWidth;
+        }
+      }
     }
     isTeleportedToBody.value = getLocalStorageItem('isTeleportedToBody') === 'true';
     lastSessionId.value = getLocalStorageItem('lastSessionId');
