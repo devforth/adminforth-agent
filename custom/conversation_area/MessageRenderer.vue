@@ -1,6 +1,7 @@
 <template>
   <ProcessingTimeline 
     :message="message"
+    :isLastMessageInChat="isLastMessageInChat"
   />
   <template 
     v-for="(part, index) in getMessageParts(message)"
@@ -27,5 +28,6 @@
 
   const props = defineProps<{ 
     message: IMessage 
+    isLastMessageInChat: boolean
   }>();
 </script>

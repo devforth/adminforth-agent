@@ -33,11 +33,11 @@
   > 
 
     <div 
-      v-for="message in props.messages" :key="message.id"
+      v-for="(message, index) in props.messages" :key="message.id"
       class="flex flex-col w-full"
       :class="message.role === 'user' ? 'self-end' : 'self-start'"
     >
-      <MessageRenderer :message="message"/>
+      <MessageRenderer :message="message" :isLastMessageInChat="index === props.messages.length - 1"/>
     </div>
     <div 
       v-if="props.messages.length === 0"
@@ -100,12 +100,6 @@ watch(clicks, () => {
   recalculateScroll();
 })
 
-const showFakeThinkingMessage = computed(() => {
-  const lastMessage = props.messages[props.messages.length - 1];
-  if (!lastMessage) return false;
-  const lastPart = getMessageParts(lastMessage)[getMessageParts(lastMessage).length - 1];
-  return lastPart?.type !== 'text' && lastPart?.type !== 'reasoning';
-})
 
 const formatToolCallTextPart = ((part: IPart, currentMessage: IMessage) => {
   if (part.type === 'data-tool-call') {
