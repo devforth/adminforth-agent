@@ -1,4 +1,4 @@
-import { IMessage } from "./types";
+import { IMessage, IPart } from "./types";
 
 export function remToPx(rem: number): number {
   const rootFontSize = parseFloat(getComputedStyle(document.documentElement).fontSize);
@@ -11,7 +11,7 @@ export function pxToRem(px: number): number {
 }
 
 
-export function getMessageParts(message: IMessage) {
+export function getMessageParts(message: IMessage): IPart[] {
   return message.parts?.length
     ? message.parts
     : [{ text: '', type: 'reasoning', state: 'streaming' }];

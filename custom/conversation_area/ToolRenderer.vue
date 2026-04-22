@@ -48,7 +48,7 @@
 
 <script setup lang="ts">
   import { computed, ref } from 'vue';
-  import { type IPartData } from '../types';
+  import { type IFormattedToolCallPart } from '../types';
   import { Spinner } from '@/afcl';
   import { IconAngleDownOutline, IconCheckOutline } from '@iconify-prerendered/vue-flowbite';
 
@@ -63,10 +63,7 @@
   }
 
   const props = defineProps<{
-    data: {
-      type: string;
-      toolInfo: IPartData;
-    }
+    data: IFormattedToolCallPart
   }>();
 
   const isRunning = computed(() => props.data?.toolInfo?.phase === 'start');

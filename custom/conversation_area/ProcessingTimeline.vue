@@ -21,7 +21,7 @@
         <ol class="ml-8 relative border-l border-l-2 border-black border-default">
           <li class="mb-6 ms-2 z-50" v-for="(part, index) in ToolOrReasoningParts" :key="index"> 
             <ReasoningRenderer v-if="part.type === 'reasoning'" :state="part.state" :text="part.text" />
-            <ToolsGroup v-else :toolGroup="groupToolCallParts(message, index, part)" />
+            <ToolsGroup v-else :toolGroup="groupToolCallParts(message, part)" />
           </li>      
         </ol>
       </AutoScrollContainer>
@@ -32,7 +32,7 @@
 
 
 <script setup lang="ts">
-  import type { IMessage, IPart } from '../types';
+  import type { IFormattedToolCallPart, IMessage, IPart, IToolGroup } from '../types';
   import { ref, computed, watch, defineAsyncComponent } from 'vue';
   import ReasoningRenderer from './ReasoningRenderer.vue';
   import { IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
@@ -68,64 +68,82 @@
     return false;
   })
 
-  const formatToolCallTextPart = ((part: IPart, currentMessage: IMessage) => {
-    if (part.type === 'data-tool-call') {
-      if (part.data?.phase === 'start') {
-        const finishedPart = currentMessage.parts?.find(p => p.type === 'data-tool-call' && p.data?.toolCallId === part.data?.toolCallId && p.data?.phase === 'end');
-        return {
-          type: 'text',
-          toolInfo: {
-            toolCallId: part.data!.toolCallId,
-            toolName: part.data!.toolName,
-            phase: finishedPart ? 'end' : 'start',
-            durationMs: finishedPart ? finishedPart.data?.durationMs : undefined,
-            input: part.data!.input,
-            output: finishedPart ? finishedPart.data!.output : undefined,
-          }          
-        }
-      }
+  const formatToolCallPart = (part: IPart, currentMessage: IMessage): IFormattedToolCallPart | null => {
+    if (part.type !== 'data-tool-call' || part.data?.phase !== 'start') {
+      return null;
     }
-    return null;  
-  });
 
-  const groupToolCallParts = (message: IMessage, currentPartIndex: number, currentPart: IPart) => {
-    const groupedParts: { title: string; groupedTools: IPart[] }[] = [];
-    let currentToolName: string | null = null;
-    const parts = getMessageParts(message);
-    if (!parts) return [];
-    const formatedToolParts = parts.map(part => {
-      return formatToolCallTextPart(part as IPart, message)
+    const finishedPart = currentMessage.parts.find(candidate => {
+      return candidate.type === 'data-tool-call'
+        && candidate.data?.toolCallId === part.data?.toolCallId
+        && candidate.data?.phase === 'end';
     });
-    const currentPartIndexInFormatedParts = formatedToolParts.findIndex(part => part?.toolInfo?.toolCallId === currentPart.data?.toolCallId);
-    if (currentPartIndexInFormatedParts === -1) {
+
+    return {
+      type: 'data-tool-call',
+      toolInfo: {
+        toolCallId: part.data.toolCallId,
+        toolName: part.data.toolName,
+        phase: finishedPart ? 'end' : 'start',
+        durationMs: finishedPart?.data?.durationMs,
+        input: part.data.input,
+        output: finishedPart?.data?.output,
+      }
+    };
+  };
+
+  const getVisibleTimelineParts = (message: IMessage) => {
+    return getMessageParts(message).filter(part => {
+      return part.type === 'reasoning' || (part.type === 'data-tool-call' && part.data?.phase === 'start');
+    });
+  };
+
+  const groupToolCallParts = (message: IMessage, currentPart: IPart): IToolGroup[] => {
+    if (currentPart.type !== 'data-tool-call') {
       return [];
     }
-    const cleaned = formatedToolParts.filter(item => item !== null);
-    console.log('formatedToolParts', cleaned);
-    for( const[index, part] of cleaned.entries()){
-      if ( index < currentPartIndexInFormatedParts - 1 ) {
+
+    const visibleParts = getVisibleTimelineParts(message);
+    const currentPartIndex = visibleParts.findIndex(part => part === currentPart);
+
+    if (currentPartIndex === -1) {
+      return [];
+    }
+
+    if (currentPartIndex > 0 && visibleParts[currentPartIndex - 1]?.type === 'data-tool-call') {
+      return [];
+    }
+
+    const groupedParts: IToolGroup[] = [];
+
+    for (let index = currentPartIndex; index < visibleParts.length; index += 1) {
+      const part = visibleParts[index];
+
+      if (part.type === 'reasoning') {
+        break;
+      }
+
+      const formattedPart = formatToolCallPart(part, message);
+
+      if (!formattedPart) {
         continue;
       }
-      if(!part || !part.toolInfo) {
+
+      const lastGroup = groupedParts[groupedParts.length - 1];
+
+      if (lastGroup?.title === formattedPart.toolInfo.toolName) {
+        lastGroup.groupedTools.push(formattedPart);
         continue;
       }
-      currentToolName = part.toolInfo.toolName;
-      if (!groupedParts.find(group => group.title === currentToolName)) {
-        groupedParts.push({
-          title: currentToolName,
-          groupedTools: []
-        })
-      }
-      if( formatedToolParts[currentPartIndexInFormatedParts - 1]?.toolInfo.toolName === part.toolInfo.toolName) {
-        continue;
-      } else if ( formatedToolParts[currentPartIndexInFormatedParts + 1]?.toolInfo.toolName === part.toolInfo.toolName) {
-        groupedParts[groupedParts.length - 1].groupedTools.push(formatedToolParts[currentPartIndexInFormatedParts + 1] as IPart);
-      } else {
-        groupedParts[groupedParts.length - 1].groupedTools.push(part as IPart);
-      }
-    }  
+
+      groupedParts.push({
+        title: formattedPart.toolInfo.toolName,
+        groupedTools: [formattedPart],
+      });
+    }
+
     return groupedParts;
-  }
+  };
 
 
 </script>

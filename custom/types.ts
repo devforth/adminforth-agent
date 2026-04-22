@@ -13,6 +13,16 @@ export interface IPart {
   data?: IPartData;
 }
 
+export interface IFormattedToolCallPart {
+  type: 'data-tool-call';
+  toolInfo: IPartData;
+}
+
+export interface IToolGroup {
+  title: string;
+  groupedTools: IFormattedToolCallPart[];
+}
+
 export interface IMessage {
   id: string;
   role: 'user' | 'assistant';
