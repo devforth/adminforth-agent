@@ -31,12 +31,12 @@
           :key="section.label"
           class="overflow-hidden rounded-xl border border-black/5 bg-white/70 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-slate-900/50"
         >
-          <header class="border-b border-black/5 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500 dark:border-white/10 dark:text-gray-400">
+          <header class="border-b border-black/5 px-3 py-2 text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-gray-500 dark:border-white/10 dark:text-gray-400">
             {{ section.label }}
           </header>
           <div class="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 px-3 py-3 font-mono text-xs leading-5 text-gray-700 dark:text-gray-200">
             <template v-for="line in section.lines" :key="`${section.label}-${line.number}`">
-              <span class="select-none text-[11px] text-gray-400 dark:text-gray-500">{{ line.number }}</span>
+              <span class="select-none text-[0.7rem] text-gray-400 dark:text-gray-500">{{ line.number }}</span>
               <span class="whitespace-pre-wrap break-words">{{ line.content || ' ' }}</span>
             </template>
           </div>
