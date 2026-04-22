@@ -33,7 +33,6 @@
         :class="{
           'bg-lightPrimary/20 hover:bg-lightPrimary/20 dark:bg-darkPrimary/20 dark:hover:bg-darkPrimary/20': agentStore.activeSessionId === session.sessionId, 
           'cursor-default opacity-50 pointer-events-none': agentStore.isResponseInProgress,
-          'pl-8': agentStore.isFullScreen
          }"
         @click="agentStore.setActiveSession(session.sessionId); agentStore.setSessionHistoryOpen(false);"
         :disabled="agentStore.isResponseInProgress"

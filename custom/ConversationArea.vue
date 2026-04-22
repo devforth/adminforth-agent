@@ -24,7 +24,7 @@
     :threshold="10"
     behavior="smooth"
     :style="{ 
-      maxWidth: agentStore.isFullScreen ? agentStore.MAX_WIDTH+'px' : '100%',
+      maxWidth: agentStore.isFullScreen ? agentStore.MAX_WIDTH+'rem' : '100%',
       transition: `
         max-width ${agentTransitions.TRANSITION_DURATION}ms ease-in-out,
         transform ${agentTransitions.TRANSITION_DURATION}ms ease-in-out
@@ -37,9 +37,8 @@
       class="flex flex-col w-full"
       :class="message.role === 'user' ? 'self-end' : 'self-start'"
     >
-      <ToolsGroup :toolGroup="groupToolCallParts(message)" />
       <template 
-        v-for="part in getParts(message)"
+        v-for="(part, index) in getParts(message)"
         :key="part.type"
       >
         <Message
@@ -52,6 +51,7 @@
           @toggle-thoughts="() => clicks++"
         >
         </Message>
+        <ToolsGroup v-else :toolGroup="groupToolCallParts(message, index, part)" />
       </template>
     </div>
     <!-- Show a placeholder message if the last message is not of type 'text' or 'reasoning' -->
@@ -154,27 +154,39 @@ const formatToolCallTextPart = ((part: IPart, currentMessage: IMessage) => {
   return null;  
 });
 
-const groupToolCallParts = (message: IMessage) => {
-  const groupedParts = [];
-  let currentToolName = null;
+const groupToolCallParts = (message: IMessage, currentPartIndex: number, currentPart: IPart) => {
+  const groupedParts: { title: string; groupedTools: IPart[] }[] = [];
+  let currentToolName: string | null = null;
   const parts = getParts(message);
   if (!parts) return [];
   const formatedToolParts = parts.map(part => {
     return formatToolCallTextPart(part as IPart, message)
   });
+  const currentPartIndexInFormatedParts = formatedToolParts.findIndex(part => part?.toolInfo?.toolCallId === currentPart.data?.toolCallId);
+  if (currentPartIndexInFormatedParts === -1) {
+    return [];
+  }
   for( const[index, part] of formatedToolParts.entries()){
-    if(!part?.toolInfo) {
+    if ( index < currentPartIndexInFormatedParts - 1 ) {
       continue;
     }
-    if (part.toolInfo.toolName === currentToolName) {
-      groupedParts[groupedParts.length - 1].groupedTools.push(part);
+    if(!part || !part.toolInfo) {
       continue;
     }
     currentToolName = part.toolInfo.toolName;
-    groupedParts.push({
-      title: currentToolName,
-      groupedTools: [part]
-    });
+    if (!groupedParts.find(group => group.title === currentToolName)) {
+      groupedParts.push({
+        title: currentToolName,
+        groupedTools: []
+      })
+    }
+    if( formatedToolParts[currentPartIndexInFormatedParts - 1]?.toolInfo.toolName === part.toolInfo.toolName) {
+      continue;
+    } else if ( formatedToolParts[currentPartIndexInFormatedParts + 1]?.toolInfo.toolName === part.toolInfo.toolName) {
+      groupedParts[groupedParts.length - 1].groupedTools.push(formatedToolParts[currentPartIndexInFormatedParts + 1] as IPart);
+    } else {
+      groupedParts[groupedParts.length - 1].groupedTools.push(part);
+    }
   }  
   return groupedParts;
 }

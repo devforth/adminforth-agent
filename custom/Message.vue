@@ -58,10 +58,13 @@
   import { useRouter } from 'vue-router';
   import { IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
   import { useAgentStore } from './composables/useAgentStore';
+  import { useCoreStore } from '@/stores/core';
+
   const IncremarkContent = defineAsyncComponent(() => import('@incremark/vue').then(module => module.IncremarkContent))
   const ShikiCodeBlock = defineAsyncComponent(() => import('./incremark_code_renderers/IncremarkShikiCodeBlock.vue'))
 
   const agentStore = useAgentStore();
+  const coreStore = useCoreStore();
 
   const incremarkComponents = {
     code: ShikiCodeBlock,
@@ -134,8 +137,10 @@
 
     const internalRoute = resolveInternalRoute(href);
     if (internalRoute !== null) {
-      if (agentStore.isFullScreen) {
+      if (agentStore.isFullScreen && !coreStore.isMobile) {
         agentStore.setFullScreen(false);
+      } else if (coreStore.isMobile) {
+        agentStore.setIsChatOpen(false);
       }
       void router.push(internalRoute);
       return;

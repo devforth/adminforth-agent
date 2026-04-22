@@ -23,10 +23,10 @@
       class="fixed bg-lightNavbar dark:bg-darkNavbar h-screen top-0 right-0 border-x border-b border-gray-200 dark:border-gray-700 
             flex flex z-40"
       :class="[agentStore.isChatOpen ? 'translate-x-0' : 'translate-x-full', !agentStore.isTeleportedToBody ? 'shadow-2xl' : '']"
-      :style="{ width: agentStore.chatWidth + 'px' }"
+      :style="{ width: agentStore.chatWidth + 'rem' }"
     > 
       <div 
-        v-if="!coreStore.isMobile"
+        v-if="!(coreStore.isMobile || agentStore.isFullScreen)"
         class="w-2 cursor-ew-resize absolute left-0 top-0 h-full z-30"
         @mousedown="startResize"
       ></div>
@@ -36,7 +36,6 @@
       >
         <div 
           class="flex items-center justify-between h-14 border-b border-gray-200 dark:border-gray-700"         
-          :class="{ 'pl-4': agentStore.isFullScreen }"
         >
           <div 
             class="flex items-center"
@@ -103,7 +102,7 @@
           <div 
             class="w-full mb-2 flex items-center justify-center px-2 bg-transparent relative translate-x-[-50%] left-1/2"
             :style="{ 
-              maxWidth: agentStore.isFullScreen ? agentStore.MAX_WIDTH+'px' : '100%',
+              maxWidth: agentStore.isFullScreen ? remToPx(agentStore.MAX_WIDTH)+'px' : '100%',
               transition: `transform ${agentTransitions.TRANSITION_DURATION}ms ease-in-out`
             }"            
           >
@@ -185,6 +184,7 @@ import { useAgentStore } from './composables/useAgentStore';
 import { useAgentTransitions } from './composables/useAgentTransitions';
 import { Button } from '@/afcl';
 import { useCoreStore } from '@/stores/core';
+import { remToPx, pxToRem } from './utils';
 
 const props = defineProps<{
   meta: {
@@ -209,7 +209,7 @@ let startWidth = 0
 
 const startResize = (e: MouseEvent) => {
   startX = e.clientX
-  startWidth = agentStore.chatWidth
+  startWidth = remToPx(agentStore.chatWidth)
 
   document.body.style.userSelect = 'none'
   document.body.style.cursor = 'ew-resize'
@@ -220,7 +220,7 @@ const startResize = (e: MouseEvent) => {
 
 const onResize = (e: MouseEvent) => {
   const dx = startX - e.clientX
-  agentStore.setChatWidth(Math.min(Math.max(startWidth + dx, agentStore.MIN_WIDTH), agentStore.MAX_WIDTH))
+  agentStore.setChatWidth(Math.min(Math.max(startWidth + dx, remToPx(agentStore.MIN_WIDTH)), remToPx(agentStore.MAX_WIDTH)))
   agentTransitions.setChatSurfaceTransition(true);
 }
 
@@ -246,7 +246,12 @@ onMounted(async () => {
   agentStore.setAvailableModes(props.meta.modes, props.meta.defaultModeName);
   agentStore.regisrerTextInput(textInput.value);
   textInput.value?.focus();
-  agentStore.setIsTeleportedToBody(props.meta.stickByDefault);
+  const isTeleportedToBodyFromLocalStorage = agentStore.getLocalStorageItem('isTeleportedToBody') === 'true';
+  if( coreStore.isMobile ) {
+    agentStore.setIsTeleportedToBody(false);
+  } else {
+    agentStore.setIsTeleportedToBody(isTeleportedToBodyFromLocalStorage || props.meta.stickByDefault);
+  }
   await agentStore.fetchSessionsList();
 });
 

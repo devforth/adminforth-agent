@@ -8,6 +8,7 @@ import { DefaultChatTransport } from 'ai';
 import { useCoreStore } from '@/stores/core';
 import { useAgentTransitions } from './useAgentTransitions';
 import { useWindowSize } from '@vueuse/core';
+import { remToPx, pxToRem } from '../utils';
 
 type AgentMode = {
   name: string;
@@ -19,9 +20,9 @@ const PLACEHOLDER_DELETING_DELAY_MS = 35;
 const PLACEHOLDER_HOLD_DELAY_MS = 3000;
 
 export const useAgentStore = defineStore('agent', () => {
-  const DEFAULT_CHAT_WIDTH = 600;
-  const MAX_WIDTH = 800;
-  const MIN_WIDTH = 382; //w-96
+  const DEFAULT_CHAT_WIDTH = 30;
+  const MAX_WIDTH = 60;
+  const MIN_WIDTH = 25
   const agentTransitions = useAgentTransitions();
 
   const activeSessionId = ref<string | null>(null);
@@ -71,6 +72,9 @@ export const useAgentStore = defineStore('agent', () => {
   })
   watch(chatWidth, (newVal: number) => {
     setLocalStorageItem('chatWidth', newVal.toString());
+    if (!isFullScreen.value) {
+      setLocalStorageItem('chatWidthBeforeFullScreen', newVal.toString());
+    }
   })
   watch(activeSessionId, (newVal: string | null) => {
     if (newVal) {
@@ -90,14 +94,14 @@ export const useAgentStore = defineStore('agent', () => {
   onMounted(() => {
     const chatWidthBeforeFullScreen = parseInt(getLocalStorageItem('chatWidthBeforeFullScreen') || '0', 10);
     if (chatWidthBeforeFullScreen) {
-      chatWidth.value = chatWidthBeforeFullScreen;
+      setChatWidth(remToPx(chatWidthBeforeFullScreen));
     } else {
       const savedChatWidth = parseInt(getLocalStorageItem('chatWidth') || '0', 10);
       if (savedChatWidth) {
         if (savedChatWidth > MAX_WIDTH || savedChatWidth < MIN_WIDTH) {
-          chatWidth.value = DEFAULT_CHAT_WIDTH;
+          setChatWidth(remToPx(DEFAULT_CHAT_WIDTH));
         } else {
-          chatWidth.value = savedChatWidth;
+          setChatWidth(remToPx(savedChatWidth));
         }
       }
     }
@@ -110,7 +114,7 @@ export const useAgentStore = defineStore('agent', () => {
       isChatOpen.value = getLocalStorageItem('isChatOpen') === 'true';
     }
     if (coreStore.isMobile) {
-      chatWidth.value = window.innerWidth;
+      setChatWidth(window.innerWidth);
     }
     appRoot.value = document.getElementById('app');
     header.value = document.getElementById('af-header-nav');
@@ -125,33 +129,36 @@ export const useAgentStore = defineStore('agent', () => {
   function setFullScreen(fullScreen: boolean) {
     isFullScreen.value = fullScreen;
     if (fullScreen) {
+      document.body.style.overflow = 'hidden';
       setLocalStorageItem('chatWidthBeforeFullScreen', chatWidth.value.toString());
       setLocalStorageItem('isTeleportedToBodyBeforeFullScreen', isTeleportedToBody.value ? 'true' : 'false');
       setIsTeleportedToBody(false);
       useAgentTransitions().setChatSurfaceTransition(false);
       setChatWidth(window.innerWidth, false);
     } else {
+      document.body.style.overflow = '';
       const lastChatWidth = parseInt(getLocalStorageItem('chatWidthBeforeFullScreen') || DEFAULT_CHAT_WIDTH.toString(), 10);
       const isTeleportedBeforeFullScreen = getLocalStorageItem('isTeleportedToBodyBeforeFullScreen') === 'true';
       agentTransitions.setAppRootTransition(true);
       setIsTeleportedToBody(isTeleportedBeforeFullScreen);
-      setChatWidth(lastChatWidth, false);
+      setChatWidth(remToPx(lastChatWidth), false);
       setTimeout(() => agentTransitions.setAppRootTransition(false), agentTransitions.TRANSITION_DURATION);
     }
   }
 
+  //takes on input width in pixels, converts to rem and sets chat width
   function setChatWidth(width: number, blockTransition = true) {
     if (blockTransition) {
       agentTransitions.setAppRootTransition(true);
     }
-    chatWidth.value = width;
+    chatWidth.value = pxToRem(width);
 
   }
   watch([isTeleportedToBody, isChatOpen, chatWidth], ([newIsTeleportedToBody, newIsChatOpen, newChatWidth]: [boolean, boolean, number]) => {
     if (appRoot.value && header.value) {
       if (newIsTeleportedToBody && newIsChatOpen) {
-        appRoot.value.style.paddingRight = `${chatWidth.value}px`;
-        header.value.style.paddingRight = `${chatWidth.value}px`;
+        appRoot.value.style.paddingRight = `${remToPx(chatWidth.value)}px`;
+        header.value.style.paddingRight = `${remToPx(chatWidth.value)}px`;
       } else {
         appRoot.value.style.paddingRight = '';
         header.value.style.paddingRight = '';
@@ -310,6 +317,9 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   function closeChat() {
+    if(isFullScreen.value) {
+      document.body.style.overflow = '';
+    }
     if (blockCloseOfChat.value) {
       return;
     }
@@ -318,6 +328,12 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   function openChat() {
+    if (isFullScreen.value) {
+      document.body.style.overflow = 'hidden';
+    }
+    if (coreStore.isMobile) {
+      setFullScreen(true);
+    }
     isChatOpen.value = true;
     nextTick(() => {
       focusTextInput();
@@ -572,5 +588,6 @@ export const useAgentStore = defineStore('agent', () => {
     DEFAULT_CHAT_WIDTH,
     MAX_WIDTH,
     MIN_WIDTH,
+    getLocalStorageItem
   }
 })
