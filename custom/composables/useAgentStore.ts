@@ -331,6 +331,9 @@ export const useAgentStore = defineStore('agent', () => {
     if (isFullScreen.value) {
       document.body.style.overflow = 'hidden';
     }
+    if (coreStore.isMobile) {
+      setFullScreen(true);
+    }
     isChatOpen.value = true;
     nextTick(() => {
       focusTextInput();

@@ -247,8 +247,11 @@ onMounted(async () => {
   agentStore.regisrerTextInput(textInput.value);
   textInput.value?.focus();
   const isTeleportedToBodyFromLocalStorage = agentStore.getLocalStorageItem('isTeleportedToBody') === 'true';
-
-  agentStore.setIsTeleportedToBody(isTeleportedToBodyFromLocalStorage || props.meta.stickByDefault);
+  if( coreStore.isMobile ) {
+    agentStore.setIsTeleportedToBody(false);
+  } else {
+    agentStore.setIsTeleportedToBody(isTeleportedToBodyFromLocalStorage || props.meta.stickByDefault);
+  }
   await agentStore.fetchSessionsList();
 });
 
