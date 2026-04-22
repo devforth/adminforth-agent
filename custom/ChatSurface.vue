@@ -36,7 +36,6 @@
       >
         <div 
           class="flex items-center justify-between h-14 border-b border-gray-200 dark:border-gray-700"         
-          :class="{ 'pl-4': agentStore.isFullScreen }"
         >
           <div 
             class="flex items-center"
