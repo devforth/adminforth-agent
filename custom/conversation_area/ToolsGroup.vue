@@ -11,10 +11,19 @@
       <span class="font-semibold">Call tools</span>
     </h3>
 
-    
+    <div class="flex flex-wrap">
     <template v-for="group in props.toolGroup" :key="group.title">
-      <div v-if="group.groupedTools.length > 1" class="flex flex-col">
-        <div class="flex items-center gap-2 px-2 m-2 cursor-pointer hover:opacity-75 break-all font-mono text-sm leading-5 text-lightListTableHeadingText dark:text-darkListTableHeadingText" @click="toggleGroup(group.title)">
+      <template v-if="group.groupedTools.length > 1">
+        <div
+          v-if="!expandedGroups.includes(group.title)" 
+          class="max-w-64 w-auto flex items-center gap-2 px-2 m-2 py-2.5 cursor-pointer 
+            hover:opacity-75 break-all font-mono text-sm leading-5
+            text-lightListTableHeadingText dark:text-darkListTableHeadingText
+            items-center justify-center
+          " 
+          :class="!expandedGroups.includes(group.title) ? 'border rounded-xl' : ''"
+          @click="toggleGroup(group.title)"
+        >
           <IconCheckOutline  class="w-6 h-6 p-1"/> 
           {{ group.title }} {{ 'x' + group.groupedTools.length }} 
           <IconAngleDownOutline 
@@ -22,14 +31,15 @@
             :class="expandedGroups.includes(group.title) ? 'rotate-180' : 'rotate-0'"
           />
         </div>
-        <transition name="expand">
-          <div v-show="expandedGroups.includes(group.title)" class="flex flex-col"> 
-          <ToolRenderer v-for="part in group.groupedTools" :key="part.toolInfo.toolCallId" :data="part" class="ml-8"/>
-          </div>
-        </transition>
-      </div>
+        <!-- <transition name="expand">
+          <div v-show="expandedGroups.includes(group.title)" class="flex flex-wrap gap-1">  -->
+            <ToolRenderer v-if="expandedGroups.includes(group.title)" v-for="part in group.groupedTools" :key="part.toolInfo.toolCallId" :data="part"/>
+          <!-- </div>
+        </transition> -->
+      </template>
       <ToolRenderer v-else-if="group.groupedTools.length > 0" :data="group.groupedTools[0]" />
     </template> 
+    </div>
   </template>
 </template>
 

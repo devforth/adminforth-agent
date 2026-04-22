@@ -1,6 +1,6 @@
 <template>
   <div 
-    class="inline-flex m-2 max-w-[80%] flex-col gap-3 rounded-xl px-2 cursor-pointer text-lightListTableHeadingText dark:text-darkListTableHeadingText hover:opacity-75"         
+    class="border py-1 w-64 max-w-64 inline-flex items-center justify-center m-2 flex-col gap-3 rounded-xl px-2 cursor-pointer text-lightListTableHeadingText dark:text-darkListTableHeadingText hover:opacity-75"         
     @click="isInputOutputExpanded = !isInputOutputExpanded"
   >
     <div class="flex items-center gap-3">

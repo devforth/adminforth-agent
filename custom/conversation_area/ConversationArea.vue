@@ -1,5 +1,5 @@
 <template>
-  <button @click="scrollContainer.scrollToBottom()">
+  <button @click="scrollContainer.scrollToBottom(); recalculateScroll();">
     <IconArrowDownOutline 
       class="absolute z-10 bottom-32 left-1/2 bg-lightPrimary dark:bg-darkPrimary text-white p-2 w-10 h-10 rounded-full transition-opacity duration-100 ease-in" 
       :class="showScrollToBottomButton ? 'opacity-100' : 'opacity-0 pointer-events-none'"
