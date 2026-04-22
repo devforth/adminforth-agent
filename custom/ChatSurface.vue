@@ -179,7 +179,7 @@ import { IconChatBubbleLeft20Solid, IconSparklesSolid, IconArrowsPointingOut, Ic
 import { IconCloseOutline, IconBarsOutline, IconArrowUpOutline, IconCloseSidebarSolid, IconOpenSidebarSolid, IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
 import { useTemplateRef, onMounted, ref,computed } from 'vue';
 import { onClickOutside } from '@vueuse/core'
-import ConversationArea from './ConversationArea.vue';
+import ConversationArea from './conversation_area/ConversationArea.vue';
 import { useAgentStore } from './composables/useAgentStore';
 import { useAgentTransitions } from './composables/useAgentTransitions';
 import { Button } from '@/afcl';

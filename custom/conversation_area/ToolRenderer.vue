@@ -48,7 +48,7 @@
 
 <script setup lang="ts">
   import { computed, ref } from 'vue';
-  import { type IPartData } from './types';
+  import { type IPartData } from '../types';
   import { Spinner } from '@/afcl';
   import { IconAngleDownOutline, IconCheckOutline } from '@iconify-prerendered/vue-flowbite';
 

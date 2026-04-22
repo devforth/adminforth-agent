@@ -1,5 +1,5 @@
 <template>
-  <div 
+  <div
     class="max-w-[80%] flex px-4 m-2 rounded-xl border border-gray-200 dark:border-gray-700"
     @click="handleMarkdownLinkClick"
     :class="[
@@ -57,11 +57,12 @@
   import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue';
   import { useRouter } from 'vue-router';
   import { IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
-  import { useAgentStore } from './composables/useAgentStore';
+  import { useAgentStore } from '../composables/useAgentStore';
   import { useCoreStore } from '@/stores/core';
+  import ToolsGroup from './ToolsGroup.vue';
 
   const IncremarkContent = defineAsyncComponent(() => import('@incremark/vue').then(module => module.IncremarkContent))
-  const ShikiCodeBlock = defineAsyncComponent(() => import('./incremark_code_renderers/IncremarkShikiCodeBlock.vue'))
+  const ShikiCodeBlock = defineAsyncComponent(() => import('../incremark_code_renderers/IncremarkShikiCodeBlock.vue'))
 
   const agentStore = useAgentStore();
   const coreStore = useCoreStore();
@@ -95,7 +96,7 @@
 
   const content = computed(() => props.message)
   const isFinished = computed(() => props.state === 'done')
-  const isThoughtsExpanded = ref(false)
+  const isThoughtsExpanded = ref(true);
   const hasVegaLite = computed(() => props.type === 'text' && props.message.includes('```vega-lite'))
 
   const isTypeReasoning = computed(() => props.type === 'reasoning')
@@ -109,6 +110,12 @@
     return props.data?.phase === 'end';
   })
   const isStateStreaming = computed(() => props.state === 'streaming')
+
+  watch(isStateStreaming, (newValue) => {
+    if (!newValue) {
+      isThoughtsExpanded.value = false;
+    } 
+  })
 
   watch(isThoughtsExpanded, (newValue: boolean) => {
     emit('toggle-thoughts', newValue);

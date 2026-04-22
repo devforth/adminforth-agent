@@ -7,7 +7,7 @@ export interface IPartData {
   durationMs?: number;
 }
 export interface IPart {
-  type: string;
+  type: 'reasoning' | 'data-tool-call' | 'text';
   text?: string;
   state?: 'started' | 'thinking' | 'processing' | 'streaming' | 'done';
   data?: IPartData;

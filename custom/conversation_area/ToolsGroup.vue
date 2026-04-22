@@ -22,7 +22,7 @@
 
 <script setup lang="ts">
 import ToolRenderer from './ToolRenderer.vue';
-import type { IPart } from './types';
+import type { IPart } from '../types';
 import { ref } from 'vue';
 import { IconAngleDownOutline, IconCheckOutline } from '@iconify-prerendered/vue-flowbite';
 

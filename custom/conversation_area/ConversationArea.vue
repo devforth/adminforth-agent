@@ -37,22 +37,7 @@
       class="flex flex-col w-full"
       :class="message.role === 'user' ? 'self-end' : 'self-start'"
     >
-      <template 
-        v-for="(part, index) in getParts(message)"
-        :key="part.type"
-      >
-        <Message
-          v-if="part.type !== 'data-tool-call'"
-          :message="part.text"
-          :role="message.role"
-          :type="part.type"
-          :state="part.state"
-          :data="part.data"
-          @toggle-thoughts="() => clicks++"
-        >
-        </Message>
-        <ToolsGroup v-else :toolGroup="groupToolCallParts(message, index, part)" />
-      </template>
+      <MessageRenderer :message="message"/>
     </div>
     <!-- Show a placeholder message if the last message is not of type 'text' or 'reasoning' -->
     <Message
@@ -75,13 +60,15 @@
 
 <script setup lang="ts">
 import Message from './Message.vue';
-import type { IMessage, IPart } from './types';
+import type { IMessage, IPart } from '../types';
 import { useTemplateRef, ref, defineAsyncComponent, onMounted, onUnmounted, watch, computed } from 'vue';
 import { IconArrowDownOutline } from '@iconify-prerendered/vue-flowbite';
-import SessionsHistory from './SessionsHistory.vue';
-import { useAgentStore } from './composables/useAgentStore';
+import SessionsHistory from '../SessionsHistory.vue';
+import { useAgentStore } from '../composables/useAgentStore';
 import ToolsGroup from './ToolsGroup.vue';
-import { useAgentTransitions } from './composables/useAgentTransitions';
+import { useAgentTransitions } from '../composables/useAgentTransitions';
+import { getMessageParts } from '../utils';
+import MessageRenderer from './MessageRenderer.vue';
 
 const scrollContainer = useTemplateRef('scrollContainer');
 const showScrollToBottomButton = ref(false);
@@ -124,15 +111,9 @@ watch(clicks, () => {
 const showFakeThinkingMessage = computed(() => {
   const lastMessage = props.messages[props.messages.length - 1];
   if (!lastMessage) return false;
-  const lastPart = getParts(lastMessage)[getParts(lastMessage).length - 1];
+  const lastPart = getMessageParts(lastMessage)[getMessageParts(lastMessage).length - 1];
   return lastPart?.type !== 'text' && lastPart?.type !== 'reasoning';
 })
-
-const getParts = (message: IMessage) => {
-  return message.parts?.length
-    ? message.parts
-    : [{ text: '', type: 'reasoning', state: 'streaming' }];
-};
 
 const formatToolCallTextPart = ((part: IPart, currentMessage: IMessage) => {
   if (part.type === 'data-tool-call') {
@@ -157,7 +138,7 @@ const formatToolCallTextPart = ((part: IPart, currentMessage: IMessage) => {
 const groupToolCallParts = (message: IMessage, currentPartIndex: number, currentPart: IPart) => {
   const groupedParts: { title: string; groupedTools: IPart[] }[] = [];
   let currentToolName: string | null = null;
-  const parts = getParts(message);
+  const parts = getMessageParts(message);
   if (!parts) return [];
   const formatedToolParts = parts.map(part => {
     return formatToolCallTextPart(part as IPart, message)
