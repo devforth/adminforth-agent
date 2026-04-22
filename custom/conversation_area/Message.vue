@@ -29,11 +29,7 @@
           class="transition-transform duration-200"
         />
         {{ isStateStreaming ? 'Thinking' : 'Thoughts' }}
-        <template v-if="isStateStreaming">
-          <span class="bounce-dot1 rounded-full w-2 h-2 bg-lightPrimary"></span>
-          <span class="bounce-dot2 rounded-full w-2 h-2 bg-lightPrimary"></span>
-          <span class="bounce-dot3 rounded-full w-2 h-2 bg-lightPrimary"></span>
-        </template>
+        <ThreeDotsAnimation v-if="isStateStreaming"/>
       </div>
       <transition name="expand" class="max-h-36 overflow-y-auto">
         <p v-show="isThoughtsExpanded" class="overflow-hidden">
@@ -59,7 +55,7 @@
   import { IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
   import { useAgentStore } from '../composables/useAgentStore';
   import { useCoreStore } from '@/stores/core';
-  import ToolsGroup from './ToolsGroup.vue';
+  import ThreeDotsAnimation from './ThreeDotsAnimation.vue';
 
   const IncremarkContent = defineAsyncComponent(() => import('@incremark/vue').then(module => module.IncremarkContent))
   const ShikiCodeBlock = defineAsyncComponent(() => import('../incremark_code_renderers/IncremarkShikiCodeBlock.vue'))

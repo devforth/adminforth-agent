@@ -39,14 +39,6 @@
     >
       <MessageRenderer :message="message"/>
     </div>
-    <!-- Show a placeholder message if the last message is not of type 'text' or 'reasoning' -->
-    <Message
-      v-if="props.messages.length > 0 && showFakeThinkingMessage"
-      :message="''"
-      :role="props.messages[props.messages.length - 1].role"
-      type="reasoning"
-      state="streaming"
-    />
     <div 
       v-if="props.messages.length === 0"
       class="flex-1 flex flex-col items-center justify-center text-gray-400 tracking-widest text-xl font-medium"
