@@ -15,17 +15,16 @@
       class="transition-transform duration-200"
     />
   </h3>
-  <transition name="expand" class="max-h-48 overflow-y-auto">
-    <p v-show="isExpanded" class="overflow-hidden mb-4 text-sm mr-48">
+  <transition name="expand">
+    <div v-show="isExpanded" class="overflow-hidden mb-4 text-sm mr-48 h-64">
       <AutoScrollContainer
         :enabled="true"
-        behavior="smooth"
       >
         <IncremarkContent
           :content="reasoningText"
         />
       </AutoScrollContainer>
-    </p>
+    </div>
   </transition>    
 </template>
 
@@ -82,7 +81,7 @@ watch(() => props.state, (newValue: IPart['state']) => {
 .expand-enter-to,
 .expand-leave-from {
   opacity: 1;
-  max-height: 144px;
+  max-height: 256px;
 }
 
 </style>

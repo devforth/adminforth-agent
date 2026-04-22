@@ -1,4 +1,17 @@
-<template>
+<template v-if="toolGroup.length > 0">
+  {{ toolGroup.length }}
+  <span class="bg-lightNavbar absolute flex items-center justify-center w-5 h-5 bg-brand-softer rounded-full -start-[0.68rem] ring-4 ring-lightNavbar ring-default">
+    <div class="w-5 h-5 rounded-full flex items-center justify-center">
+      <IconWrenchSolid class="w-4 h-4" />
+    </div>
+  </span>
+  <h3 
+    class="flex items-center mb-1 text-sm my-2 ml-3 gap-1"      
+  >
+    <span class="font-semibold">Call tools</span>
+  </h3>
+
+  
   <template v-for="group in props.toolGroup" :key="group.title">
     <div v-if="group.groupedTools.length > 1" class="flex flex-col">
       <div class="flex items-center gap-2 px-2 m-2 cursor-pointer hover:opacity-75 break-all font-mono text-sm leading-5 text-lightListTableHeadingText dark:text-darkListTableHeadingText" @click="toggleGroup(group.title)">
@@ -24,7 +37,9 @@
 import ToolRenderer from './ToolRenderer.vue';
 import type { IPart } from '../types';
 import { ref } from 'vue';
-import { IconAngleDownOutline, IconCheckOutline } from '@iconify-prerendered/vue-flowbite';
+import { IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
+import { IconWrenchSolid } from '@iconify-prerendered/vue-heroicons';
+
 
 const props = defineProps<{
   toolGroup: {

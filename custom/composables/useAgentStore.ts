@@ -512,7 +512,6 @@ export const useAgentStore = defineStore('agent', () => {
         role: m.role,
         text: m.parts.map((p: IPart) => p.type === 'text' ? p.text : '').join(''),
       })) || [];
-      console.log('Saving current session in cache', currentSession.value);
       sessions.value[currentSession.value.sessionId] = currentSession.value;
     }
   }

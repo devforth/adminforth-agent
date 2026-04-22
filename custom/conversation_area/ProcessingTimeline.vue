@@ -21,7 +21,7 @@
         <ol class="ml-8 relative border-l border-l-2 border-black border-default">
           <li class="mb-6 ms-2 z-50" v-for="(part, index) in ToolOrReasoningParts" :key="index"> 
             <ReasoningRenderer v-if="part.type === 'reasoning'" :state="part.state" :text="part.text" />
-            <!-- <ToolRenderer v-else-if="part.type === 'data-tool-call'" :part="part" /> -->
+            <ToolsGroup v-else :toolGroup="groupToolCallParts(message, index, part)" />
           </li>      
         </ol>
       </AutoScrollContainer>
@@ -39,6 +39,7 @@
   import ThreeDotsAnimation from './ThreeDotsAnimation.vue';
   import { useAgentStore } from '../composables/useAgentStore';
   import { getMessageParts } from '../utils';
+  import ToolsGroup from './ToolsGroup.vue';
 
   const props = defineProps<{
     message: IMessage
@@ -57,9 +58,7 @@
   });
   
   watch(isResponseInProgress, (newValue: boolean) => {
-    console.log('isResponseInProgress changed:', newValue);
     if (!newValue) {
-      console.log('Response is no longer in progress, collapsing reasoning section.');
       isExpanded.value = false;
     }
   });
@@ -68,6 +67,65 @@
     if (props.message.parts.length === 0) return true;
     return false;
   })
+
+  const formatToolCallTextPart = ((part: IPart, currentMessage: IMessage) => {
+    if (part.type === 'data-tool-call') {
+      if (part.data?.phase === 'start') {
+        const finishedPart = currentMessage.parts?.find(p => p.type === 'data-tool-call' && p.data?.toolCallId === part.data?.toolCallId && p.data?.phase === 'end');
+        return {
+          type: 'text',
+          toolInfo: {
+            toolCallId: part.data!.toolCallId,
+            toolName: part.data!.toolName,
+            phase: finishedPart ? 'end' : 'start',
+            durationMs: finishedPart ? finishedPart.data?.durationMs : undefined,
+            input: part.data!.input,
+            output: finishedPart ? finishedPart.data!.output : undefined,
+          }          
+        }
+      }
+    }
+    return null;  
+  });
+
+  const groupToolCallParts = (message: IMessage, currentPartIndex: number, currentPart: IPart) => {
+    const groupedParts: { title: string; groupedTools: IPart[] }[] = [];
+    let currentToolName: string | null = null;
+    const parts = getMessageParts(message);
+    if (!parts) return [];
+    const formatedToolParts = parts.map(part => {
+      return formatToolCallTextPart(part as IPart, message)
+    });
+    const currentPartIndexInFormatedParts = formatedToolParts.findIndex(part => part?.toolInfo?.toolCallId === currentPart.data?.toolCallId);
+    if (currentPartIndexInFormatedParts === -1) {
+      return [];
+    }
+    const cleaned = formatedToolParts.filter(item => item !== null);
+    console.log('formatedToolParts', cleaned);
+    for( const[index, part] of cleaned.entries()){
+      if ( index < currentPartIndexInFormatedParts - 1 ) {
+        continue;
+      }
+      if(!part || !part.toolInfo) {
+        continue;
+      }
+      currentToolName = part.toolInfo.toolName;
+      if (!groupedParts.find(group => group.title === currentToolName)) {
+        groupedParts.push({
+          title: currentToolName,
+          groupedTools: []
+        })
+      }
+      if( formatedToolParts[currentPartIndexInFormatedParts - 1]?.toolInfo.toolName === part.toolInfo.toolName) {
+        continue;
+      } else if ( formatedToolParts[currentPartIndexInFormatedParts + 1]?.toolInfo.toolName === part.toolInfo.toolName) {
+        groupedParts[groupedParts.length - 1].groupedTools.push(formatedToolParts[currentPartIndexInFormatedParts + 1] as IPart);
+      } else {
+        groupedParts[groupedParts.length - 1].groupedTools.push(part as IPart);
+      }
+    }  
+    return groupedParts;
+  }
 
 
 </script>
