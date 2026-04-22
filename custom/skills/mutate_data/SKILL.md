@@ -20,8 +20,12 @@ Use `start_custom_action` and `start_custom_bulk_action` for resource actions.
 
 Before performing any state mutation including action calls edit/delete please fetch record which is going to be edited/deleted and show user record in format field → value (show several most important fields which can help user to understand what exactly record he is going to edit or delete). 
 
+Every confirmation must describe one exact fetched row. Never combine `_label`, primary key, link, or field values from different rows or different resources in one confirmation.
+
 For field values with long texts show only several first words and add "..." at the end.
 Also please add related link to record with will be changed. Build it as `{ADMIN_BASE_PATH}resource/{resourceId}/show/{primary key}`. Use _label from `get_resource_data` as anchor text for link (use markdown link). Links should always be relative paths and must start with `ADMIN_BASE_PATH`. Do not add an extra slash after `ADMIN_BASE_PATH`.
+
+Before sending the confirmation, verify that the `resourceId`, `{primary key}`, `_label`, and all shown fields come from the same exact fetched row.
 
 And in the same message ask user for final confirmation.
 
