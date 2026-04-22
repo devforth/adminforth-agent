@@ -165,7 +165,6 @@ function createAgentLlmMetricsLogger() {
 export function createAgentChatModel(params: {
   adapter: CompletionAdapter;
   maxTokens: number;
-  modelName?: string;
 }) {
   const adapter = params.adapter as OpenAIBackedCompletionAdapter;
   const options = adapter.options ?? {};
@@ -176,7 +175,7 @@ export function createAgentChatModel(params: {
     );
   }
 
-  const model = params.modelName ?? options.model ?? "gpt-5-nano";
+  const model = options.model ?? "gpt-5-nano";
   const baseURL = options.baseURL ?? options.baseUrl;
   const reasoning = options.extraRequestBodyParameters
     ?.reasoning as OpenAiReasoningConfig | undefined;
@@ -195,8 +194,8 @@ export function createAgentChatModel(params: {
     useResponsesApi: true,
     outputVersion: "v1",
     streaming: true,
-    promptCacheKey: `adminforth-agent:${model}:system-v1:tools-v1`,
 
+    promptCacheKey: `adminforth-agent:${model}:system-v1:tools-v1`,
     promptCacheRetention: "in_memory", 
 
     ...(reasoningConfig ? { reasoning: reasoningConfig } : {}),
