@@ -26,7 +26,7 @@
       :style="{ width: agentStore.chatWidth + 'rem' }"
     > 
       <div 
-        v-if="!coreStore.isMobile"
+        v-if="!(coreStore.isMobile || agentStore.isFullScreen)"
         class="w-2 cursor-ew-resize absolute left-0 top-0 h-full z-30"
         @mousedown="startResize"
       ></div>
