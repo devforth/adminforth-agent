@@ -246,7 +246,7 @@ onMounted(async () => {
   agentStore.setAvailableModes(props.meta.modes, props.meta.defaultModeName);
   agentStore.regisrerTextInput(textInput.value);
   textInput.value?.focus();
-  const isTeleportedToBodyFromLocalStorage = agentStore.getLocalStorageItem('isTeleportedToBody') === 'true';
+  const isTeleportedToBodyFromLocalStorage = agentStore.getLocalStorageItem('isTeleportedToBody') === 'true' || agentStore.getLocalStorageItem('isTeleportedToBodyBeforeFullScreen') === 'true';
   if( coreStore.isMobile ) {
     agentStore.setIsTeleportedToBody(false);
   } else {

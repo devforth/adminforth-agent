@@ -105,7 +105,7 @@ export const useAgentStore = defineStore('agent', () => {
         }
       }
     }
-    isTeleportedToBody.value = getLocalStorageItem('isTeleportedToBody') === 'true';
+    setIsTeleportedToBody(getLocalStorageItem('isTeleportedToBody') === 'true' || getLocalStorageItem('isTeleportedToBodyBeforeFullScreen') === 'true');
     lastSessionId.value = getLocalStorageItem('lastSessionId');
     if (lastSessionId.value && lastSessionId.value !== 'pre-session') {
       setActiveSession(lastSessionId.value);
