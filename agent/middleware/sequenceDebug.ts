@@ -122,10 +122,31 @@ function finalizeSequenceDebug(sequence: PendingSequenceDebug): SequenceDebug {
 }
 
 type OpenAiResponsesDebugModel = {
-  model: string;
+  getName?: () => string;
+  model?: string;
   zdrEnabled?: boolean;
-  invocationParams: (options?: Record<string, unknown>) => Record<string, unknown>;
+  _defaultConfig?: {
+    modelProvider?: string;
+  };
+  invocationParams?: (options?: Record<string, unknown>) => Record<string, unknown>;
 };
+
+function getDebugModelName(model: OpenAiResponsesDebugModel) {
+  return typeof model.getName === "function" ? model.getName() : undefined;
+}
+
+function supportsOpenAiResponseDebug(
+  model: OpenAiResponsesDebugModel,
+): model is OpenAiResponsesDebugModel & {
+  model: string;
+  invocationParams: (options?: Record<string, unknown>) => Record<string, unknown>;
+} {
+  return (
+    getDebugModelName(model) === "ChatOpenAI" &&
+    typeof model.model === "string" &&
+    typeof model.invocationParams === "function"
+  );
+}
 
 function stringifyPromptForDebug(params: {
   model: OpenAiResponsesDebugModel;
@@ -136,6 +157,22 @@ function stringifyPromptForDebug(params: {
   modelSettings?: Record<string, unknown>;
 }) {
   const { model, systemMessage, messages, tools, toolChoice, modelSettings } = params;
+
+  if (!supportsOpenAiResponseDebug(model)) {
+    return YAML.stringify({
+      model: {
+        name: getDebugModelName(model) ?? null,
+        provider: model._defaultConfig?.modelProvider ?? null,
+        configuredModel:
+          typeof model.model === "string" ? model.model : null,
+      },
+      systemMessage,
+      messages,
+      ...(tools.length > 0 ? { tools } : {}),
+      ...(toolChoice !== undefined ? { toolChoice } : {}),
+      ...(modelSettings ? { modelSettings } : {}),
+    });
+  }
 
   return YAML.stringify({
     input: convertMessagesToResponsesInput({

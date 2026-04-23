@@ -489,7 +489,9 @@ export async function formatApiBasedToolCall(params: {
   });
 }
 
-function normalizeCookies(cookies?: Partial<HttpExtra>['cookies']): CookieItem[] {
+function normalizeCookies(
+  cookies?: Partial<HttpExtra>['cookies'] | Record<string, string>,
+): CookieItem[] {
   if (!cookies) {
     return [];
   }

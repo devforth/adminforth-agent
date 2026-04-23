@@ -1,4 +1,9 @@
+import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { createAgent, summarizationMiddleware } from "langchain";
+import {
+  MODEL_PROVIDER_CONFIG,
+  getChatModelByClassName,
+} from "langchain/chat_models/universal";
 import {
   logger,
   type AdminUser,
@@ -9,7 +14,6 @@ import { BaseCallbackHandler } from "@langchain/core/callbacks/base";
 import {type BaseCheckpointSaver, type Messages } from "@langchain/langgraph";
 import type { LLMResult } from "@langchain/core/outputs";
 import { z } from "zod";
-import { ChatOpenAI } from "@langchain/openai";
 import { createAgentTools } from "./tools/index.js";
 import { createApiBasedToolsMiddleware } from "./middleware/apiBasedTools.js";
 import {
@@ -28,9 +32,24 @@ export const contextSchema = z.object({
   emitToolCallEvent: z.custom<ToolCallEventSink>(),
 });
 
-type OpenAIBackedCompletionAdapter = CompletionAdapter & {
+export type AgentModelProvider = "openai" | "anthropic" | "google-genai";
+export type AgentChatModel = BaseChatModel<any, any>;
+
+type ProviderBackedCompletionAdapter = CompletionAdapter & {
+  constructor?: {
+    name?: string;
+  };
   options?: {
     openAiApiKey?: string;
+    openAIApiKey?: string;
+    anthropicApiKey?: string;
+    geminiApiKey?: string;
+    googleApiKey?: string;
+    googleGenAiApiKey?: string;
+    googleGenerativeAiApiKey?: string;
+    apiKey?: string;
+    provider?: string;
+    modelProvider?: string;
     model?: string;
     baseURL?: string;
     baseUrl?: string;
@@ -39,7 +58,9 @@ type OpenAIBackedCompletionAdapter = CompletionAdapter & {
   };
 };
 
-type OpenAiReasoningConfig = Record<string, unknown>;
+type AgentChatModelConstructor = new (
+  fields?: Record<string, unknown>,
+) => AgentChatModel;
 
 type LlmOutputTokenUsage = {
   promptTokens?: unknown;
@@ -55,6 +76,233 @@ type PendingLlmRun = {
   startedAt: number;
   firstTokenAt?: number;
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function normalizeProvider(value: unknown): AgentModelProvider | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const normalized = value.toLowerCase().replace(/[_\s]+/g, "-");
+
+  if (["openai", "open-ai"].includes(normalized)) {
+    return "openai";
+  }
+
+  if (["anthropic", "claude"].includes(normalized)) {
+    return "anthropic";
+  }
+
+  if (
+    [
+      "google",
+      "gemini",
+      "google-genai",
+      "google-gemini",
+      "google-generative-ai",
+      "google-generativeai",
+    ].includes(normalized)
+  ) {
+    return "google-genai";
+  }
+
+  return undefined;
+}
+
+function detectProviderFromConstructorName(
+  constructorName: string | undefined,
+): AgentModelProvider | undefined {
+  const normalized = constructorName?.toLowerCase();
+
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (normalized.includes("openai")) {
+    return "openai";
+  }
+
+  if (normalized.includes("anthropic") || normalized.includes("claude")) {
+    return "anthropic";
+  }
+
+  if (normalized.includes("gemini") || normalized.includes("google")) {
+    return "google-genai";
+  }
+
+  return undefined;
+}
+
+function detectProviderFromModelName(
+  model: string | undefined,
+): AgentModelProvider | undefined {
+  const normalized = model?.toLowerCase();
+
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (normalized.startsWith("claude")) {
+    return "anthropic";
+  }
+
+  if (normalized.startsWith("gemini")) {
+    return "google-genai";
+  }
+
+  if (/^(gpt|o[1-9]|chatgpt)/.test(normalized)) {
+    return "openai";
+  }
+
+  return undefined;
+}
+
+function detectAgentModelProvider(
+  adapter: ProviderBackedCompletionAdapter,
+): AgentModelProvider {
+  const options = adapter.options ?? {};
+
+  return (
+    normalizeProvider(options.modelProvider) ??
+    normalizeProvider(options.provider) ??
+    detectProviderFromConstructorName(adapter.constructor?.name) ??
+    (options.openAiApiKey || options.openAIApiKey
+      ? "openai"
+      : undefined) ??
+    (options.anthropicApiKey ? "anthropic" : undefined) ??
+    (options.geminiApiKey ||
+    options.googleApiKey ||
+    options.googleGenAiApiKey ||
+    options.googleGenerativeAiApiKey
+      ? "google-genai"
+      : undefined) ??
+    detectProviderFromModelName(options.model) ??
+    (() => {
+      throw new Error(
+        "Could not infer completion adapter provider. Set options.modelProvider to openai, anthropic, or google-genai.",
+      );
+    })()
+  );
+}
+
+function getProviderApiKey(
+  provider: AgentModelProvider,
+  options: ProviderBackedCompletionAdapter["options"],
+) {
+  switch (provider) {
+    case "openai":
+      return options?.openAiApiKey ?? options?.openAIApiKey ?? options?.apiKey;
+    case "anthropic":
+      return options?.anthropicApiKey ?? options?.apiKey;
+    case "google-genai":
+      return (
+        options?.geminiApiKey ??
+        options?.googleApiKey ??
+        options?.googleGenAiApiKey ??
+        options?.googleGenerativeAiApiKey ??
+        options?.apiKey
+      );
+  }
+}
+
+function getProviderModel(
+  provider: AgentModelProvider,
+  options: ProviderBackedCompletionAdapter["options"],
+) {
+  if (options?.model) {
+    return options.model;
+  }
+
+  if (provider === "openai") {
+    return "gpt-5-nano";
+  }
+
+  if (provider === "google-genai") {
+    return "gemini-3-flash-preview";
+  }
+
+  throw new Error(
+    `CompletionAdapter for provider ${provider} must expose options.model`,
+  );
+}
+
+function buildChatModelConfig(params: {
+  provider: AgentModelProvider;
+  options: ProviderBackedCompletionAdapter["options"];
+  maxTokens: number;
+}) {
+  const { provider, options, maxTokens } = params;
+  const apiKey = getProviderApiKey(provider, options);
+
+  if (!apiKey) {
+    const optionName =
+      provider === "openai"
+        ? "options.openAiApiKey"
+        : provider === "anthropic"
+          ? "options.anthropicApiKey"
+          : "options.geminiApiKey";
+
+    throw new Error(
+      `CompletionAdapter must expose ${optionName} for ${provider} agent mode`,
+    );
+  }
+
+  const model = getProviderModel(provider, options);
+  const baseURL = options?.baseURL ?? options?.baseUrl;
+  const extraRequestBodyParameters = {
+    ...(options?.extraRequestBodyParameters ?? {}),
+  };
+
+  if (provider === "openai" && isRecord(extraRequestBodyParameters.reasoning)) {
+    extraRequestBodyParameters.reasoning = {
+      ...extraRequestBodyParameters.reasoning,
+      summary: "auto",
+    };
+  }
+
+  const config: Record<string, unknown> = {
+    model,
+    apiKey,
+    maxTokens,
+    streaming: true,
+    ...extraRequestBodyParameters,
+  };
+
+  if (typeof options?.timeoutMs === "number") {
+    config.timeout = options.timeoutMs;
+  }
+
+  if (baseURL) {
+    config.baseURL = baseURL;
+    config.baseUrl = baseURL;
+    config.configuration = {
+      baseURL,
+    };
+  }
+
+  if (provider === "openai") {
+    config.openAIApiKey = apiKey;
+    config.useResponsesApi = true;
+    config.outputVersion = "v1";
+    config.promptCacheKey = `adminforth-agent:${model}:system-v1:tools-v1`;
+    config.promptCacheRetention = "in_memory";
+  }
+
+  if (provider === "anthropic") {
+    config.anthropicApiKey = apiKey;
+  }
+
+  if (provider === "google-genai") {
+    config.geminiApiKey = apiKey;
+    config.googleApiKey = apiKey;
+    config.maxOutputTokens = maxTokens;
+  }
+
+  return { model, config };
+}
 
 function getFiniteNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value)
@@ -167,60 +415,35 @@ function createAgentLlmMetricsLogger() {
   return new AgentLlmMetricsLogger();
 }
 
-export function createAgentChatModel(params: {
+export async function createAgentChatModel(params: {
   adapter: CompletionAdapter;
   maxTokens: number;
 }) {
-  const adapter = params.adapter as OpenAIBackedCompletionAdapter;
+  const adapter = params.adapter as ProviderBackedCompletionAdapter;
   const options = adapter.options ?? {};
-
-  if (!options.openAiApiKey) {
-    throw new Error(
-      "CompletionAdapter must expose options.openAiApiKey for ChatOpenAI",
-    );
-  }
-
-  const model = options.model ?? "gpt-5-nano";
-  const baseURL = options.baseURL ?? options.baseUrl;
-  const reasoning = options.extraRequestBodyParameters
-    ?.reasoning as OpenAiReasoningConfig | undefined;
-  const reasoningConfig = reasoning
-    ? {
-        ...reasoning,
-        summary: "auto",
-      }
-    : undefined;
-
-  // @ts-ignore
-  return new ChatOpenAI({
-    apiKey: options.openAiApiKey,
-    model,
+  const provider = detectAgentModelProvider(adapter);
+  const { config } = buildChatModelConfig({
+    provider,
+    options,
     maxTokens: params.maxTokens,
-    useResponsesApi: true,
-    outputVersion: "v1",
-    streaming: true,
-
-    promptCacheKey: `adminforth-agent:${model}:system-v1:tools-v1`,
-    promptCacheRetention: "in_memory", 
-
-    ...(reasoningConfig ? { reasoning: reasoningConfig } : {}),
-    ...(typeof options.timeoutMs === "number"
-      ? { timeout: options.timeoutMs }
-      : {}),
-    ...(baseURL
-      ? {
-          configuration: {
-            baseURL,
-          },
-        }
-      : {}),
   });
+  const className = MODEL_PROVIDER_CONFIG[provider].className;
+  const ChatModelClass = await getChatModelByClassName(
+    className,
+    provider,
+  ) as AgentChatModelConstructor;
+
+  return {
+    model: new ChatModelClass(config),
+    provider,
+  };
 }
 
 export async function callAgent(params: {
   name: string;
-  model: ChatOpenAI;
-  summaryModel: ChatOpenAI;
+  model: AgentChatModel;
+  summaryModel: AgentChatModel;
+  modelProvider: AgentModelProvider;
   checkpointer?: BaseCheckpointSaver;
   messages: Messages;
   adminUser: AdminUser;
@@ -237,6 +460,7 @@ export async function callAgent(params: {
     name,
     model,
     summaryModel,
+    modelProvider,
     checkpointer,
     messages,
     adminUser,
@@ -252,15 +476,15 @@ export async function callAgent(params: {
 
   const tools = await createAgentTools(customComponentsDir, apiBasedTools);
   const apiBasedToolsMiddleware = createApiBasedToolsMiddleware(apiBasedTools, adminforth);
-  const openAiResponsesContinuationMiddleware =
-    createOpenAiResponsesContinuationMiddleware();
   const sequenceDebugMiddleware = createSequenceDebugMiddleware(
     sequenceDebugSink,
   );
 
   const middleware = [
     apiBasedToolsMiddleware,
-    openAiResponsesContinuationMiddleware,
+    ...(modelProvider === "openai"
+      ? [createOpenAiResponsesContinuationMiddleware()]
+      : []),
     sequenceDebugMiddleware,
     summarizationMiddleware({
       model: summaryModel,

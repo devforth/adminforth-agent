@@ -10,7 +10,12 @@ import type { PluginOptions } from './types.js';
 import { randomUUID } from 'crypto';
 import { HumanMessage, SystemMessage } from "langchain";
 import { MemorySaver, type BaseCheckpointSaver } from "@langchain/langgraph";
-import { createAgentChatModel, callAgent } from "./agent/simpleAgent.js";
+import {
+  createAgentChatModel,
+  callAgent,
+  type AgentChatModel,
+  type AgentModelProvider,
+} from "./agent/simpleAgent.js";
 import { AdminForthCheckpointSaver } from "./agent/checkpointer.js";
 import { createSequenceDebugCollector } from "./agent/middleware/sequenceDebug.js";
 import {
@@ -24,7 +29,6 @@ import {
 } from "./agent/systemPrompt.js";
 import { ALWAYS_AVAILABLE_API_TOOL_NAMES } from "./agent/tools/index.js";
 import type { ToolCallEvent } from "./agent/toolCallEvents.js";
-import type { ChatOpenAI } from "@langchain/openai";
 
 function isAggregateErrorLike(
   error: unknown,
@@ -75,10 +79,11 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
   private checkpointer: BaseCheckpointSaver | null = null;
   private readonly modelsByModeName = new Map<
     string,
-    {
-      model: ChatOpenAI;
-      summaryModel: ChatOpenAI;
-    }
+    Promise<{
+      model: AgentChatModel;
+      summaryModel: AgentChatModel;
+      modelProvider: AgentModelProvider;
+    }>
   >();
 
   private async createNewTurn(sessionId: string, prompt: string, response?: string) {
@@ -118,29 +123,39 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     }));
   }
 
-  private getModeModels(
+  private async getModeModels(
     mode: PluginOptions["modes"][number],
     maxTokens: number,
   ) {
     const cachedModels = this.modelsByModeName.get(mode.name);
 
     if (cachedModels) {
-      return cachedModels;
+      return await cachedModels;
     }
 
-    const models = {
-      model: createAgentChatModel({
+    const modelsPromise = Promise.all([
+      createAgentChatModel({
         adapter: mode.completionAdapter,
         maxTokens,
       }),
-      summaryModel: createAgentChatModel({
+      createAgentChatModel({
         adapter: mode.completionAdapter,
         maxTokens,
       }),
-    };
+    ]).then(([primaryModel, summaryModel]) => ({
+      model: primaryModel.model,
+      summaryModel: summaryModel.model,
+      modelProvider: primaryModel.provider,
+    }));
 
-    this.modelsByModeName.set(mode.name, models);
-    return models;
+    this.modelsByModeName.set(mode.name, modelsPromise);
+
+    try {
+      return await modelsPromise;
+    } catch (error) {
+      this.modelsByModeName.delete(mode.name);
+      throw error;
+    }
   }
 
   private getCheckpointer() {
@@ -326,12 +341,14 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
 
           const maxTokens = this.options.maxTokens ?? 10000;
           const selectedMode = this.options.modes.find((mode) => mode.name === body.mode) ?? this.options.modes[0];
-          const { model, summaryModel } = this.getModeModels(selectedMode, maxTokens);
+          const { model, summaryModel, modelProvider } =
+            await this.getModeModels(selectedMode, maxTokens);
           const systemPrompt = await this.agentSystemPromptPromise;
           const stream = await callAgent({
             name: `adminforth-agent-${this.pluginInstanceId}`,
             model,
             summaryModel,
+            modelProvider,
             checkpointer: this.getCheckpointer(),
             messages: [
               new SystemMessage(systemPrompt),
