@@ -9,6 +9,7 @@
   
   <SessionsHistory 
     :class="agentStore.isSessionHistoryOpen ? 'translate-x-0' : '-translate-x-full'"
+    @recalculateScroll="recalculateScroll"
   />
   <div 
     v-if="agentStore.isSessionHistoryOpen"
@@ -51,17 +52,18 @@
 
 
 <script setup lang="ts">
-import Message from './Message.vue';
 import type { IMessage, IPart } from '../types';
-import { useTemplateRef, ref, defineAsyncComponent, onMounted, onUnmounted, watch, computed } from 'vue';
+import { useTemplateRef, ref, defineAsyncComponent, onMounted, onUnmounted, watch, computed, nextTick } from 'vue';
 import { IconArrowDownOutline } from '@iconify-prerendered/vue-flowbite';
 import SessionsHistory from '../SessionsHistory.vue';
 import { useAgentStore } from '../composables/useAgentStore';
-import ToolsGroup from './ToolsGroup.vue';
 import { useAgentTransitions } from '../composables/useAgentTransitions';
-import { getMessageParts } from '../utils';
 import MessageRenderer from './MessageRenderer.vue';
 import CustomAutoScrollContainer from '../CustomAutoScrollContainer.vue';
+
+const props = defineProps<{
+  messages: IMessage[]
+}>();
 
 const scrollContainer = useTemplateRef('scrollContainer');
 const showScrollToBottomButton = ref(false);
@@ -100,10 +102,5 @@ watch(clicks, () => {
   recalculateScroll();
 })
 
-
-
-const props = defineProps<{
-  messages: IMessage[]
-}>();
 
 </script>
