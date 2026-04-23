@@ -129,12 +129,14 @@ export const useAgentStore = defineStore('agent', () => {
   function setFullScreen(fullScreen: boolean) {
     isFullScreen.value = fullScreen;
     if (fullScreen) {
+      document.body.style.overflow = 'hidden';
       setLocalStorageItem('chatWidthBeforeFullScreen', chatWidth.value.toString());
       setLocalStorageItem('isTeleportedToBodyBeforeFullScreen', isTeleportedToBody.value ? 'true' : 'false');
       setIsTeleportedToBody(false);
       useAgentTransitions().setChatSurfaceTransition(false);
       setChatWidth(window.innerWidth, false);
     } else {
+      document.body.style.overflow = '';
       const lastChatWidth = parseInt(getLocalStorageItem('chatWidthBeforeFullScreen') || DEFAULT_CHAT_WIDTH.toString(), 10);
       const isTeleportedBeforeFullScreen = getLocalStorageItem('isTeleportedToBodyBeforeFullScreen') === 'true';
       agentTransitions.setAppRootTransition(true);
@@ -315,6 +317,9 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   function closeChat() {
+    if(isFullScreen.value) {
+      document.body.style.overflow = '';
+    }
     if (blockCloseOfChat.value) {
       return;
     }
@@ -323,6 +328,12 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   function openChat() {
+    if (isFullScreen.value) {
+      document.body.style.overflow = 'hidden';
+    }
+    if (coreStore.isMobile) {
+      setFullScreen(true);
+    }
     isChatOpen.value = true;
     nextTick(() => {
       focusTextInput();

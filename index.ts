@@ -422,8 +422,9 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       path: `/agent/get-sessions`,
       handler: async ({body, adminUser }) => {
         const userId = adminUser.pk;
+        const limit = typeof body.limit === 'number' ? body.limit : 20;
         const sessions = await this.adminforth.resource(this.pluginOptions.sessionResource.resourceId).list(
-          [Filters.EQ(this.pluginOptions.sessionResource.askerIdField, userId)], undefined, undefined, [Sorts.DESC(this.pluginOptions.sessionResource.createdAtField)]
+          [Filters.EQ(this.pluginOptions.sessionResource.askerIdField, userId)], limit, undefined, [Sorts.DESC(this.pluginOptions.sessionResource.createdAtField)]
         );
         const sessionsToReturn = [];
         for (const session of sessions) {

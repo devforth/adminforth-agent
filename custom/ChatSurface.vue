@@ -26,7 +26,7 @@
       :style="{ width: agentStore.chatWidth + 'rem' }"
     > 
       <div 
-        v-if="!coreStore.isMobile"
+        v-if="!(coreStore.isMobile || agentStore.isFullScreen)"
         class="w-2 cursor-ew-resize absolute left-0 top-0 h-full z-30"
         @mousedown="startResize"
       ></div>
@@ -36,7 +36,6 @@
       >
         <div 
           class="flex items-center justify-between h-14 border-b border-gray-200 dark:border-gray-700"         
-          :class="{ 'pl-4': agentStore.isFullScreen }"
         >
           <div 
             class="flex items-center"
@@ -248,8 +247,11 @@ onMounted(async () => {
   agentStore.regisrerTextInput(textInput.value);
   textInput.value?.focus();
   const isTeleportedToBodyFromLocalStorage = agentStore.getLocalStorageItem('isTeleportedToBody') === 'true';
-
-  agentStore.setIsTeleportedToBody(isTeleportedToBodyFromLocalStorage || props.meta.stickByDefault);
+  if( coreStore.isMobile ) {
+    agentStore.setIsTeleportedToBody(false);
+  } else {
+    agentStore.setIsTeleportedToBody(isTeleportedToBodyFromLocalStorage || props.meta.stickByDefault);
+  }
   await agentStore.fetchSessionsList();
 });
 

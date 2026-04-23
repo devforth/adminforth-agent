@@ -15,7 +15,7 @@
         </div>
       </transition>
     </div>
-    <ToolRenderer v-else :data="group.groupedTools[0]" />
+    <ToolRenderer v-else-if="group.groupedTools.length > 0" :data="group.groupedTools[0]" />
   </template> 
 
 </template>
