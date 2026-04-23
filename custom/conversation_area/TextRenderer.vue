@@ -1,52 +1,21 @@
 <template>
-  <div 
+  <div
     class="max-w-[80%] flex px-4 m-2 rounded-xl border border-gray-200 dark:border-gray-700"
     @click="handleMarkdownLinkClick"
     :class="[
       hasVegaLite ? 'w-full' : '',
       props.role === 'user' ? 'bg-lightListTableHeading dark:bg-darkListTableHeading self-end' 
-      : isTypeReasoning || isTypeToolCall ? 'bg-transparent border-none self-start' 
-        : 'bg-blue-100 dark:bg-blue-700/10 self-start'
+        : 'border-none self-start'
     ]"
   >
     <IncremarkContent
       class="text-wrap break-words w-full max-w-full"
-      v-if="content && props.type === 'text'"
+      v-if="content"
       :content="content" 
       :is-finished="isFinished" 
       :components="incremarkComponents"
       :incremark-options="incremarkOptions"
     />
-    <!-- reasoning/thinking -->
-    <div 
-      v-else-if="isTypeReasoning || isStateStreaming" 
-      class="flex flex-col items-start gap-1 text-gray-500 py-2 " 
-    >
-      <div class="flex items-center gap-1 hover:underline cursor-pointer text-lightListTableHeadingText hover:text-lightListTableHeadingText  dark:text-darkListTableHeadingText dark:hover:text-darkListTableHeadingText" @click="isThoughtsExpanded = !isThoughtsExpanded">
-        <IconAngleDownOutline 
-          v-if="content"
-          :class="isThoughtsExpanded ? 'rotate-180' : 'rotate-0'"
-          class="transition-transform duration-200"
-        />
-        {{ isStateStreaming ? 'Thinking' : 'Thoughts' }}
-        <template v-if="isStateStreaming">
-          <span class="bounce-dot1 rounded-full w-2 h-2 bg-lightPrimary"></span>
-          <span class="bounce-dot2 rounded-full w-2 h-2 bg-lightPrimary"></span>
-          <span class="bounce-dot3 rounded-full w-2 h-2 bg-lightPrimary"></span>
-        </template>
-      </div>
-      <transition name="expand" class="max-h-36 overflow-y-auto">
-        <p v-show="isThoughtsExpanded" class="overflow-hidden">
-          {{ content }}
-        </p>
-      </transition>    
-    </div>
-    <div v-else-if="isTypeToolCall && isToolCallStart">
-      {{ props.data?.toolName }} start
-    </div>
-    <div v-else-if="isTypeToolCall && isToolCallEnd">
-      {{ props.data?.toolName }} end
-    </div>
     <p v-else class="text-red-500 py-2">
       Error occured
     </p>
@@ -56,12 +25,11 @@
 <script setup lang="ts">
   import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue';
   import { useRouter } from 'vue-router';
-  import { IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
-  import { useAgentStore } from './composables/useAgentStore';
+  import { useAgentStore } from '../composables/useAgentStore';
   import { useCoreStore } from '@/stores/core';
 
   const IncremarkContent = defineAsyncComponent(() => import('@incremark/vue').then(module => module.IncremarkContent))
-  const ShikiCodeBlock = defineAsyncComponent(() => import('./incremark_code_renderers/IncremarkShikiCodeBlock.vue'))
+  const ShikiCodeBlock = defineAsyncComponent(() => import('../incremark_code_renderers/IncremarkShikiCodeBlock.vue'))
 
   const agentStore = useAgentStore();
   const coreStore = useCoreStore();
@@ -84,10 +52,8 @@
   })
 
   const props = defineProps<{
-    type: string,
     message: string | undefined,
     state: string | undefined,
-    data?: any
     role: 'user' | 'assistant'
   }>();
 
@@ -95,27 +61,23 @@
 
   const content = computed(() => props.message)
   const isFinished = computed(() => props.state === 'done')
-  const isThoughtsExpanded = ref(false)
-  const hasVegaLite = computed(() => props.type === 'text' && props.message.includes('```vega-lite'))
+  const isThoughtsExpanded = ref(true);
+  const hasVegaLite = computed(() => props.message?.includes('```vega-lite'))
 
-  const isTypeReasoning = computed(() => props.type === 'reasoning')
-  const isTypeToolCall = computed(() => props.type === 'data-tool-call')
-  const isToolCallStart = computed(() => {
-    if (props.type !== 'data-tool-call') return false;
-    return props.data?.phase === 'start';
-  })
-  const isToolCallEnd = computed(() => {
-    if (props.type !== 'data-tool-call') return false;
-    return props.data?.phase === 'end';
-  })
   const isStateStreaming = computed(() => props.state === 'streaming')
+
+  watch(isStateStreaming, (newValue: boolean) => {
+    if (!newValue) {
+      isThoughtsExpanded.value = false;
+    } 
+  })
 
   watch(isThoughtsExpanded, (newValue: boolean) => {
     emit('toggle-thoughts', newValue);
   })
 
   function handleMarkdownLinkClick(event: MouseEvent) {
-    if (props.type !== 'text' || event.defaultPrevented || event.button !== 0) {
+    if (event.defaultPrevented || event.button !== 0) {
       return;
     }
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
@@ -134,7 +96,6 @@
       return;
     }
     event.preventDefault();
-
     const internalRoute = resolveInternalRoute(href);
     if (internalRoute !== null) {
       if (agentStore.isFullScreen && !coreStore.isMobile) {
@@ -168,55 +129,6 @@
   .incremark-paragraph {
     margin: 8px 0;
   }
-</style>
-
-<style scoped>
-
-.bounce-dot1 {
-  animation: bounce 1.5s infinite;
-  animation-delay: 0s;
-}
-
-.bounce-dot2 {
-  animation: bounce 1.5s infinite;
-  animation-delay: 0.1s;
-}
-
-.bounce-dot3 {
-  animation: bounce 1.5s infinite;
-  animation-delay: 0.2s;
-}
-
-@keyframes bounce {
-  0%, 100% {
-    transform: translateY(20%);
-    opacity: 0.3;
-    animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
-  }
-  50% {
-    transform: none;
-    opacity: 1;
-    animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
-  }
-}
-
-.expand-enter-active,
-.expand-leave-active {
-  transition: all 0.3s ease;
-}
-
-.expand-enter-from,
-.expand-leave-to {
-  opacity: 0;
-  max-height: 0;
-}
-
-.expand-enter-to,
-.expand-leave-from {
-  opacity: 1;
-  max-height: 144px;
-}
-
 </style>
 
 <style lang="scss">

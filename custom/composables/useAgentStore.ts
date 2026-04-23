@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { IAgentSession, ISessionsListItem, IMessage } from '../types';
+import { IAgentSession, ISessionsListItem, IMessage, IPart } from '../types';
 import { ref, nextTick, computed, watch, onMounted, shallowRef } from 'vue';
 import { callAdminForthApi } from '@/utils';
 import { useAdminforth } from '@/adminforth';
@@ -93,7 +93,9 @@ export const useAgentStore = defineStore('agent', () => {
   })
   onMounted(() => {
     const chatWidthBeforeFullScreen = parseInt(getLocalStorageItem('chatWidthBeforeFullScreen') || '0', 10);
-    if (chatWidthBeforeFullScreen) {
+    if (chatWidthBeforeFullScreen && (chatWidthBeforeFullScreen > MAX_WIDTH || chatWidthBeforeFullScreen < MIN_WIDTH)) {
+      setChatWidth(remToPx(DEFAULT_CHAT_WIDTH));
+    } else if (chatWidthBeforeFullScreen) {
       setChatWidth(remToPx(chatWidthBeforeFullScreen));
     } else {
       const savedChatWidth = parseInt(getLocalStorageItem('chatWidth') || '0', 10);
@@ -105,7 +107,7 @@ export const useAgentStore = defineStore('agent', () => {
         }
       }
     }
-    isTeleportedToBody.value = getLocalStorageItem('isTeleportedToBody') === 'true';
+    setIsTeleportedToBody(getLocalStorageItem('isTeleportedToBody') === 'true' || getLocalStorageItem('isTeleportedToBodyBeforeFullScreen') === 'true');
     lastSessionId.value = getLocalStorageItem('lastSessionId');
     if (lastSessionId.value && lastSessionId.value !== 'pre-session') {
       setActiveSession(lastSessionId.value);
@@ -510,7 +512,7 @@ export const useAgentStore = defineStore('agent', () => {
     if (currentSession.value) {
       currentSession.value.messages = currentChat.value?.messages.map((m: any) => ({
         role: m.role,
-        text: m.parts.map((p: any) => p.text).join(' '),
+        text: m.parts.map((p: IPart) => p.type === 'text' ? p.text : '').join(''),
       })) || [];
       sessions.value[currentSession.value.sessionId] = currentSession.value;
     }
@@ -522,8 +524,10 @@ export const useAgentStore = defineStore('agent', () => {
     if (!sessions.value[sessionId]) {
       await fetchSession(sessionId);    
     }
+    console.log('Set active session from sessions', sessionId, sessions.value[sessionId]);
     currentSession.value = sessions.value[sessionId];
     setCurrentChat(sessionId);
+    console.log('Set active session chat', sessionId, currentSession.value);
     currentChat.value.messages = currentSession.value?.messages.map((m: any) => ({
       role: m.role,
       parts:[{

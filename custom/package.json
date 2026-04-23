@@ -21,6 +21,7 @@
     "dompurify": "^3.3.3",
     "katex": "^0.16.45",
     "marked": "^18.0.0",
-    "vega-embed": "^7.1.0"
+    "vega-embed": "^7.1.0",
+    "vue-custom-scrollbar": "^2.0.2"
   }
 }

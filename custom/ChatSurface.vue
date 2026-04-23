@@ -179,7 +179,7 @@ import { IconChatBubbleLeft20Solid, IconSparklesSolid, IconArrowsPointingOut, Ic
 import { IconCloseOutline, IconBarsOutline, IconArrowUpOutline, IconCloseSidebarSolid, IconOpenSidebarSolid, IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
 import { useTemplateRef, onMounted, ref,computed } from 'vue';
 import { onClickOutside } from '@vueuse/core'
-import ConversationArea from './ConversationArea.vue';
+import ConversationArea from './conversation_area/ConversationArea.vue';
 import { useAgentStore } from './composables/useAgentStore';
 import { useAgentTransitions } from './composables/useAgentTransitions';
 import { Button } from '@/afcl';
@@ -246,7 +246,7 @@ onMounted(async () => {
   agentStore.setAvailableModes(props.meta.modes, props.meta.defaultModeName);
   agentStore.regisrerTextInput(textInput.value);
   textInput.value?.focus();
-  const isTeleportedToBodyFromLocalStorage = agentStore.getLocalStorageItem('isTeleportedToBody') === 'true';
+  const isTeleportedToBodyFromLocalStorage = agentStore.getLocalStorageItem('isTeleportedToBody') === 'true' || agentStore.getLocalStorageItem('isTeleportedToBodyBeforeFullScreen') === 'true';
   if( coreStore.isMobile ) {
     agentStore.setIsTeleportedToBody(false);
   } else {

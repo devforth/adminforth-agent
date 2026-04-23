@@ -7,10 +7,20 @@ export interface IPartData {
   durationMs?: number;
 }
 export interface IPart {
-  type: string;
+  type: 'reasoning' | 'data-tool-call' | 'text';
   text?: string;
   state?: 'started' | 'thinking' | 'processing' | 'streaming' | 'done';
   data?: IPartData;
+}
+
+export interface IFormattedToolCallPart {
+  type: 'data-tool-call';
+  toolInfo: IPartData;
+}
+
+export interface IToolGroup {
+  title: string;
+  groupedTools: IFormattedToolCallPart[];
 }
 
 export interface IMessage {

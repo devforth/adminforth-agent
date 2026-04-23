@@ -1,19 +1,34 @@
 <template>
-  <div 
-    class="inline-flex m-2 max-w-[80%] flex-col gap-3 rounded-xl px-2 cursor-pointer text-lightListTableHeadingText dark:text-darkListTableHeadingText hover:opacity-75"         
-    @click="isInputOutputExpanded = !isInputOutputExpanded"
+  <div
+    ref="toolRendererRef" 
+    class="py-1 inline-flex justify-center m-2 
+      flex-col gap-3 rounded-xl px-2 text-lightListTableHeadingText 
+      dark:text-darkListTableHeadingText select-none
+    "         
+    :class="[
+      isInputOutputExpanded ? 'items-start border-none' : '', 
+      activateShrinkedStyle ? 'border items-center' : '',
+      activateFullWidth ? 'w-full' : '',
+    ]"
+    :style="{
+      maxWidth: isAnimatingShrinkFinal ? toolRendererInitialWidth + 'px' : '',
+      transition: 'max-width 0.3s ease',
+    }"
   >
-    <div class="flex items-center gap-3">
+    <div 
+      class="flex items-center gap-1 cursor-pointer"     
+      @click="toggleInputOutput()"
+    >
       <div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/70 dark:bg-blue-700/20">
         <Spinner v-if="isRunning" class="h-4 w-4" />
         <IconCheckOutline v-else class="h-4 w-4 text-lightPrimary dark:text-darkPrimary" />
       </div>
 
       <div class="min-w-0">
-        <p class="text-xs text-gray-500 dark:text-gray-400 font-bold">
+        <!-- <p class="text-xs text-gray-500 dark:text-gray-400 font-bold">
           {{ statusLabel }}
           <span v-if="props.data?.toolInfo?.durationMs" class="text-xs">({{ (props.data.toolInfo.durationMs / 1000).toFixed(2) }}s)</span>
-        </p>
+        </p> -->
         <p class="break-all font-mono text-sm leading-5">
           {{ props.data?.toolInfo?.toolName }}
         </p>
@@ -47,12 +62,52 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, ref } from 'vue';
-  import { type IPartData } from './types';
+  import { computed, ref, watch, onMounted } from 'vue';
+  import { type IFormattedToolCallPart } from '../types';
   import { Spinner } from '@/afcl';
   import { IconAngleDownOutline, IconCheckOutline } from '@iconify-prerendered/vue-flowbite';
 
   const isInputOutputExpanded = ref(false);
+  const activateShrinkedStyle = ref(true);
+  const isAnimatingShrinkFinal = ref(false);
+  const toolRendererInitialWidth = ref<number | null>(null);
+  const toolRendererRef = ref<HTMLElement | null>(null);
+  const activateFullWidth = ref(false);
+  const blockClicksDuringAnimation = ref(false);
+  const ANIMATION_DURATION = 300;
+
+  onMounted(() => {
+    if (toolRendererRef.value) {
+      toolRendererInitialWidth.value = toolRendererRef.value.offsetWidth;
+    }
+  });  
+
+  watch(isInputOutputExpanded, (newValue) => {
+    if (!newValue) {
+      setTimeout(() => {
+        activateFullWidth.value = false;
+        isAnimatingShrinkFinal.value = true;
+      }, ANIMATION_DURATION - 10)
+      setTimeout(() => {
+        isAnimatingShrinkFinal.value = false;
+      }, ANIMATION_DURATION);
+      setTimeout(() => {
+        activateShrinkedStyle.value = true;
+      }, ANIMATION_DURATION + 10);
+    } else {
+      activateShrinkedStyle.value = false;
+      activateFullWidth.value = true;
+    }
+  });
+
+  function toggleInputOutput() {
+    if (blockClicksDuringAnimation.value) return;
+    isInputOutputExpanded.value = !isInputOutputExpanded.value;
+    blockClicksDuringAnimation.value = true;
+    setTimeout(() => {
+      blockClicksDuringAnimation.value = false;
+    }, ANIMATION_DURATION);
+  }
 
   interface IToolSection {
     label: string;
@@ -63,10 +118,7 @@
   }
 
   const props = defineProps<{
-    data: {
-      type: string;
-      toolInfo: IPartData;
-    }
+    data: IFormattedToolCallPart
   }>();
 
   const isRunning = computed(() => props.data?.toolInfo?.phase === 'start');
@@ -115,7 +167,7 @@
 
 .expand-enter-active,
 .expand-leave-active {
-  transition: all 0.3s ease;
+  transition: all 300ms ease;
 }
 
 .expand-enter-from,
