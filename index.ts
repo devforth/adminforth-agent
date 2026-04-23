@@ -338,6 +338,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
               new HumanMessage(prompt),
             ],
             adminUser,
+            adminforth: this.adminforth,
             apiBasedTools: this.apiBasedTools,
             customComponentsDir: this.adminforth.config.customization.customComponentsDir,
             sessionId,

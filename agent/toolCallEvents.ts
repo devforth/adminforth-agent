@@ -6,6 +6,7 @@ export type ToolCallEvent =
   | {
       toolCallId: string;
       toolName: string;
+      toolInfo?: string;
       phase: "start";
       input: string;
     }
@@ -64,6 +65,7 @@ export function createToolCallTracker(params: {
   emit: ToolCallEventSink;
   toolCallId?: string;
   toolName: string;
+  toolInfo?: string;
   input?: Record<string, unknown>;
   startedAt?: number;
 }) {
@@ -75,6 +77,7 @@ export function createToolCallTracker(params: {
       params.emit({
         toolCallId,
         toolName: params.toolName,
+        toolInfo: params.toolInfo,
         phase: "start",
         input: YAML.stringify(params.input ?? {}),
       });

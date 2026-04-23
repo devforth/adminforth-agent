@@ -1,7 +1,10 @@
 import { ToolMessage } from "@langchain/core/messages";
 import { createMiddleware } from "langchain";
-import { logger } from "adminforth";
-import { type ApiBasedTool } from "../../apiBasedTools.js";
+import { logger, type AdminUser, type IAdminForth } from "adminforth";
+import {
+  formatApiBasedToolCall,
+  type ApiBasedTool,
+} from "../../apiBasedTools.js";
 import {
   createToolCallTracker,
   type ToolCallEventSink,
@@ -46,6 +49,7 @@ function getEnabledApiToolNames(messages: unknown[]) {
 
 export function createApiBasedToolsMiddleware(
   apiBasedTools: Record<string, ApiBasedTool>,
+  adminforth: IAdminForth,
 ) {
   const alwaysAvailableApiToolNames = new Set<string>(ALWAYS_AVAILABLE_API_TOOL_NAMES);
   const dynamicTools = Object.fromEntries(
@@ -71,14 +75,33 @@ export function createApiBasedToolsMiddleware(
     async wrapToolCall(request, handler) {
       const startedAt = Date.now();
       const toolInput = JSON.stringify(request.toolCall.args ?? {});
-      const { emitToolCallEvent } = request.runtime.context as {
+      const { adminUser, emitToolCallEvent, userTimeZone } = request.runtime.context as {
+        adminUser: AdminUser;
         emitToolCallEvent: ToolCallEventSink;
+        userTimeZone: string;
       };
+      const toolArgs = (request.toolCall.args ?? {}) as Record<string, unknown>;
+      let toolInfo: string | undefined;
+
+      if (request.toolCall.name === "fetch_skill") {
+        toolInfo = `Load ${(toolArgs.skillName as string).split("_").join(" ")} skill`;
+      } else if (request.toolCall.name === "fetch_tool_schema") {
+        toolInfo = `Load ${(toolArgs.toolName as string).split("_").join(" ")} tool `;
+      } else {
+        toolInfo = await formatApiBasedToolCall({
+          adminforth,
+          adminUser,
+          inputs: toolArgs,
+          toolName: request.toolCall.name,
+          userTimeZone,
+        });
+      }
       const toolCallTracker = createToolCallTracker({
         emit: emitToolCallEvent,
         toolCallId: request.toolCall.id,
         toolName: request.toolCall.name,
-        input: (request.toolCall.args ?? {}) as Record<string, unknown>,
+        toolInfo,
+        input: toolArgs,
         startedAt,
       });
       toolCallTracker.start();

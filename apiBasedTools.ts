@@ -65,10 +65,11 @@ type ToolHttpResponse = IAdminForthHttpResponse & {
 type ToolOverrideCallParams = Pick<ApiBasedToolCallParams, 'httpExtra' | 'inputs' | 'userTimeZone'>;
 
 type ToolOverrideContext = {
-  output: unknown;
+  output?: unknown;
   adminUser?: AdminUser;
   httpExtra?: Partial<HttpExtra>;
   inputs?: Record<string, unknown>;
+  resourceLabel?: string;
   userTimeZone?: string;
   invokeTool: (toolName: string, params?: ToolOverrideCallParams) => Promise<unknown>;
 };
@@ -98,6 +99,42 @@ type DateTimeColumnType = AdminForthDataTypes.DATETIME | AdminForthDataTypes.TIM
 
 const DEFAULT_USER_TIME_ZONE = 'UTC';
 
+function getInputString(inputs: Record<string, unknown> | undefined, key: string) {
+  const value = inputs?.[key];
+
+  return typeof value === 'string' && value ? value : undefined;
+}
+
+function getInputArrayLength(inputs: Record<string, unknown> | undefined, key: string) {
+  const value = inputs?.[key];
+
+  return Array.isArray(value) ? value.length : undefined;
+}
+
+function resourceLabel(adminforth: IAdminForth, inputs: Record<string, unknown> | undefined) {
+  const resourceId = getInputString(inputs, 'resourceId');
+  const resource = adminforth.config.resources.find((res) => res.resourceId === resourceId);
+
+  return resource?.label ?? resourceId ?? 'resource';
+}
+
+function getDataPrefix(inputs: Record<string, unknown> | undefined) {
+  const offset = typeof inputs?.offset === 'number' ? inputs.offset : undefined;
+  const limit = typeof inputs?.limit === 'number' ? inputs.limit : undefined;
+
+  if (offset !== undefined && limit !== undefined) {
+    return `${offset}-${offset + limit} `;
+  }
+
+  return limit === undefined ? '' : `${limit} `;
+}
+
+function actionText(inputs: Record<string, unknown> | undefined) {
+  const actionId = getInputString(inputs, 'actionId');
+
+  return actionId ? ` action ${actionId}` : ' action';
+}
+
 const TOOL_OVERRIDES: Record<string, ToolOverride> = {
   get_resource: {
     wipe_frontend_specific_data: [
@@ -106,11 +143,12 @@ const TOOL_OVERRIDES: Record<string, ToolOverride> = {
       'resource.options.actions[].customComponent',
       'resource.options.pageInjections',
     ],
-    format_tool: async ({ }) => {
-      return "get resource Apartments"
-    }
+    format_tool: ({ resourceLabel }) => `Get ${resourceLabel} resource`,
   },
   get_resource_data: {
+    format_tool: ({ inputs, resourceLabel }) => (
+      `Get ${getDataPrefix(inputs)}${resourceLabel}`
+    ),
     post_process_response: async ({ output, inputs, invokeTool, userTimeZone }) => {
       if (hasToolError(output)) {
         return output;
@@ -132,9 +170,37 @@ const TOOL_OVERRIDES: Record<string, ToolOverride> = {
 
       return response;
     },
-    format_tool: async ({ }) => {
-      return "get 1-20 Apartment filtered listed=yes"
-    }
+  },
+  aggregate: {
+    format_tool: ({ resourceLabel }) => `Aggregate ${resourceLabel}`,
+  },
+  start_custom_action: {
+    format_tool: ({ inputs, resourceLabel }) => `Run ${resourceLabel}${actionText(inputs)}`,
+  },
+  start_custom_bulk_action: {
+    format_tool: ({ inputs, resourceLabel }) => {
+      const recordCount = getInputArrayLength(inputs, 'recordIds');
+      const recordsText = recordCount === undefined ? '' : ` for ${recordCount} records`;
+
+      return `Run ${resourceLabel}${actionText(inputs)}${recordsText}`;
+    },
+  },
+  start_bulk_action: {
+    format_tool: ({ inputs, resourceLabel }) => {
+      const recordCount = getInputArrayLength(inputs, 'recordIds');
+      const recordsText = recordCount === undefined ? '' : ` for ${recordCount} records`;
+
+      return `Run ${resourceLabel}${actionText(inputs)}${recordsText}`;
+    },
+  },
+  create_record: {
+    format_tool: ({ resourceLabel }) => `Create ${resourceLabel}`,
+  },
+  update_record: {
+    format_tool: ({ resourceLabel }) => `Update ${resourceLabel}`,
+  },
+  delete_record: {
+    format_tool: ({ resourceLabel }) => `Delete ${resourceLabel}`,
   },
 };
 
@@ -399,6 +465,28 @@ function endpointPathToToolName(path: string) {
     .replace(/^\/+/, '')
     .replace(/[^a-zA-Z0-9_]+/g, '_')
     .replace(/^_+|_+$/g, '');
+}
+
+export async function formatApiBasedToolCall(params: {
+  adminforth: IAdminForth;
+  adminUser?: AdminUser;
+  httpExtra?: Partial<HttpExtra>;
+  inputs?: Record<string, unknown>;
+  toolName: string;
+  userTimeZone?: string;
+}) {
+  const formatTool = TOOL_OVERRIDES[params.toolName]?.format_tool;
+
+  return await formatTool?.({
+    adminUser: params.adminUser,
+    httpExtra: params.httpExtra,
+    inputs: params.inputs,
+    resourceLabel: resourceLabel(params.adminforth, params.inputs),
+    userTimeZone: params.userTimeZone,
+    invokeTool: async () => {
+      throw new Error('Tool info formatting cannot invoke tools');
+    },
+  });
 }
 
 function normalizeCookies(cookies?: Partial<HttpExtra>['cookies']): CookieItem[] {

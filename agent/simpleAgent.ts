@@ -1,5 +1,10 @@
 import { createAgent, summarizationMiddleware } from "langchain";
-import { logger, type AdminUser, type CompletionAdapter } from "adminforth";
+import {
+  logger,
+  type AdminUser,
+  type CompletionAdapter,
+  type IAdminForth,
+} from "adminforth";
 import { BaseCallbackHandler } from "@langchain/core/callbacks/base";
 import {type BaseCheckpointSaver, type Messages } from "@langchain/langgraph";
 import type { LLMResult } from "@langchain/core/outputs";
@@ -219,6 +224,7 @@ export async function callAgent(params: {
   checkpointer?: BaseCheckpointSaver;
   messages: Messages;
   adminUser: AdminUser;
+  adminforth: IAdminForth;
   apiBasedTools: Record<string, ApiBasedTool>;
   customComponentsDir: string;
   sessionId: string;
@@ -234,6 +240,7 @@ export async function callAgent(params: {
     checkpointer,
     messages,
     adminUser,
+    adminforth,
     apiBasedTools,
     customComponentsDir,
     sessionId,
@@ -244,7 +251,7 @@ export async function callAgent(params: {
   } = params;
 
   const tools = await createAgentTools(customComponentsDir, apiBasedTools);
-  const apiBasedToolsMiddleware = createApiBasedToolsMiddleware(apiBasedTools);
+  const apiBasedToolsMiddleware = createApiBasedToolsMiddleware(apiBasedTools, adminforth);
   const openAiResponsesContinuationMiddleware =
     createOpenAiResponsesContinuationMiddleware();
   const sequenceDebugMiddleware = createSequenceDebugMiddleware(
