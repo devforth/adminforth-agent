@@ -17,7 +17,7 @@ Adds a native AI agent to your AdminForth application.
 
 Full setup and configuration guide:
 
-[AdminForth Agent Documentation](https://adminforth.dev/docs/tutorial/Plugins/Agent/)
+[AdminForth Agent Documentation](https://adminforth.dev/docs/tutorial/Plugins/agent/)
 
 ## About AdminForth
 
