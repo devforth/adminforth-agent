@@ -16,15 +16,17 @@
     />
   </h3>
   <transition name="expand">
-    <div v-show="isExpanded" class="overflow-hidden mb-4 text-sm mr-48 max-h-64 pl-4 ">
-      <AutoScrollContainer
-        :enabled="true"
-      >
-        <IncremarkContent
-          :content="reasoningText"
-        />
-      </AutoScrollContainer>
-    </div>
+    <CustomAutoScrollContainer
+      v-if="isExpanded" v-show="isExpanded" class="mb-4 text-sm max-h-64 pl-4"
+      :wrapperStyle="{
+        marginRight: '8rem',
+      }"
+      :enabled="true"
+    >
+      <IncremarkContent
+        :content="reasoningText"
+      />
+    </CustomAutoScrollContainer>
   </transition>    
 </template>
 
@@ -37,10 +39,10 @@ import { ref, computed, watch, defineAsyncComponent } from 'vue';
 import ThreeDotsAnimation from './ThreeDotsAnimation.vue';
 import { extractTitleAndTextFromReasoning } from '../utils';
 import { useAgentStore } from '../composables/useAgentStore';
-
+import CustomAutoScrollContainer from '../CustomAutoScrollContainer.vue';
 
 const IncremarkContent = defineAsyncComponent(() => import('@incremark/vue').then(module => module.IncremarkContent))
-const AutoScrollContainer = defineAsyncComponent(() => import('@incremark/vue').then(module => module.AutoScrollContainer))
+// const AutoScrollContainer = defineAsyncComponent(() => import('@incremark/vue').then(module => module.AutoScrollContainer))
 
 const props = defineProps<{
   state?: IPart['state']

@@ -1,14 +1,9 @@
 <template>
   <CustomScrollbar
     ref="containerRef"
-    class="auto-scroll-container"
-    :wrapperStyle = "{ 
-      maxHeight: '100%',
-      maxWidth: agentStore.isFullScreen ? agentStore.MAX_WIDTH+'rem' : '100%',
-      width: '100%',
-      marginLeft: 'auto',
-      marginRight: 'auto'
-    }"
+    class="auto-scroll-container mask-y"
+    :wrapperStyle = "wrapperStyle"
+    :contentStyle = "contentStyle"
   >
     <slot />
   </CustomScrollbar>
@@ -27,6 +22,8 @@ const props = withDefaults(defineProps<{
   enabled?: boolean
   threshold?: number
   behavior?: ScrollBehavior
+  wrapperStyle?: Record<string, string>
+  contentStyle?: Record<string, string>
 }>(), {
   enabled: true,
   threshold: 50,
@@ -143,3 +140,15 @@ defineExpose({
   container: containerRef
 })
 </script>
+
+<style>
+  .mask-y {
+    mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      black 20px,
+      black calc(100% - 20px),
+      transparent
+    );
+  }
+</style>
