@@ -1,5 +1,4 @@
 import { AIMessage } from "@langchain/core/messages";
-import { convertMessagesToResponsesInput } from "@langchain/openai";
 import { createMiddleware } from "langchain";
 import YAML from "yaml";
 import type { ToolCallEvent } from "../toolCallEvents.js";
@@ -121,35 +120,21 @@ function finalizeSequenceDebug(sequence: PendingSequenceDebug): SequenceDebug {
   };
 }
 
-type OpenAiResponsesDebugModel = {
+type SequenceDebugPromptModel = {
   getName?: () => string;
   model?: string;
-  zdrEnabled?: boolean;
   _defaultConfig?: {
     modelProvider?: string;
   };
   invocationParams?: (options?: Record<string, unknown>) => Record<string, unknown>;
 };
 
-function getDebugModelName(model: OpenAiResponsesDebugModel) {
+function getDebugModelName(model: SequenceDebugPromptModel) {
   return typeof model.getName === "function" ? model.getName() : undefined;
 }
 
-function supportsOpenAiResponseDebug(
-  model: OpenAiResponsesDebugModel,
-): model is OpenAiResponsesDebugModel & {
-  model: string;
-  invocationParams: (options?: Record<string, unknown>) => Record<string, unknown>;
-} {
-  return (
-    getDebugModelName(model) === "ChatOpenAI" &&
-    typeof model.model === "string" &&
-    typeof model.invocationParams === "function"
-  );
-}
-
 function stringifyPromptForDebug(params: {
-  model: OpenAiResponsesDebugModel;
+  model: SequenceDebugPromptModel;
   systemMessage: { text: string };
   messages: unknown[];
   tools: unknown[];
@@ -157,37 +142,28 @@ function stringifyPromptForDebug(params: {
   modelSettings?: Record<string, unknown>;
 }) {
   const { model, systemMessage, messages, tools, toolChoice, modelSettings } = params;
-
-  if (!supportsOpenAiResponseDebug(model)) {
-    return YAML.stringify({
-      model: {
-        name: getDebugModelName(model) ?? null,
-        provider: model._defaultConfig?.modelProvider ?? null,
-        configuredModel:
-          typeof model.model === "string" ? model.model : null,
-      },
-      systemMessage,
-      messages,
-      ...(tools.length > 0 ? { tools } : {}),
-      ...(toolChoice !== undefined ? { toolChoice } : {}),
-      ...(modelSettings ? { modelSettings } : {}),
-    });
-  }
+  const invocationParams =
+    typeof model.invocationParams === "function"
+      ? model.invocationParams({
+          ...(modelSettings ?? {}),
+          ...(tools.length > 0 ? { tools } : {}),
+          ...(toolChoice !== undefined ? { tool_choice: toolChoice } : {}),
+        })
+      : null;
 
   return YAML.stringify({
-    input: convertMessagesToResponsesInput({
-      messages: [
-        ...(systemMessage.text === "" ? [] : [systemMessage]),
-        ...messages,
-      ] as any[],
-      zdrEnabled: model.zdrEnabled ?? false,
-      model: model.model,
-    }),
-    ...model.invocationParams({
-    ...(modelSettings ?? {}),
+    model: {
+      name: getDebugModelName(model) ?? null,
+      provider: model._defaultConfig?.modelProvider ?? null,
+      configuredModel:
+        typeof model.model === "string" ? model.model : null,
+    },
+    systemMessage,
+    messages,
     ...(tools.length > 0 ? { tools } : {}),
-    ...(toolChoice !== undefined ? { tool_choice: toolChoice } : {}),
-    }),
+    ...(toolChoice !== undefined ? { toolChoice } : {}),
+    ...(modelSettings ? { modelSettings } : {}),
+    ...(invocationParams ? { invocationParams } : {}),
   });
 }
 
@@ -386,7 +362,7 @@ export function createSequenceDebugMiddleware(
     name: "SequenceDebugMiddleware",
     async wrapModelCall(request, handler) {
       const prompt = stringifyPromptForDebug({
-        model: request.model as unknown as OpenAiResponsesDebugModel,
+        model: request.model as unknown as SequenceDebugPromptModel,
         systemMessage: request.systemMessage,
         messages: request.messages,
         tools: request.tools,

@@ -1,9 +1,9 @@
 import {
   type PluginsCommonOptions,
-  type CompletionAdapter,
   type AdminUser,
   type HttpExtra,
 } from "adminforth";
+import type { AgentModeCompletionAdapter } from "./agent/simpleAgent.js";
 
 interface ISessionResource {
   resourceId: string;
@@ -58,7 +58,7 @@ export interface PluginOptions extends PluginsCommonOptions {
    */
   modes: {
     name: string;
-    completionAdapter: CompletionAdapter;
+    completionAdapter: AgentModeCompletionAdapter;
   }[];
 
   /**
