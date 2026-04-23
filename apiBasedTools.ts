@@ -75,6 +75,7 @@ type ToolOverrideContext = {
 
 type ToolOverride = {
   wipe_frontend_specific_data?: readonly string[];
+  format_tool?: (params: ToolOverrideContext) => Promise<string> | string;
   post_process_response?: (params: ToolOverrideContext) => Promise<unknown> | unknown;
 };
 
@@ -103,6 +104,9 @@ const TOOL_OVERRIDES: Record<string, ToolOverride> = {
       'resource.options.actions[].customComponent',
       'resource.options.pageInjections',
     ],
+    format_tool: async ({ }) => {
+      return "get resource Apartments"
+    }
   },
   get_resource_data: {
     post_process_response: async ({ output, inputs, invokeTool, userTimeZone }) => {
@@ -126,6 +130,9 @@ const TOOL_OVERRIDES: Record<string, ToolOverride> = {
 
       return response;
     },
+    format_tool: async ({ }) => {
+      return "get 1-20 Apartment filtered listed=yes"
+    }
   },
 };
 

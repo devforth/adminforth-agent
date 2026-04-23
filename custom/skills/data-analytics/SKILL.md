@@ -12,10 +12,10 @@ Use `get_resource_data` to fetch data for this skill. This is the main tool for 
 
 When the user asks for analytics, reports, trends, comparisons, or distributions:
 
-- Fetch the underlying rows with `get_resource_data`.
-- Prefer narrow requests: request only the columns you need and use filters, sorting, pagination, and date ranges whenever possible.
+- Fetch the requested data using `aggregate` tool. This tool is capable of performing fast server-side aggregations on filtered data, groupings by date including grouping by day/week/month etc. 
+- if it is not possible to get the required aggregates using `aggregate`, fetch the underlying rows with `get_resource_data`. This is much heavier since returns original rows  with all fields, but allows you to perform complex calculations, comparisons, and custom groupings in-memory. Always prefer `aggregate` when possible.
+- Prefer narrow requests: use filters, sorting, pagination, and date ranges whenever possible.
 - If the request is ambiguous, clarify the resource, metric, grouping, or date range before fetching data.
-- Compute aggregates from the returned rows yourself: sums, counts, averages, min/max, grouped totals, ratios, and trend deltas.
 - Return a short written summary with the key finding and most important numbers.
 - If a chart would help, produce a Vega-Lite spec.
 
