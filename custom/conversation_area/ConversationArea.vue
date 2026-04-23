@@ -17,7 +17,7 @@
   >
 
   </div>
-  <AutoScrollContainer
+  <CustomAutoScrollContainer
     :enabled="!showScrollToBottomButton" 
     class="relative flex flex-col overflow-y-auto translate-x-[-50%] left-1/2"
     ref="scrollContainer"
@@ -46,7 +46,7 @@
       <p>{{ $t('Start the conversation') }}</p>
       <p class="tracking-normal text-base text">{{ $t('Give any input to begin') }}</p>
     </div>
-  </AutoScrollContainer>
+  </CustomAutoScrollContainer>
 </template>
 
 
@@ -61,11 +61,11 @@ import ToolsGroup from './ToolsGroup.vue';
 import { useAgentTransitions } from '../composables/useAgentTransitions';
 import { getMessageParts } from '../utils';
 import MessageRenderer from './MessageRenderer.vue';
+import CustomAutoScrollContainer from '../CustomAutoScrollContainer.vue';
 
 const scrollContainer = useTemplateRef('scrollContainer');
 const showScrollToBottomButton = ref(false);
 const innerScrollContainerRef = ref(null);
-const AutoScrollContainer = defineAsyncComponent(() => import('@incremark/vue').then(module => module.AutoScrollContainer))
 const agentStore = useAgentStore();
 const agentTransitions = useAgentTransitions();
 const clicks = ref(0);

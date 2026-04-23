@@ -12,8 +12,8 @@
         class="transition-transform duration-200"
       />
     </div>
-    <transition name="expand" class="max-h-96 overflow-y-auto mb-4 ">
-      <AutoScrollContainer
+    <transition name="expand" class="max-h-96 overflow-y-auto mb-4 pt-1">
+      <CustomAutoScrollContainer
         :enabled="true"
         behavior="smooth"
         v-if="ToolOrReasoningParts.length > 0" 
@@ -26,7 +26,7 @@
             <ToolsGroup v-else :toolGroup="groupToolCallParts(message, part)" />
           </li>      
         </ol>
-      </AutoScrollContainer>
+      </CustomAutoScrollContainer>
     </transition>
   </template>
 </template>
@@ -42,13 +42,14 @@
   import { useAgentStore } from '../composables/useAgentStore';
   import { getMessageParts } from '../utils';
   import ToolsGroup from './ToolsGroup.vue';
+  import CustomAutoScrollContainer from '../CustomAutoScrollContainer.vue';
 
   const props = defineProps<{
     message: IMessage
     isLastMessageInChat: boolean
   }>()
 
-  const AutoScrollContainer = defineAsyncComponent(() => import('@incremark/vue').then(module => module.AutoScrollContainer))
+  // const AutoScrollContainer = defineAsyncComponent(() => import('@incremark/vue').then(module => module.AutoScrollContainer))
   const agentStore = useAgentStore();
   const thinkingStartTime = ref<number | null>(null);
   const thinkingDuration = ref(0);
