@@ -5,7 +5,7 @@
     :class="[
       hasVegaLite ? 'w-full' : '',
       props.role === 'user' ? 'bg-lightListTableHeading dark:bg-darkListTableHeading self-end' 
-        : 'bg-blue-100 dark:bg-blue-700/10 self-start'
+        : 'border-none self-start'
     ]"
   >
     <IncremarkContent

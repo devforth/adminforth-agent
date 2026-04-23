@@ -1,30 +1,30 @@
 <template>
   <div 
-    class="border py-1 w-64 max-w-64 inline-flex items-center justify-center m-2 flex-col gap-3 rounded-xl px-2 cursor-pointer text-lightListTableHeadingText dark:text-darkListTableHeadingText hover:opacity-75"         
+    class="border py-1 inline-flex items-center justify-center m-2 flex-col gap-3 rounded-xl px-2 text-lightListTableHeadingText dark:text-darkListTableHeadingText select-none "         
     @click="isInputOutputExpanded = !isInputOutputExpanded"
   >
-    <div class="flex items-center gap-3">
+    <div class="flex items-center gap-1">
       <div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/70 dark:bg-blue-700/20">
         <Spinner v-if="isRunning" class="h-4 w-4" />
         <IconCheckOutline v-else class="h-4 w-4 text-lightPrimary dark:text-darkPrimary" />
       </div>
 
       <div class="min-w-0">
-        <p class="text-xs text-gray-500 dark:text-gray-400 font-bold">
+        <!-- <p class="text-xs text-gray-500 dark:text-gray-400 font-bold">
           {{ statusLabel }}
           <span v-if="props.data?.toolInfo?.durationMs" class="text-xs">({{ (props.data.toolInfo.durationMs / 1000).toFixed(2) }}s)</span>
-        </p>
+        </p> -->
         <p class="break-all font-mono text-sm leading-5">
           {{ props.data?.toolInfo?.toolName }}
         </p>
       </div>
-      <IconAngleDownOutline
+      <!-- <IconAngleDownOutline
         v-if="hasToolSections"
         :class="isInputOutputExpanded ? 'rotate-180' : 'rotate-0'"
         class="cursor-pointer transition-transform duration-200 hover:scale-105"
-      />
+      /> -->
     </div>
-    <transition name="expand">
+    <!-- <transition name="expand">
       <div v-if="isInputOutputExpanded" v-show="isInputOutputExpanded" class="max-h-72 space-y-3 overflow-y-auto pr-1">
         <section
           v-for="section in toolSections"
@@ -42,7 +42,7 @@
           </div>
         </section>
       </div>
-    </transition>
+    </transition> -->
   </div>
 </template>
 

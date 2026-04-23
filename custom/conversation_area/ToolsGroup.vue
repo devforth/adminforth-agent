@@ -15,25 +15,24 @@
     <template v-for="group in props.toolGroup" :key="group.title">
       <template v-if="group.groupedTools.length > 1">
         <div
-          v-if="!expandedGroups.includes(group.title)" 
-          class="max-w-64 w-auto flex items-center gap-2 px-2 m-2 py-2.5 cursor-pointer 
-            hover:opacity-75 break-all font-mono text-sm leading-5
+          class="max-w-64 w-auto flex items-center gap-2 px-2 m-2 py-1  
+            break-all font-mono text-sm leading-5 select-none 
             text-lightListTableHeadingText dark:text-darkListTableHeadingText
-            items-center justify-center
+            items-center justify-center border rounded-xl
           " 
           :class="!expandedGroups.includes(group.title) ? 'border rounded-xl' : ''"
           @click="toggleGroup(group.title)"
         >
           <IconCheckOutline  class="w-6 h-6 p-1"/> 
           {{ group.title }} {{ 'x' + group.groupedTools.length }} 
-          <IconAngleDownOutline 
+          <!-- <IconAngleDownOutline 
             class="transition-transform duration-200 hover:scale-105 hover:opacity-75"
             :class="expandedGroups.includes(group.title) ? 'rotate-180' : 'rotate-0'"
-          />
+          /> -->
         </div>
         <!-- <transition name="expand">
           <div v-show="expandedGroups.includes(group.title)" class="flex flex-wrap gap-1">  -->
-            <ToolRenderer v-if="expandedGroups.includes(group.title)" v-for="part in group.groupedTools" :key="part.toolInfo.toolCallId" :data="part"/>
+            <!-- <ToolRenderer v-if="expandedGroups.includes(group.title)" v-for="part in group.groupedTools" :key="part.toolInfo.toolCallId" :data="part"/> -->
           <!-- </div>
         </transition> -->
       </template>
