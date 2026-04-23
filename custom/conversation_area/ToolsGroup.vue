@@ -8,7 +8,7 @@
     <h3 
       class="flex items-center mb-1 text-sm my-2 ml-3 gap-1"      
     >
-      <span class="font-semibold">Call tools</span>
+      <span class="font-semibold select-none ">Call tools</span>
     </h3>
 
     <div class="flex flex-wrap">

@@ -16,7 +16,7 @@
     />
   </h3>
   <transition name="expand">
-    <div v-show="isExpanded" class="overflow-hidden mb-4 text-sm mr-48 max-h-64">
+    <div v-show="isExpanded" class="overflow-hidden mb-4 text-sm mr-48 max-h-64 pl-4 ">
       <AutoScrollContainer
         :enabled="true"
       >

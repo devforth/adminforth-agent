@@ -93,7 +93,9 @@ export const useAgentStore = defineStore('agent', () => {
   })
   onMounted(() => {
     const chatWidthBeforeFullScreen = parseInt(getLocalStorageItem('chatWidthBeforeFullScreen') || '0', 10);
-    if (chatWidthBeforeFullScreen) {
+    if (chatWidthBeforeFullScreen && (chatWidthBeforeFullScreen > MAX_WIDTH || chatWidthBeforeFullScreen < MIN_WIDTH)) {
+      setChatWidth(remToPx(DEFAULT_CHAT_WIDTH));
+    } else if (chatWidthBeforeFullScreen) {
       setChatWidth(remToPx(chatWidthBeforeFullScreen));
     } else {
       const savedChatWidth = parseInt(getLocalStorageItem('chatWidth') || '0', 10);

@@ -1,10 +1,11 @@
 <template>
   <template v-if="ToolOrReasoningParts.length > 0 || isResponseInProgress || showFakeThinkingMessage">
     <div 
-      class="ml-2 flex items-center gap-1 cursor-pointer select-none hover:opacity-80 tracking-wide font-medium text-sm"
+      class="ml-2 px-4 flex items-center gap-1 cursor-pointer select-none hover:opacity-80 tracking-wide font-medium text-sm"
       @click="isExpanded = !isExpanded"
     >
       Thoughts
+      <span v-if="thinkingDuration > 0">({{ (thinkingDuration/1000).toFixed(2) }} s)</span>
       <ThreeDotsAnimation v-if="isResponseInProgress || showFakeThinkingMessage" />
       <IconAngleDownOutline 
         :class="isExpanded ? 'rotate-180' : 'rotate-0'"
@@ -17,6 +18,7 @@
         behavior="smooth"
         v-if="ToolOrReasoningParts.length > 0" 
         v-show="isExpanded"
+        class="mask-y"
       >
         <ol class="ml-8 relative border-l border-l-2 border-black border-default">
           <li class="mb-6 ms-2 z-50" v-for="(part, index) in ToolOrReasoningParts" :key="index"> 
@@ -33,7 +35,7 @@
 
 <script setup lang="ts">
   import type { IFormattedToolCallPart, IMessage, IPart, IToolGroup } from '../types';
-  import { ref, computed, watch, defineAsyncComponent } from 'vue';
+  import { ref, computed, watch, defineAsyncComponent, onMounted } from 'vue';
   import ReasoningRenderer from './ReasoningRenderer.vue';
   import { IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
   import ThreeDotsAnimation from './ThreeDotsAnimation.vue';
@@ -48,6 +50,13 @@
 
   const AutoScrollContainer = defineAsyncComponent(() => import('@incremark/vue').then(module => module.AutoScrollContainer))
   const agentStore = useAgentStore();
+  const thinkingStartTime = ref<number | null>(null);
+  const thinkingDuration = ref(0);
+
+  onMounted(() => {
+    thinkingStartTime.value = Date.now();
+  })
+
   const ToolOrReasoningParts = computed(() => {
     return props.message.parts.filter((part: IPart) => part.type === 'data-tool-call' || part.type === 'reasoning');
   });
@@ -60,6 +69,7 @@
   watch(isResponseInProgress, (newValue: boolean) => {
     if (!newValue) {
       isExpanded.value = false;
+      thinkingDuration.value = Date.now() - (thinkingStartTime.value ?? Date.now());
     }
   });
   
@@ -166,4 +176,14 @@
     max-height: 384px;
   }
 
+  .mask-y {
+    mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      black 20px,
+      black calc(100% - 20px),
+      transparent
+    );
+  }
+ 
 </style>
