@@ -541,6 +541,9 @@ export const useAgentStore = defineStore('agent', () => {
       const res = await callAdminForthApi({
         method: 'POST',
         path: '/agent/get-sessions',
+        body: {
+          limit: 100,
+        },
       });
       if (res.error) {
         console.error('Error fetching sessions list:', res.error);
