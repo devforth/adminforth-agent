@@ -20,7 +20,7 @@
     <div 
       ref="chatSurface"
       id="adminforth-agent-chat-surface"
-      class="fixed bg-lightNavbar dark:bg-darkNavbar h-screen top-0 right-0 border-x border-b border-gray-200 dark:border-gray-700 
+      class="fixed bg-lightNavbar dark:bg-darkNavbar max-h-screen top-0 right-0 border-x border-b border-gray-200 dark:border-gray-700 
             flex flex z-40"
       :class="[agentStore.isChatOpen ? 'translate-x-0' : 'translate-x-full', !agentStore.isTeleportedToBody ? 'shadow-2xl' : '']"
       :style="{ width: agentStore.chatWidth + 'rem' }"
@@ -32,7 +32,7 @@
       ></div>
 
       <div 
-        class="w-full h-full flex flex-col"
+        class="w-full max-h-full flex flex-col"
       >
         <div 
           class="flex items-center justify-between h-14 border-b border-gray-200 dark:border-gray-700"         

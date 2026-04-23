@@ -73,11 +73,17 @@ const agentTransitions = useAgentTransitions();
 const clicks = ref(0);
 
 function recalculateScroll() {
+  console.log('AAAAAAAAAA');
   if (scrollContainer.value) {
     const isScrolledUp = scrollContainer.value.isUserScrolledUp();
     showScrollToBottomButton.value = !!isScrolledUp;
   }
 }
+
+watch(() => agentStore.isFullScreen, () => {
+  const scrollEl = scrollContainer.value.container.scrollEl;
+  console.log('isFullScreen changed, recalculating scroll. Scroll element:', scrollEl);
+})
 
 onMounted(async () => {
   await import('@incremark/theme/styles.css')
@@ -90,7 +96,7 @@ onUnmounted(() => {
 
 watch(scrollContainer, () => {
   if (scrollContainer.value) {
-    innerScrollContainerRef.value = scrollContainer.value.container;
+    innerScrollContainerRef.value = scrollContainer.value.container.scrollEl;
 
     innerScrollContainerRef.value.addEventListener('scroll', () => {
       recalculateScroll();

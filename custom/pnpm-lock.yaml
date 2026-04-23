@@ -29,6 +29,9 @@ importers:
       ai:
         specifier: ^6.0.168
         version: 6.0.168(zod@4.3.6)
+      custom-vue-scrollbar:
+        specifier: ^0.0.8
+        version: 0.0.8(lodash-es@4.18.1)(vue@3.5.32)
       dompurify:
         specifier: ^3.3.3
         version: 3.3.3
@@ -41,9 +44,6 @@ importers:
       vega-embed:
         specifier: ^7.1.0
         version: 7.1.0(vega-lite@6.4.2(vega@6.2.0))(vega@6.2.0)
-      vue-custom-scrollbar:
-        specifier: ^2.0.2
-        version: 2.0.2(vue@3.5.32)
 
 packages:
 
@@ -306,6 +306,12 @@ packages:
 
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
+
+  custom-vue-scrollbar@0.0.8:
+    resolution: {integrity: sha512-JcO0B+02Kf9wXSL9SaxXVvuToaY+lvJAtmrwNfSLS3x6xx5+mO24r5/dGkNK8av0VlSDzviypYUXTjEZbwgGHA==}
+    peerDependencies:
+      lodash-es: ^4.17.21
+      vue: ^3.2.13
 
   d3-array@3.2.4:
     resolution: {integrity: sha512-tdQAmyA18i4J7wprpYq8ClcxZy3SC31QMeByyCFyRt7BVHdREQZ5lpzoe5mFEYZUWe+oq8HBvk9JjpibyEV4Jg==}
@@ -656,9 +662,6 @@ packages:
   parse-entities@4.0.2:
     resolution: {integrity: sha512-GG2AQYWoLgL877gQIKeRPGO1xF9+eG1ujIb5soS5gPvLQ1y2o8FL90w2QWNdf9I361Mpp7726c+lj3U0qK1uGw==}
 
-  perfect-scrollbar@1.5.6:
-    resolution: {integrity: sha512-rixgxw3SxyJbCaSpo1n35A/fwI1r2rdwMKOTCg/AcG+xOEyZcE8UHVjpZMFCVImzsFoCZeJTT+M/rdEIQYO2nw==}
-
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
 
@@ -878,11 +881,6 @@ packages:
 
   vfile@6.0.3:
     resolution: {integrity: sha512-KzIbH/9tXat2u30jf+smMwFCsno4wHVdNmzFyL+T/L3UGqqk6JKfVqOFOZEpZSHADH1k40ab6NUIXZq422ov3Q==}
-
-  vue-custom-scrollbar@2.0.2:
-    resolution: {integrity: sha512-eRyxGb7UFLLH8P0B8FDux2uPrzNBH0X6IN+A/RB5sfmLq1ym7shbCPVKua1pC7LPqPB7dc86evFXyWO/svrfKA==}
-    peerDependencies:
-      vue: ^3.3.0
 
   vue@3.5.32:
     resolution: {integrity: sha512-vM4z4Q9tTafVfMAK7IVzmxg34rSzTFMyIe0UUEijUCkn9+23lj0WRfA83dg7eQZIUlgOSGrkViIaCfqSAUXsMw==}
@@ -1218,6 +1216,11 @@ snapshots:
   commander@8.3.0: {}
 
   csstype@3.2.3: {}
+
+  custom-vue-scrollbar@0.0.8(lodash-es@4.18.1)(vue@3.5.32):
+    dependencies:
+      lodash-es: 4.18.1
+      vue: 3.5.32
 
   d3-array@3.2.4:
     dependencies:
@@ -1766,8 +1769,6 @@ snapshots:
       is-decimal: 2.0.1
       is-hexadecimal: 2.0.1
 
-  perfect-scrollbar@1.5.6: {}
-
   picocolors@1.1.1: {}
 
   postcss@8.5.10:
@@ -2141,11 +2142,6 @@ snapshots:
     dependencies:
       '@types/unist': 3.0.3
       vfile-message: 4.0.3
-
-  vue-custom-scrollbar@2.0.2(vue@3.5.32):
-    dependencies:
-      perfect-scrollbar: 1.5.6
-      vue: 3.5.32
 
   vue@3.5.32:
     dependencies:
