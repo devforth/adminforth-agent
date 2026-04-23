@@ -94,6 +94,8 @@ type GetResourceDataToolResponse = {
   options?: Record<string, unknown>;
 };
 
+type DateTimeColumnType = AdminForthDataTypes.DATETIME | AdminForthDataTypes.TIME;
+
 const DEFAULT_USER_TIME_ZONE = 'UTC';
 
 const TOOL_OVERRIDES: Record<string, ToolOverride> = {
@@ -373,6 +375,7 @@ async function applyToolOverride(params: {
         adminUser,
         inputs: nestedInputs,
         httpExtra: nestedHttpExtra,
+        userTimeZone: nestedUserTimeZone,
       });
 
       return applyToolOverride({
@@ -488,20 +491,104 @@ function createRawExpressResponse(response: ToolHttpResponse) {
   return rawResponse;
 }
 
+function normalizeDateTimeInputsToUtc(
+  body: Record<string, unknown>,
+  adminforth: IAdminForth,
+  userTimeZone?: string,
+): Record<string, unknown> {
+  if (!userTimeZone || typeof body.resourceId !== 'string') {
+    return body;
+  }
+
+  const resource = adminforth.config.resources.find((res) => res.resourceId === body.resourceId);
+
+  if (!resource) {
+    return body;
+  }
+
+  const columnsByName = new Map(resource.dataSourceColumns.map((column) => [column.name, column]));
+
+  const normalizeColumnValue = (
+    value: unknown,
+    columnType: DateTimeColumnType,
+  ): unknown => {
+    if (Array.isArray(value)) {
+      return value.map((item) => normalizeColumnValue(item, columnType));
+    }
+
+    if (typeof value !== 'string' || value === '') {
+      return value;
+    }
+
+    if (columnType === AdminForthDataTypes.DATETIME) {
+      return dayjs.tz(value, userTimeZone).utc().toISOString();
+    }
+
+    if (columnType === AdminForthDataTypes.TIME) {
+      const userDate = dayjs().tz(userTimeZone).format('YYYY-MM-DD');
+      return dayjs.tz(`${userDate}T${value}`, userTimeZone).utc().format('HH:mm:ss');
+    }
+  };
+
+  const normalizeValue = (value: unknown, key?: string): unknown => {
+    const column = key ? columnsByName.get(key) : undefined;
+
+    if (column?.type === AdminForthDataTypes.DATETIME || column?.type === AdminForthDataTypes.TIME) {
+      return normalizeColumnValue(value, column.type);
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((item) => normalizeValue(item));
+    }
+
+    if (!value || typeof value !== 'object') {
+      return value;
+    }
+
+    const record = value as Record<string, unknown>;
+    const filterColumn = typeof record.field === 'string' ? columnsByName.get(record.field) : undefined;
+
+    if (
+      'value' in record &&
+      (filterColumn?.type === AdminForthDataTypes.DATETIME || filterColumn?.type === AdminForthDataTypes.TIME)
+    ) {
+      return {
+        ...record,
+        value: normalizeColumnValue(record.value, filterColumn.type),
+      };
+    }
+
+    return Object.fromEntries(
+      Object.entries(record).map(([nestedKey, nestedValue]) => [
+        nestedKey,
+        normalizeValue(nestedValue, nestedKey),
+      ]),
+    );
+  };
+
+  return normalizeValue(body) as Record<string, unknown>;
+}
+
 async function callCapturedEndpoint(params: {
   adminforth: IAdminForth;
   adminUser?: AdminUser;
   endpoint: CapturedEndpoint;
   httpExtra?: Partial<HttpExtra>;
   inputs?: Record<string, unknown>;
+  userTimeZone?: string;
 }) {
-  const { adminforth, adminUser, endpoint, httpExtra, inputs } = params;
+  const { adminforth, adminUser, endpoint, httpExtra, inputs, userTimeZone } = params;
   const response = createToolResponse(httpExtra?.response);
   const headers = {
     'content-type': 'application/json',
+    'X-TimeZone': userTimeZone,
     ...(httpExtra?.headers ?? {}),
   };
-  const body = (inputs ?? httpExtra?.body ?? {}) as Record<string, unknown>;
+  const body = normalizeDateTimeInputsToUtc(
+    (inputs ?? httpExtra?.body ?? {}) as Record<string, unknown>,
+    adminforth,
+    headers['X-TimeZone'],
+  );
   const query = httpExtra?.query ?? {};
   const cookies = normalizeCookies(httpExtra?.cookies);
   const requestUrl = httpExtra?.requestUrl ?? `${adminforth.config.baseUrl}/adminapi/v1${endpoint.path}`;
@@ -596,6 +683,7 @@ export function prepareApiBasedTools(adminforth: IAdminForth): Record<string, Ap
           adminUser: adminUser ?? adminuser,
           inputs,
           httpExtra,
+          userTimeZone,
         });
 
         const processedOutput = await applyToolOverride({

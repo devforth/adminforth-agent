@@ -73,8 +73,7 @@ Are you sure?
 ## Updating
 
 You can use tool `update_record` tool it updates fields of record. To update `allowedActions.edit` should be set to true and 
-`updated` column `showIn.edit` should be true at the same time. If one of this condition is not met, explain to user that is 
-not allowed to edit
+`updated` column `showIn.edit` should be true at the same time. If one of this condition is not met, explain to user that is not allowed to edit
 
 In addition to instructions above show user the table of edits (old value/new value)
 
@@ -125,6 +124,10 @@ For decimal fields please use string values with dot as decimal separator.
 After creation of new record also show user a link to this record. If several records record were created, show links to all of them in list.
 
 Omit any pictures or file paths, you are not capable of doing it. If they are not required all is good, if they are required, explain to user that you are not able to create record because of this reason.
+
+### Working with dates 
+
+When you create or update date or datetime fields, please use ISO format for this. For example, "2024-01-01" for date and "2024-01-01T12:00:00Z" for datetime. If user provides date in different format, try to parse it and convert to ISO format.
 
 ### Example
 

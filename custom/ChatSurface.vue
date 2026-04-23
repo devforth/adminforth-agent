@@ -195,6 +195,7 @@ const props = defineProps<{
     defaultModeName: string | null;
     stickByDefault: boolean;
   }
+  adminUser: any
 }>();
 
 const chatSurface = useTemplateRef('chatSurface');

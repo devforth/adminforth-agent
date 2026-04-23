@@ -19,7 +19,7 @@
       class="flex items-center gap-1 cursor-pointer"     
       @click="toggleInputOutput()"
     >
-      <div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/70 dark:bg-blue-700/20">
+      <div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-lightNavbar dark:bg-darkNavbar">
         <Spinner v-if="isRunning" class="h-4 w-4" />
         <IconCheckOutline v-else class="h-4 w-4 text-lightPrimary dark:text-darkPrimary" />
       </div>

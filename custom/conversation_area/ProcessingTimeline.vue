@@ -1,7 +1,7 @@
 <template>
   <template v-if="ToolOrReasoningParts.length > 0 || isResponseInProgress || showFakeThinkingMessage">
     <div 
-      class="ml-2 px-4 flex items-center gap-1 cursor-pointer select-none hover:opacity-80 tracking-wide font-medium text-sm"
+      class="ml-2 px-4 flex items-center gap-1 cursor-pointer select-none hover:opacity-80 tracking-wide font-medium text-sm text-listTableHeadingText dark:text-darkListTableHeadingText"
       @click="isExpanded = !isExpanded"
     >
       Thoughts
@@ -20,7 +20,7 @@
         v-show="isExpanded"
         class="mask-y"
       >
-        <ol class="ml-8 relative border-l border-l-2 border-black border-default">
+        <ol class="ml-8 relative border-l border-l-2 border-black border-default border-listTableHeadingText dark:border-darkListTableHeadingText">
           <li class="mb-6 ms-2 z-50" v-for="(part, index) in ToolOrReasoningParts" :key="index"> 
             <ReasoningRenderer v-if="part.type === 'reasoning'" :state="part.state" :text="part.text" />
             <ToolsGroup v-else :toolGroup="groupToolCallParts(message, part)" />

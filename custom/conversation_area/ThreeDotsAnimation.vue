@@ -1,7 +1,7 @@
 <template>
-  <span class="bounce-dot1 rounded-full w-2 h-2 bg-lightPrimary"></span>
-  <span class="bounce-dot2 rounded-full w-2 h-2 bg-lightPrimary"></span>
-  <span class="bounce-dot3 rounded-full w-2 h-2 bg-lightPrimary"></span>
+  <span class="bounce-dot1 rounded-full w-2 h-2 bg-lightPrimary dark:bg-darkPrimary"></span>
+  <span class="bounce-dot2 rounded-full w-2 h-2 bg-lightPrimary dark:bg-darkPrimary"></span>
+  <span class="bounce-dot3 rounded-full w-2 h-2 bg-lightPrimary dark:bg-darkPrimary"></span>
 </template>
 
 <style scoped>

@@ -524,10 +524,8 @@ export const useAgentStore = defineStore('agent', () => {
     if (!sessions.value[sessionId]) {
       await fetchSession(sessionId);    
     }
-    console.log('Set active session from sessions', sessionId, sessions.value[sessionId]);
     currentSession.value = sessions.value[sessionId];
     setCurrentChat(sessionId);
-    console.log('Set active session chat', sessionId, currentSession.value);
     currentChat.value.messages = currentSession.value?.messages.map((m: any) => ({
       role: m.role,
       parts:[{
