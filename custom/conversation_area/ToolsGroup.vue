@@ -1,12 +1,12 @@
 <template >
   <template v-if="toolGroup.length > 0">
-    <span class="bg-lightNavbar absolute flex items-center justify-center w-5 h-5 bg-brand-softer rounded-full -start-[0.68rem] ring-4 ring-lightNavbar ring-default">
+    <span class="text-listTableHeadingText dark:text-darkListTableHeadingText bg-lightNavbar dark:bg-darkNavbar absolute flex items-center justify-center w-5 h-5 bg-brand-softer rounded-full -start-[0.68rem] ring-4 ring-lightNavbar dark:ring-darkNavbar ring-default">
       <div class="w-5 h-5 rounded-full flex items-center justify-center">
         <IconWrenchSolid class="w-4 h-4" />
       </div>
     </span>
     <h3 
-      class="flex items-center mb-1 text-sm my-2 ml-3 gap-1"      
+      class="flex items-center mb-1 text-sm my-2 ml-3 gap-1 text-listTableHeadingText dark:text-darkListTableHeadingText"      
     >
       <span class="font-semibold select-none ">Call tools</span>
     </h3>
