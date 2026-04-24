@@ -1,7 +1,6 @@
 <template>
   <SessionsHistory 
     :class="agentStore.isSessionHistoryOpen ? 'translate-x-0' : '-translate-x-full'"
-    @recalculateScroll="recalculateScroll"
   />
   <div 
     v-if="agentStore.isSessionHistoryOpen"
