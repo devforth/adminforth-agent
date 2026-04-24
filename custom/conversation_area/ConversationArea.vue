@@ -8,7 +8,7 @@
     class="absolute bg-black/10 backdrop-blur-md z-10 h-full w-full"
   >
   </div>
-  <div class="relative flex-1 min-h-0 overflow-hidden" @click="recalculateScroll()">
+  <div ref="chatContainerRef" class="relative flex-1 min-h-0 overflow-hidden" @click="recalculateScroll()">
     <CustomAutoScrollContainer
       v-if="showScrollContainer"
       :enabled="!showScrollToBottomButton" 
@@ -23,10 +23,6 @@
         width: '100%',
         marginLeft: 'auto',
         marginRight: 'auto',
-      }"
-      :contentStyle="{
-        height: '100%',
-        maxHeight: '100%',
       }"
       :style="{ 
         maxWidth: agentStore.isFullScreen ? agentStore.MAX_WIDTH+'rem' : '100%',
@@ -46,7 +42,10 @@
       </div>
       <div 
         v-if="props.messages.length === 0"
-        class="flex-1 flex flex-col items-center justify-center text-gray-400 tracking-widest text-xl font-medium h-full"
+        class="flex-1 flex flex-col items-center justify-center text-gray-400 tracking-widest text-xl font-medium h-max"
+        :style="{
+          height: chatContainerRef ? chatContainerRef.clientHeight + 'px' : '100%',
+        }"
       >
         <p>{{ $t('Start the conversation') }}</p>
         <p class="tracking-normal text-base text">{{ $t('Give any input to begin') }}</p>
@@ -84,6 +83,7 @@ const innerScrollContainerRef = ref(null);
 const agentStore = useAgentStore();
 const agentTransitions = useAgentTransitions();
 const showScrollContainer = ref(true);
+const chatContainerRef = ref(null);
 
 const scrollHeight = computed(() => {
   return scrollContainer.value ? scrollContainer.value.scrollParams.scrollHeight : 0;
