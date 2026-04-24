@@ -30,7 +30,7 @@
           <span v-if="props.data?.toolInfo?.durationMs" class="text-xs">({{ (props.data.toolInfo.durationMs / 1000).toFixed(2) }}s)</span>
         </p> -->
         <p class="break-all font-mono text-sm leading-5">
-          {{ props.data?.toolInfo?.toolName }}
+          {{ props.data?.toolInfo?.toolInfo }}
         </p>
       </div>
       <IconAngleDownOutline
