@@ -18,7 +18,9 @@
         behavior="smooth"
         v-if="ToolOrReasoningParts.length > 0" 
         v-show="isExpanded"
-        class="mask-y"
+        :wrapperStyle="{
+          marginRight: '8rem',
+        }"
       >
         <ol class="ml-8 relative border-l border-l-2 border-black border-default border-listTableHeadingText dark:border-darkListTableHeadingText">
           <li class="mb-6 ms-2 z-50" v-for="(part, index) in ToolOrReasoningParts" :key="index"> 
@@ -175,16 +177,6 @@
   .expand-leave-from {
     opacity: 1;
     max-height: 384px;
-  }
-
-  .mask-y {
-    mask-image: linear-gradient(
-      to bottom,
-      transparent,
-      black 20px,
-      black calc(100% - 20px),
-      transparent
-    );
   }
  
 </style>
