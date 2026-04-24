@@ -11,7 +11,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import CustomScrollbar from 'custom-vue-scrollbar';
 import 'custom-vue-scrollbar/dist/style.css';
 import { useAgentStore } from './composables/useAgentStore';
@@ -50,7 +50,6 @@ function scrollToBottom(force = false): void {
   if (!container) return
   
   if (isUserScrolledUp.value && !force) return
-  
   container.scrollTo({
     top: container.scrollHeight,
     behavior: props.behavior
@@ -65,7 +64,7 @@ function hasScrollbar(): boolean {
 }
 
 
-function handleScroll(): void {
+function handleScroll(detectScrollDown = true): void {
   const container = containerRef.value.scrollEl
   if (!container) return
   
@@ -80,11 +79,9 @@ function handleScroll(): void {
     isUserScrolledUp.value = false
   } else {
     const isScrollingUp = scrollTop < lastScrollTop
-    const isScrollingDown = scrollTop > lastScrollTop
+    const isScrollingDown = detectScrollDown ? scrollTop > lastScrollTop : false
     const isContentUnchanged = scrollHeight === lastScrollHeight
     if ((isScrollingUp || isScrollingDown) && isContentUnchanged) {
-      isUserScrolledUp.value = true
-    } else if (!isNearBottom()) {
       isUserScrolledUp.value = true
     }
   }
@@ -110,7 +107,6 @@ onMounted(() => {
       }
       
       lastScrollHeight = containerRef.value.scrollEl.scrollHeight
-      
       if (props.enabled && !isUserScrolledUp.value) {
         scrollToBottom()
       }

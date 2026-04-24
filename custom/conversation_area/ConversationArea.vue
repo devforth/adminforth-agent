@@ -83,12 +83,11 @@ const showScrollToBottomButton = ref(false);
 const innerScrollContainerRef = ref(null);
 const agentStore = useAgentStore();
 const agentTransitions = useAgentTransitions();
-const clicks = ref(0);
 const showScrollContainer = ref(true);
 
 function recalculateScroll() {
   if (scrollContainer.value) {
-    scrollContainer.value.handleScroll();
+    scrollContainer.value.handleScroll(false);
     const isScrolledUp = scrollContainer.value.isUserScrolledUp();
     showScrollToBottomButton.value = !!isScrolledUp;
   }
@@ -121,9 +120,6 @@ watch(scrollContainer, () => {
   }
 })
 
-watch(clicks, () => {
-  recalculateScroll();
-})
 
 
 </script>
