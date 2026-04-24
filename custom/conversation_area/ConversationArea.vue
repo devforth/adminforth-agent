@@ -51,6 +51,7 @@
         <p>{{ $t('Start the conversation') }}</p>
         <p class="tracking-normal text-base text">{{ $t('Give any input to begin') }}</p>
       </div>
+      <div></div>
     </CustomAutoScrollContainer>
     <button @click="scrollContainer.scrollToBottom();">
       <IconArrowDownOutline 
@@ -83,6 +84,10 @@ const innerScrollContainerRef = ref(null);
 const agentStore = useAgentStore();
 const agentTransitions = useAgentTransitions();
 const showScrollContainer = ref(true);
+
+const scrollHeight = computed(() => {
+  return scrollContainer.value ? scrollContainer.value.scrollParams.scrollHeight : 0;
+});
 
 function recalculateScroll() {
   if (scrollContainer.value) {

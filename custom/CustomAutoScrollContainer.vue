@@ -11,12 +11,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import CustomScrollbar from 'custom-vue-scrollbar';
 import 'custom-vue-scrollbar/dist/style.css';
 import { useAgentStore } from './composables/useAgentStore';
 
-const agentStore = useAgentStore();
+const scrollParams = ref({
+  scrollTop: 0,
+  scrollHeight: 0,
+  clientHeight: 0
+});
 
 const props = withDefaults(defineProps<{
   enabled?: boolean
@@ -42,6 +46,9 @@ function isNearBottom(): boolean {
   if (!container) return true
   
   const { scrollTop, scrollHeight, clientHeight } = container
+  scrollParams.value.scrollTop = scrollTop
+  scrollParams.value.scrollHeight = scrollHeight
+  scrollParams.value.clientHeight = clientHeight
   return scrollHeight - scrollTop - clientHeight <= props.threshold
 }
 
@@ -107,6 +114,9 @@ onMounted(() => {
       }
       
       lastScrollHeight = containerRef.value.scrollEl.scrollHeight
+      scrollParams.value.scrollTop = containerRef.value.scrollEl.scrollTop
+      scrollParams.value.scrollHeight = containerRef.value.scrollEl.scrollHeight
+      scrollParams.value.clientHeight = containerRef.value.scrollEl.clientHeight
       if (props.enabled && !isUserScrolledUp.value) {
         scrollToBottom()
       }
@@ -128,7 +138,8 @@ defineExpose({
   scrollToBottom: () => scrollToBottom(true),
   isUserScrolledUp: () => isUserScrolledUp.value,
   container: containerRef,
-  handleScroll
+  handleScroll,
+  scrollParams
 })
 </script>
 
