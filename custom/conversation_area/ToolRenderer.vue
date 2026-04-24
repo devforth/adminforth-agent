@@ -11,8 +11,7 @@
       activateFullWidth ? 'w-full' : '',
     ]"
     :style="{
-      maxWidth: isAnimatingShrinkFinal ? toolRendererInitialWidth + 'px' : '',
-      transition: 'max-width 0.3s ease',
+      maxWidth: activateShrinkedStyle ? toolRendererInitialWidth + 'px' : '',
     }"
   >
     <div 
@@ -29,18 +28,19 @@
           {{ statusLabel }}
           <span v-if="props.data?.toolInfo?.durationMs" class="text-xs">({{ (props.data.toolInfo.durationMs / 1000).toFixed(2) }}s)</span>
         </p> -->
-        <p class="break-all font-mono text-sm leading-5">
+        <p class="break-all font-mono text-sm leading-5 text-nowrap">
           {{ props.data?.toolInfo?.toolInfo }}
         </p>
       </div>
       <IconAngleDownOutline
         v-if="hasToolSections"
         :class="isInputOutputExpanded ? 'rotate-180' : 'rotate-0'"
-        class="cursor-pointer transition-transform duration-200 hover:scale-105"
+        @transitionend="finishTransition()"
+        class="cursor-pointer transition-transform duration-300 hover:scale-105"
       />
     </div>
     <transition name="expand">
-      <div v-if="isInputOutputExpanded" v-show="isInputOutputExpanded" class="max-h-72 space-y-3 overflow-y-auto pr-1">
+      <div v-if="isInputOutputExpanded" v-show="isInputOutputExpanded" class="max-h-72 space-y-3 overflow-y-auto pr-1 w-full">
         <section
           v-for="section in toolSections"
           :key="section.label"
@@ -82,19 +82,14 @@
     }
   });  
 
+  function finishTransition() {
+    if (!isInputOutputExpanded.value) {
+      activateFullWidth.value = false;
+      activateShrinkedStyle.value = true;
+    }
+  }
   watch(isInputOutputExpanded, (newValue) => {
-    if (!newValue) {
-      setTimeout(() => {
-        activateFullWidth.value = false;
-        isAnimatingShrinkFinal.value = true;
-      }, ANIMATION_DURATION - 10)
-      setTimeout(() => {
-        isAnimatingShrinkFinal.value = false;
-      }, ANIMATION_DURATION);
-      setTimeout(() => {
-        activateShrinkedStyle.value = true;
-      }, ANIMATION_DURATION + 10);
-    } else {
+    if (newValue) {
       activateShrinkedStyle.value = false;
       activateFullWidth.value = true;
     }
