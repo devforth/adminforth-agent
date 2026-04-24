@@ -9,8 +9,8 @@
     class="absolute bg-black/10 backdrop-blur-md z-10 h-full w-full"
   >
   </div>
-  <div class="relative flex-1 min-h-0 overflow-hidden">
-    <button @click="scrollContainer.scrollToBottom(); recalculateScroll();">
+  <div class="relative flex-1 min-h-0 overflow-hidden" @click="recalculateScroll()">
+    <button @click="scrollContainer.scrollToBottom();">
       <IconArrowDownOutline 
         class="absolute z-10 bottom-8 left-1/2 bg-lightPrimary dark:bg-darkPrimary text-white p-2 w-10 h-10 rounded-full transition-opacity duration-100 ease-in" 
         :class="showScrollToBottomButton ? 'opacity-100' : 'opacity-0 pointer-events-none'"

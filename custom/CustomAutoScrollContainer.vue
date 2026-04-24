@@ -4,16 +4,16 @@
     class="auto-scroll-container mask-y"
     :wrapperStyle = "wrapperStyle"
     :contentStyle = "contentStyle"
+    @scroll="handleScroll"
   >
     <slot />
   </CustomScrollbar>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import CustomScrollbar from 'custom-vue-scrollbar';
 import 'custom-vue-scrollbar/dist/style.css';
-import { useScroll } from '@vueuse/core'
 import { useAgentStore } from './composables/useAgentStore';
 
 const agentStore = useAgentStore();
@@ -33,11 +33,6 @@ const props = withDefaults(defineProps<{
 const containerRef = ref<HTMLDivElement | null>(null)
 const isUserScrolledUp = ref(false)
 const scrollElement = ref<HTMLElement | null>(null)
-const { y } = useScroll(scrollElement)
-
-watch(y, () => {
-  handleScroll()
-})
 
 let lastScrollTop = 0
 let lastScrollHeight = 0
@@ -75,7 +70,6 @@ function handleScroll(): void {
   if (!container) return
   
   const { scrollTop, scrollHeight, clientHeight } = container
-  
   if (scrollHeight <= clientHeight) {
     isUserScrolledUp.value = false
     lastScrollTop = 0
@@ -86,9 +80,11 @@ function handleScroll(): void {
     isUserScrolledUp.value = false
   } else {
     const isScrollingUp = scrollTop < lastScrollTop
+    const isScrollingDown = scrollTop > lastScrollTop
     const isContentUnchanged = scrollHeight === lastScrollHeight
-    
-    if (isScrollingUp && isContentUnchanged) {
+    if ((isScrollingUp || isScrollingDown) && isContentUnchanged) {
+      isUserScrolledUp.value = true
+    } else if (!isNearBottom()) {
       isUserScrolledUp.value = true
     }
   }
