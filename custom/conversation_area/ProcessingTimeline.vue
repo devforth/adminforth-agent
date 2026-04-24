@@ -101,6 +101,7 @@
         durationMs: finishedPart?.data?.durationMs,
         input: part.data.input,
         output: finishedPart?.data?.output,
+        toolInfo: part.data.toolInfo,
       }
     };
   };

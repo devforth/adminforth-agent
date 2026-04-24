@@ -8,7 +8,7 @@
     <h3 :class="h3Style">{{ $t('Chat history') }}</h3>
     <div class="w-full flex items-center justify-center">
       <Button 
-        @click="agentStore.createPreSession(); agentStore.setSessionHistoryOpen(false); agentStore.focusTextInput(); recalculateScroll();" 
+        @click="agentStore.createPreSession(); agentStore.setSessionHistoryOpen(false); agentStore.focusTextInput();" 
         :disabled="agentStore.isResponseInProgress" 
         class="w-[90%] my-2 mb-4 rounded-3xl text-gray-800 dark:text-gray-200"
       >
@@ -34,7 +34,7 @@
           'bg-lightPrimary/20 hover:bg-lightPrimary/20 dark:bg-darkPrimary/20 dark:hover:bg-darkPrimary/20': agentStore.activeSessionId === session.sessionId, 
           'cursor-default opacity-50 pointer-events-none': agentStore.isResponseInProgress,
          }"
-        @click="agentStore.setActiveSession(session.sessionId); agentStore.setSessionHistoryOpen(false); recalculateScroll();"
+        @click="agentStore.setActiveSession(session.sessionId); agentStore.setSessionHistoryOpen(false);"
         :disabled="agentStore.isResponseInProgress"
       >
         <p class="truncate">{{ session.title || session.sessionId }}</p>
@@ -98,14 +98,5 @@ const groupedSessions = computed(() => {
 
   return Array.from(groups.values());
 });
-
-const emit = defineEmits<{
-  (e: 'recalculateScroll'): void
-}>()
-
-function recalculateScroll() {
-  // Emit an event to notify the parent component to recalculate scroll
-  emit('recalculateScroll');
-}
 
 </script>

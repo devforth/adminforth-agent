@@ -82,7 +82,6 @@ function handleScroll(): void {
     lastScrollHeight = scrollHeight
     return
   }
-  
   if (isNearBottom()) {
     isUserScrolledUp.value = false
   } else {
@@ -93,7 +92,6 @@ function handleScroll(): void {
       isUserScrolledUp.value = true
     }
   }
-  
   lastScrollTop = scrollTop
   lastScrollHeight = scrollHeight
 }
@@ -137,7 +135,8 @@ onUnmounted(() => {
 defineExpose({
   scrollToBottom: () => scrollToBottom(true),
   isUserScrolledUp: () => isUserScrolledUp.value,
-  container: containerRef
+  container: containerRef,
+  handleScroll
 })
 </script>
 

@@ -18,6 +18,7 @@
       />
     </button>
     <CustomAutoScrollContainer
+      v-if="showScrollContainer"
       :enabled="!showScrollToBottomButton" 
       class="relative h-full flex flex-col overflow-y-auto translate-x-[-50%] left-1/2"
       ref="scrollContainer"
@@ -83,19 +84,23 @@ const innerScrollContainerRef = ref(null);
 const agentStore = useAgentStore();
 const agentTransitions = useAgentTransitions();
 const clicks = ref(0);
+const showScrollContainer = ref(true);
 
 function recalculateScroll() {
-  console.log('AAAAAAAAAA');
   if (scrollContainer.value) {
+    scrollContainer.value.handleScroll();
     const isScrolledUp = scrollContainer.value.isUserScrolledUp();
     showScrollToBottomButton.value = !!isScrolledUp;
   }
 }
 
-watch(() => agentStore.isFullScreen, () => {
-  const scrollEl = scrollContainer.value.container.scrollEl;
-  console.log('isFullScreen changed, recalculating scroll. Scroll element:', scrollEl);
-})
+watch(() => agentStore.activeSessionId, async () => {
+  showScrollContainer.value = false;
+  await nextTick();
+  showScrollContainer.value = true;
+  await nextTick();
+  recalculateScroll();
+});
 
 onMounted(async () => {
   await import('@incremark/theme/styles.css')

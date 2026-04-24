@@ -5,6 +5,7 @@ export interface IPartData {
   input?: any;
   output?: any;
   durationMs?: number;
+  toolInfo?: string;
 }
 export interface IPart {
   type: 'reasoning' | 'data-tool-call' | 'text';
