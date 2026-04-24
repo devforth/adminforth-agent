@@ -5,6 +5,7 @@ import {
   type IAdminForth,
   type IAdminForthHttpResponse,
   type IHttpServer,
+  type IRegisteredApiSchema,
 } from 'adminforth';
 import dayjs from 'dayjs';
 import timezone from 'dayjs/plugin/timezone.js';
@@ -467,6 +468,25 @@ function endpointPathToToolName(path: string) {
     .replace(/^_+|_+$/g, '');
 }
 
+function stripAdminApiPrefix(path: string, adminforth: IAdminForth) {
+  const configuredBaseUrl = adminforth.config.baseUrl || '';
+  const normalizedBaseUrl = configuredBaseUrl.endsWith('/')
+    ? configuredBaseUrl.slice(0, -1)
+    : configuredBaseUrl;
+  const apiPrefix = `${normalizedBaseUrl}/adminapi/v1`;
+
+  if (path.startsWith(apiPrefix)) {
+    const strippedPath = path.slice(apiPrefix.length);
+    return strippedPath.startsWith('/') ? strippedPath : `/${strippedPath}`;
+  }
+
+  return path;
+}
+
+function openApiSchemaPathToToolName(path: string, adminforth: IAdminForth) {
+  return endpointPathToToolName(stripAdminApiPrefix(path, adminforth));
+}
+
 export async function formatApiBasedToolCall(params: {
   adminforth: IAdminForth;
   adminUser?: AdminUser;
@@ -739,15 +759,10 @@ export function prepareApiBasedTools(adminforth: IAdminForth): Record<string, Ap
   const captureServer: IHttpServer = {
     setupSpaServer() {},
     endpoint: ((options: EndpointWithSchemas) => {
-      const normalizedResponseSchema = options.response_schema ?? options.responce_schema;
-      if (!options.request_schema && !normalizedResponseSchema) {
-        return;
-      }
-
       capturedEndpoints.push({
         ...options,
-        response_schema: normalizedResponseSchema,
-        normalizedResponseSchema,
+        response_schema: options.response_schema ?? options.responce_schema,
+        normalizedResponseSchema: options.response_schema ?? options.responce_schema,
       });
     }) as IHttpServer['endpoint'],
   };
@@ -758,15 +773,30 @@ export function prepareApiBasedTools(adminforth: IAdminForth): Record<string, Ap
   const capturedEndpointsByToolName = Object.fromEntries(
     capturedEndpoints.map((endpoint) => [endpointPathToToolName(endpoint.path), endpoint]),
   );
+  const openApiSchemas = adminforth.openApi.registeredSchemas.filter(
+    (schema) => schema.request_schema || schema.response_schema,
+  );
+  const openApiSchemasByToolName = new Map<string, IRegisteredApiSchema>();
 
-  for (const endpoint of capturedEndpoints) {
-    const toolName = endpointPathToToolName(endpoint.path);
+  for (const schema of openApiSchemas) {
+    const toolName = openApiSchemaPathToToolName(schema.path, adminforth);
+    openApiSchemasByToolName.set(toolName, schema);
+  }
+
+  for (const [toolName, schema] of openApiSchemasByToolName.entries()) {
+    const endpoint = capturedEndpointsByToolName[toolName];
     apiBasedTools[toolName] = {
-      description: endpoint.description,
-      input_schema: endpoint.request_schema,
-      input_schma: endpoint.request_schema,
-      output_schema: endpoint.normalizedResponseSchema,
+      description: schema.description,
+      input_schema: schema.request_schema,
+      input_schma: schema.request_schema,
+      output_schema: schema.response_schema,
       call: async ({ adminUser, adminuser, inputs, httpExtra, userTimeZone } = {}) => {
+        if (!endpoint) {
+          throw new Error(
+            `Tool "${toolName}" is defined in OpenAPI but has no callable AdminForth endpoint handler.`,
+          );
+        }
+
         const output = await callCapturedEndpoint({
           adminforth,
           endpoint,
