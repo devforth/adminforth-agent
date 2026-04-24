@@ -1,4 +1,5 @@
 <template>
+  <button @click="handleSendMessage">Send Message</button>
   <SessionsHistory 
     :class="agentStore.isSessionHistoryOpen ? 'translate-x-0' : '-translate-x-full'"
   />
@@ -34,9 +35,10 @@
     > 
 
       <div 
-        v-for="(message, index) in props.messages" :key="message.id"
+        v-for="(message, index) in props.messages" :key="index"
         class="flex flex-col w-full mt-2"
         :class="message.role === 'user' ? 'self-end' : 'self-start'"
+        ref="messagesRefs"
       >
         <MessageRenderer :message="message" :isLastMessageInChat="index === props.messages.length - 1"/>
       </div>
@@ -50,7 +52,7 @@
         <p>{{ $t('Start the conversation') }}</p>
         <p class="tracking-normal text-base text">{{ $t('Give any input to begin') }}</p>
       </div>
-      <div></div>
+      <div class="w-full" :style="{ height: spacerHeight + 'px' }"></div>
     </CustomAutoScrollContainer>
     <button @click="scrollContainer.scrollToBottom();">
       <IconArrowDownOutline 
@@ -77,6 +79,10 @@ const props = defineProps<{
   messages: IMessage[]
 }>();
 
+defineExpose({
+  handleSendMessage
+});
+
 const scrollContainer = useTemplateRef('scrollContainer');
 const showScrollToBottomButton = ref(false);
 const innerScrollContainerRef = ref(null);
@@ -85,9 +91,73 @@ const agentTransitions = useAgentTransitions();
 const showScrollContainer = ref(true);
 const chatContainerRef = ref(null);
 
+const messagesRefs = ref<Array<HTMLElement | null>>([]);
+const showBottomSpacer = ref(false);
+const spacerHeight = ref(0);
+const scrollHeightBeforeChatResponse = ref(0);
+const lastUserMessageHeight = ref(0);
+
+function resetSpacer() {
+  showBottomSpacer.value = false;
+  spacerHeight.value = 0;
+  scrollHeightBeforeChatResponse.value = 0;
+  lastUserMessageHeight.value = 0;
+}
+
+watch(() => agentStore.activeSessionId, (newValue) => {
+  console.log('Active session changed, resetting spacer and scroll parameters.');
+  resetSpacer();
+});
+
+function getHeightOfLastUserMessage() {
+  const lastUserMessageIndex = props.messages.findLastIndex((msg: IMessage) => msg.role === 'user');
+  const lastUserMessageElement = messagesRefs.value[lastUserMessageIndex];
+  console.log('Last user message element:', lastUserMessageElement);
+  console.log('Last user message height:', lastUserMessageElement ? lastUserMessageElement.clientHeight : 'N/A');
+  if (lastUserMessageElement) {
+    return  lastUserMessageElement.clientHeight;
+  }
+}
+
+async function handleSendMessage() {
+  lastUserMessageHeight.value = getHeightOfLastUserMessage();
+  const clientHeight = scrollContainer.value ? scrollContainer.value.scrollParams.clientHeight : 0;
+  console.log('Client height:', clientHeight, 'Last user message height:', lastUserMessageHeight.value);
+  if (clientHeight) {
+    showBottomSpacer.value = true;
+    spacerHeight.value = clientHeight - lastUserMessageHeight.value;
+    await nextTick();
+    scrollHeightBeforeChatResponse.value = scrollHeight.value;
+    scrollContainer.value?.scrollToBottom();
+  }
+}
+
 const scrollHeight = computed(() => {
   return scrollContainer.value ? scrollContainer.value.scrollParams.scrollHeight : 0;
 });
+
+const lastScrollHeight = ref(0);
+let skipNextScrollAdjustment = false;
+watch(scrollHeight, (newScrollHeight) => {
+  if (skipNextScrollAdjustment) {
+    skipNextScrollAdjustment = false;
+    lastScrollHeight.value = newScrollHeight;
+    return;
+  }
+  if (!agentStore.isResponseInProgress) {
+    lastScrollHeight.value = newScrollHeight;
+    return;
+  }
+  if (lastScrollHeight.value === 0) {
+    lastScrollHeight.value = newScrollHeight;
+    return;
+  }
+  const heightDifference = newScrollHeight - lastScrollHeight.value;
+  spacerHeight.value = spacerHeight.value - heightDifference;
+  lastScrollHeight.value = newScrollHeight;
+  skipNextScrollAdjustment = true;
+});
+
 
 function recalculateScroll() {
   if (scrollContainer.value) {
