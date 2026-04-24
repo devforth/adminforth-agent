@@ -14,7 +14,7 @@ import {
   createAgentChatModel,
   callAgent,
   type AgentChatModel,
-  type AgentModelProvider,
+  type AgentModeCompletionAdapter,
 } from "./agent/simpleAgent.js";
 import { AdminForthCheckpointSaver } from "./agent/checkpointer.js";
 import { createSequenceDebugCollector } from "./agent/middleware/sequenceDebug.js";
@@ -82,7 +82,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     Promise<{
       model: AgentChatModel;
       summaryModel: AgentChatModel;
-      modelProvider: AgentModelProvider;
+      modelMiddleware: Awaited<ReturnType<typeof createAgentChatModel>>["middleware"];
     }>
   >();
 
@@ -137,15 +137,17 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       createAgentChatModel({
         adapter: mode.completionAdapter,
         maxTokens,
+        purpose: "primary",
       }),
       createAgentChatModel({
         adapter: mode.completionAdapter,
         maxTokens,
+        purpose: "summary",
       }),
     ]).then(([primaryModel, summaryModel]) => ({
       model: primaryModel.model,
       summaryModel: summaryModel.model,
-      modelProvider: primaryModel.provider,
+      modelMiddleware: primaryModel.middleware,
     }));
 
     this.modelsByModeName.set(mode.name, modelsPromise);
@@ -341,14 +343,14 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
 
           const maxTokens = this.options.maxTokens ?? 10000;
           const selectedMode = this.options.modes.find((mode) => mode.name === body.mode) ?? this.options.modes[0];
-          const { model, summaryModel, modelProvider } =
+          const { model, summaryModel, modelMiddleware } =
             await this.getModeModels(selectedMode, maxTokens);
           const systemPrompt = await this.agentSystemPromptPromise;
           const stream = await callAgent({
             name: `adminforth-agent-${this.pluginInstanceId}`,
             model,
             summaryModel,
-            modelProvider,
+            modelMiddleware,
             checkpointer: this.getCheckpointer(),
             messages: [
               new SystemMessage(systemPrompt),
