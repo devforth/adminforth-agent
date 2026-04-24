@@ -11,7 +11,7 @@
       v-if="part.type === 'text'" 
       :message="part.text" 
       :role="props.message.role" 
-      :state="part.state || props.message.role === 'user' ? 'done' : 'kapets'"
+      :state="part.state ?? (props.message.role === 'user' ? 'done' : undefined)"
     />
   </template>
 

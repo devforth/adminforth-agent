@@ -36,7 +36,7 @@
 
 <script setup lang="ts">
 import type { Code } from 'mdast';
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import embed from 'vega-embed';
 
 import { highlightCodeSnippetHtml, type IncremarkCodeTheme } from './incremarkCodeHighlight';
@@ -171,7 +171,13 @@ async function renderHighlight() {
   if (shouldRenderVega.value) {
     renderedHtml.value = '';
 
-    if (!sourceCode.value || !vegaContainer.value) {
+    if (!sourceCode.value) {
+      return;
+    }
+
+    await nextTick();
+
+    if (requestId !== renderRequestId || !shouldRenderVega.value || !vegaContainer.value) {
       return;
     }
 
