@@ -10,13 +10,6 @@
   >
   </div>
   <div class="relative flex-1 min-h-0 overflow-hidden" @click="recalculateScroll()">
-    <button @click="scrollContainer.scrollToBottom();">
-      <IconArrowDownOutline 
-        class="absolute z-10 bottom-8 left-1/2 bg-lightPrimary dark:bg-darkPrimary text-white p-2 w-10 h-10 rounded-full transition-opacity duration-100 ease-in" 
-        :class="showScrollToBottomButton ? 'opacity-100' : 'opacity-0 pointer-events-none'"
-        :disabled="!showScrollToBottomButton"
-      />
-    </button>
     <CustomAutoScrollContainer
       v-if="showScrollContainer"
       :enabled="!showScrollToBottomButton" 
@@ -47,7 +40,7 @@
 
       <div 
         v-for="(message, index) in props.messages" :key="message.id"
-        class="flex flex-col w-full"
+        class="flex flex-col w-full mt-2"
         :class="message.role === 'user' ? 'self-end' : 'self-start'"
       >
         <MessageRenderer :message="message" :isLastMessageInChat="index === props.messages.length - 1"/>
@@ -60,6 +53,13 @@
         <p class="tracking-normal text-base text">{{ $t('Give any input to begin') }}</p>
       </div>
     </CustomAutoScrollContainer>
+    <button @click="scrollContainer.scrollToBottom();">
+      <IconArrowDownOutline 
+        class="absolute z-10 bottom-8 left-1/2 bg-lightPrimary dark:bg-darkPrimary text-white p-2 w-10 h-10 rounded-full transition-opacity duration-100 ease-in" 
+        :class="showScrollToBottomButton ? 'opacity-100' : 'opacity-0 pointer-events-none'"
+        :disabled="!showScrollToBottomButton"
+      />
+    </button>
   </div>
 </template>
 
