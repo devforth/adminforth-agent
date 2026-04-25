@@ -1,4 +1,4 @@
-name: data-analytics
+name: analyze_data
 description: Analyze AdminForth resource data, summarize trends, and create charts from fetched rows.
 ---
 

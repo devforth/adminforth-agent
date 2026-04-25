@@ -83,7 +83,7 @@ export async function buildAgentSystemPrompt(adminforth: IAdminForth) {
     "The fetched skill response starts with 'Tools mentioned in this skill'. Read that list first.",
     "You can use get_resource immediately to inspect resource structure and column names.",
     "If the user wants to create, update, delete, or run actions on records, load mutate_data first.",
-    "If the user wants to fetch records, load fetch_data first. If the user wants analytics or charts, load data-analytics first.",
+    "If the user wants to fetch records, load fetch_data first. If the user wants analytics or charts, load analyze_data first.",
     "Only call fetch_tool_schema for tool names that are explicitly mentioned in a fetched skill and are not already available as base tools.",
     "If a fetched skill lists a non-base tool you need, call fetch_tool_schema for it immediately instead of telling the user the tool is unavailable.",
     "For example: for record creation load mutate_data, read its tool list, call fetch_tool_schema for create_record, and then use create_record after confirmation.",
