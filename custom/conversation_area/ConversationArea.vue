@@ -1,7 +1,6 @@
 <template>
   <SessionsHistory 
     :class="agentStore.isSessionHistoryOpen ? 'translate-x-0' : '-translate-x-full'"
-    @recalculateScroll="recalculateScroll"
   />
   <div 
     v-if="agentStore.isSessionHistoryOpen"
@@ -9,14 +8,7 @@
     class="absolute bg-black/10 backdrop-blur-md z-10 h-full w-full"
   >
   </div>
-  <div class="relative flex-1 min-h-0 overflow-hidden" @click="recalculateScroll()">
-    <button @click="scrollContainer.scrollToBottom();">
-      <IconArrowDownOutline 
-        class="absolute z-10 bottom-8 left-1/2 bg-lightPrimary dark:bg-darkPrimary text-white p-2 w-10 h-10 rounded-full transition-opacity duration-100 ease-in" 
-        :class="showScrollToBottomButton ? 'opacity-100' : 'opacity-0 pointer-events-none'"
-        :disabled="!showScrollToBottomButton"
-      />
-    </button>
+  <div ref="chatContainerRef" class="relative flex-1 min-h-0 overflow-hidden" @click="recalculateScroll()">
     <CustomAutoScrollContainer
       v-if="showScrollContainer"
       :enabled="!showScrollToBottomButton" 
@@ -32,10 +24,6 @@
         marginLeft: 'auto',
         marginRight: 'auto',
       }"
-      :contentStyle="{
-        height: '100%',
-        maxHeight: '100%',
-      }"
       :style="{ 
         maxWidth: agentStore.isFullScreen ? agentStore.MAX_WIDTH+'rem' : '100%',
         transition: `
@@ -47,19 +35,30 @@
 
       <div 
         v-for="(message, index) in props.messages" :key="message.id"
-        class="flex flex-col w-full"
+        class="flex flex-col w-full mt-2"
         :class="message.role === 'user' ? 'self-end' : 'self-start'"
       >
         <MessageRenderer :message="message" :isLastMessageInChat="index === props.messages.length - 1"/>
       </div>
       <div 
         v-if="props.messages.length === 0"
-        class="flex-1 flex flex-col items-center justify-center text-gray-400 tracking-widest text-xl font-medium h-full"
+        class="flex-1 flex flex-col items-center justify-center text-gray-400 tracking-widest text-xl font-medium h-max"
+        :style="{
+          height: chatContainerRef ? chatContainerRef.clientHeight + 'px' : '100%',
+        }"
       >
         <p>{{ $t('Start the conversation') }}</p>
         <p class="tracking-normal text-base text">{{ $t('Give any input to begin') }}</p>
       </div>
+      <div></div>
     </CustomAutoScrollContainer>
+    <button @click="scrollContainer.scrollToBottom();">
+      <IconArrowDownOutline 
+        class="absolute z-10 bottom-8 left-1/2 bg-lightPrimary dark:bg-darkPrimary text-white p-2 w-10 h-10 rounded-full transition-opacity duration-100 ease-in" 
+        :class="showScrollToBottomButton ? 'opacity-100' : 'opacity-0 pointer-events-none'"
+        :disabled="!showScrollToBottomButton"
+      />
+    </button>
   </div>
 </template>
 
@@ -83,12 +82,16 @@ const showScrollToBottomButton = ref(false);
 const innerScrollContainerRef = ref(null);
 const agentStore = useAgentStore();
 const agentTransitions = useAgentTransitions();
-const clicks = ref(0);
 const showScrollContainer = ref(true);
+const chatContainerRef = ref(null);
+
+const scrollHeight = computed(() => {
+  return scrollContainer.value ? scrollContainer.value.scrollParams.scrollHeight : 0;
+});
 
 function recalculateScroll() {
   if (scrollContainer.value) {
-    scrollContainer.value.handleScroll();
+    scrollContainer.value.handleScroll(false);
     const isScrolledUp = scrollContainer.value.isUserScrolledUp();
     showScrollToBottomButton.value = !!isScrolledUp;
   }
@@ -121,9 +124,6 @@ watch(scrollContainer, () => {
   }
 })
 
-watch(clicks, () => {
-  recalculateScroll();
-})
 
 
 </script>

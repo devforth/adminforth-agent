@@ -105,66 +105,67 @@
               transition: `transform ${agentTransitions.TRANSITION_DURATION}ms ease-in-out`
             }"            
           >
-            <textarea
-              v-model="agentStore.userMessageInput"
-              ref="textInput"
-              @input="autoResize"
-              :class="[
-                'min-h-12 w-full resize-none overflow-hidden border text-lightInputText dark:text-darkInputText rounded-md bg-transparent text-sm bg-gray-50 dark:bg-gray-700 dark:border-gray-600 focus:outline-none',
-                agentStore.availableModes.length > 1 ? 'p-4 pr-12 pb-12' : 'p-4 pr-12',
-              ]"
-              :placeholder="agentStore.userMessagePlaceholder"
-              @keydown.enter.exact.prevent="sendMessage"
-            />
-            <div
-              v-if="agentStore.availableModes.length > 1"
-              ref="modeMenu"
-              class="absolute bottom-2 left-4"
-            >
-              <button
-                aria-label="Select mode"
-                class="flex px-2 py-1 items-center text-sm justify-center 
-                  rounded-md bg-white text-lightListTableHeadingText 
-                  transition-colors duration-200 hover:bg-gray-100 
-                  dark:text-darkListTableHeadingText dark:bg-gray-700 dark:hover:bg-gray-800"
-                :class="isModeMenuOpen ? 'bg-gray-100 dark:bg-gray-700' : ''"
-                :disabled="agentStore.isResponseInProgress"
-                title="Select mode"
-                type="button"
-                @click="toggleModeMenu"
-              >
-                {{ agentStore.activeModeName }}
-                <IconAngleDownOutline 
-                  class="w-4 h-4 ml-1" 
-                />
-              </button>
-
+            <div class="w-full border rounded-lg pb-8">
+              <textarea
+                v-model="agentStore.userMessageInput"
+                ref="textInput"
+                @input="autoResize"
+                :class="[
+                  'min-h-12 px-4 pt-4  w-full resize-none overflow-hidden text-lightInputText dark:text-darkInputText rounded-md bg-transparent text-sm bg-gray-50 dark:bg-gray-700 dark:border-gray-600 focus:outline-none',
+                ]"
+                :placeholder="agentStore.userMessagePlaceholder"
+                @keydown.enter.exact.prevent="sendMessage"
+              />
               <div
-                v-if="isModeMenuOpen"
-                class="absolute bottom-full left-0 mb-2 min-w-40 overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-600 dark:bg-gray-800"
+                v-if="agentStore.availableModes.length > 1"
+                ref="modeMenu"
+                class="absolute bottom-2 left-4"
               >
                 <button
-                  v-for="mode in agentStore.availableModes"
-                  :key="mode.name"
-                  class="block w-full px-3 py-2 text-left text-sm text-lightInputText transition-colors duration-150 hover:bg-gray-100 dark:text-darkInputText dark:hover:bg-gray-700"
-                  :class="mode.name === agentStore.activeModeName ? 'bg-gray-100 dark:bg-gray-700' : ''"
+                  aria-label="Select mode"
+                  class="flex px-2 py-1 items-center text-sm justify-center 
+                    rounded-md bg-white text-lightListTableHeadingText 
+                    transition-colors duration-200 hover:bg-gray-100 
+                    dark:text-darkListTableHeadingText dark:bg-gray-700 dark:hover:bg-gray-800"
+                  :class="isModeMenuOpen ? 'bg-gray-100 dark:bg-gray-700' : ''"
+                  :disabled="agentStore.isResponseInProgress"
+                  title="Select mode"
                   type="button"
-                  @click="selectMode(mode.name)"
+                  @click="toggleModeMenu"
                 >
-                  {{ mode.name }}
+                  {{ agentStore.activeModeName }}
+                  <IconAngleDownOutline 
+                    class="w-4 h-4 ml-1" 
+                  />
                 </button>
+
+                <div
+                  v-if="isModeMenuOpen"
+                  class="absolute bottom-full left-0 mb-2 min-w-40 overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-600 dark:bg-gray-800"
+                >
+                  <button
+                    v-for="mode in agentStore.availableModes"
+                    :key="mode.name"
+                    class="block w-full px-3 py-2 text-left text-sm text-lightInputText transition-colors duration-150 hover:bg-gray-100 dark:text-darkInputText dark:hover:bg-gray-700"
+                    :class="mode.name === agentStore.activeModeName ? 'bg-gray-100 dark:bg-gray-700' : ''"
+                    type="button"
+                    @click="selectMode(mode.name)"
+                  >
+                    {{ mode.name }}
+                  </button>
+                </div>
               </div>
+              <Button 
+                class="absolute right-4 bottom-2 !p-0 h-9 w-9"                    
+                @click="sendMessage" 
+                :disabled="!agentStore.trimmedUserMessage || agentStore.isResponseInProgress"
+              >
+                <IconArrowUpOutline 
+                  class="w-8 h-8 p-1
+                    text-white" 
+                />
+              </Button>
             </div>
-            <Button 
-              class="absolute right-4 bottom-2 !p-0 h-9 w-9"                    
-              @click="sendMessage" 
-              :disabled="!agentStore.trimmedUserMessage || agentStore.isResponseInProgress"
-            >
-              <IconArrowUpOutline 
-                class="w-8 h-8 p-1
-                  text-white" 
-              />
-            </Button>
           </div>
         </div>
       </div>
@@ -253,6 +254,7 @@ onMounted(async () => {
     agentStore.setIsTeleportedToBody(isTeleportedToBodyFromLocalStorage || props.meta.stickByDefault);
   }
   await agentStore.fetchSessionsList();
+  agentStore.setFullScreen(true);
 });
 
 function autoResize() {

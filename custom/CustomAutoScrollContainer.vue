@@ -11,12 +11,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import CustomScrollbar from 'custom-vue-scrollbar';
 import 'custom-vue-scrollbar/dist/style.css';
 import { useAgentStore } from './composables/useAgentStore';
 
-const agentStore = useAgentStore();
+const scrollParams = ref({
+  scrollTop: 0,
+  scrollHeight: 0,
+  clientHeight: 0
+});
 
 const props = withDefaults(defineProps<{
   enabled?: boolean
@@ -42,6 +46,9 @@ function isNearBottom(): boolean {
   if (!container) return true
   
   const { scrollTop, scrollHeight, clientHeight } = container
+  scrollParams.value.scrollTop = scrollTop
+  scrollParams.value.scrollHeight = scrollHeight
+  scrollParams.value.clientHeight = clientHeight
   return scrollHeight - scrollTop - clientHeight <= props.threshold
 }
 
@@ -50,7 +57,6 @@ function scrollToBottom(force = false): void {
   if (!container) return
   
   if (isUserScrolledUp.value && !force) return
-  
   container.scrollTo({
     top: container.scrollHeight,
     behavior: props.behavior
@@ -65,7 +71,7 @@ function hasScrollbar(): boolean {
 }
 
 
-function handleScroll(): void {
+function handleScroll(detectScrollDown = true): void {
   const container = containerRef.value.scrollEl
   if (!container) return
   
@@ -80,11 +86,9 @@ function handleScroll(): void {
     isUserScrolledUp.value = false
   } else {
     const isScrollingUp = scrollTop < lastScrollTop
-    const isScrollingDown = scrollTop > lastScrollTop
+    const isScrollingDown = detectScrollDown ? scrollTop > lastScrollTop : false
     const isContentUnchanged = scrollHeight === lastScrollHeight
     if ((isScrollingUp || isScrollingDown) && isContentUnchanged) {
-      isUserScrolledUp.value = true
-    } else if (!isNearBottom()) {
       isUserScrolledUp.value = true
     }
   }
@@ -110,7 +114,9 @@ onMounted(() => {
       }
       
       lastScrollHeight = containerRef.value.scrollEl.scrollHeight
-      
+      scrollParams.value.scrollTop = containerRef.value.scrollEl.scrollTop
+      scrollParams.value.scrollHeight = containerRef.value.scrollEl.scrollHeight
+      scrollParams.value.clientHeight = containerRef.value.scrollEl.clientHeight
       if (props.enabled && !isUserScrolledUp.value) {
         scrollToBottom()
       }
@@ -132,7 +138,8 @@ defineExpose({
   scrollToBottom: () => scrollToBottom(true),
   isUserScrolledUp: () => isUserScrolledUp.value,
   container: containerRef,
-  handleScroll
+  handleScroll,
+  scrollParams
 })
 </script>
 
