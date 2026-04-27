@@ -126,11 +126,12 @@ function getScrollClientHeight() {
 }
 
 async function waitForRealHeight(role: 'user' | 'assistant'): Promise<number> {
+  const realHeightWeCanApprove = role === 'user' ? EMPTY_MESSAGE_HEIGHT : 0;
   return new Promise((resolve) => {
     const interval = setInterval(() => {
       const height = role === 'user' ? getHeightOfLastUserMessage() : getHeightOfLastAgentMessage();
 
-      if (height > EMPTY_MESSAGE_HEIGHT) {
+      if (height > realHeightWeCanApprove) {
         clearInterval(interval);
         resolve(height);
       }
