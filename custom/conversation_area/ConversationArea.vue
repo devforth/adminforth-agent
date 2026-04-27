@@ -91,6 +91,23 @@ const showScrollContainer = ref(true);
 const chatContainerRef = ref<HTMLElement | null>(null);
 
 const messagesRefs = ref<Array<HTMLElement | null>>([]);
+
+
+/*
+* Whenever user sends a message, it adds a bottom spacer, that takes the remaining height
+* without last user and last agent message. 
+* 
+* On send message, happens the following logic: 
+* 1) showBottomSpacer is set to true
+* 2) useWaitingForHeight is set to true and in 1000s set back to false
+*   Why do we do this?
+*   - When we want to read height of last user message, incremark shows text with some small delay
+*   - so when we read height of last user message, we actully getting height of the box without text ~18px
+*   - so for the initial period while useWaitingForHeight is true, we are waiting for real height to be bigger than 18px
+*   - and then we can read in normally, until new message is sent, then we need to wait again
+* 3) updateSpacerHeight is called, which calculates the height for spacer based on scroll container height and messages height
+* 4) Spacer moves text up  
+*/
 const showBottomSpacer = ref(false);
 const spacerHeight = ref(0);
 const MASK_HEIGHT = 20;
