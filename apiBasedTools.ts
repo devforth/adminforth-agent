@@ -23,6 +23,7 @@ type CookieItem = {
 type ToolOverrideCallParams = Pick<ApiBasedToolCallParams, 'httpExtra' | 'inputs' | 'userTimeZone'>;
 
 type ToolOverrideContext = {
+  adminforth: IAdminForth;
   output?: unknown;
   adminUser?: AdminUser;
   httpExtra?: Partial<HttpExtra>;
@@ -36,15 +37,6 @@ type ToolOverride = {
   wipe_frontend_specific_data?: readonly string[];
   format_tool?: (params: ToolOverrideContext) => Promise<string> | string;
   post_process_response?: (params: ToolOverrideContext) => Promise<unknown> | unknown;
-};
-
-type GetResourceToolResponse = {
-  resource: {
-    columns: Array<{
-      name: string;
-      type?: string;
-    }>;
-  };
 };
 
 type GetResourceDataToolResponse = {
@@ -107,16 +99,12 @@ const TOOL_OVERRIDES: Record<string, ToolOverride> = {
     format_tool: ({ inputs, resourceLabel }) => (
       `Get ${getDataPrefix(inputs)}${resourceLabel}`
     ),
-    post_process_response: async ({ output, inputs, invokeTool, userTimeZone }) => {
+    post_process_response: async ({ adminforth, output, inputs, userTimeZone }) => {
       if (hasToolError(output)) {
         return output;
       }
 
-      const resourceId = inputs?.resourceId as string;
-      const getResourceOutput = await invokeTool('get_resource', {
-        inputs: { resourceId },
-      });
-      const dateTimeColumnNames = getDateTimeColumnNames(getResourceOutput);
+      const dateTimeColumnNames = getDateTimeColumnNames(adminforth, inputs);
 
       if (dateTimeColumnNames.length === 0) {
         return output;
@@ -300,10 +288,18 @@ function hasToolError(output: unknown): output is { error: unknown } {
   return typeof output === 'object' && output !== null && 'error' in output;
 }
 
-function getDateTimeColumnNames(output: unknown): string[] {
-  const resource = (output as GetResourceToolResponse).resource;
+function getDateTimeColumnNames(
+  adminforth: IAdminForth,
+  inputs: Record<string, unknown> | undefined,
+): string[] {
+  const resourceId = getInputString(inputs, 'resourceId');
+  const resource = adminforth.config.resources.find((res) => res.resourceId === resourceId);
 
-  return resource.columns
+  if (!resource) {
+    return [];
+  }
+
+  return resource.dataSourceColumns
     .filter((column) => column.type === AdminForthDataTypes.DATETIME)
     .map((column) => column.name);
 }
@@ -378,6 +374,7 @@ async function applyToolOverride(params: {
   }
 
   const postProcessedOutput = await override.post_process_response({
+    adminforth,
     output: sanitizedOutput,
     adminUser,
     httpExtra,
@@ -450,6 +447,7 @@ export async function formatApiBasedToolCall(params: {
   const formatTool = TOOL_OVERRIDES[params.toolName]?.format_tool;
 
   return await formatTool?.({
+    adminforth: params.adminforth,
     adminUser: params.adminUser,
     httpExtra: params.httpExtra,
     inputs: params.inputs,
