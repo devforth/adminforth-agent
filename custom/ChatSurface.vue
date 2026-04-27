@@ -93,7 +93,8 @@
         <div 
           class="relative flex-1 min-h-0 flex flex-col overflow-hidden"
         >
-          <ConversationArea 
+          <ConversationArea
+            ref="conversationArea" 
             v-if="agentStore.isChatOpen"
             :messages="agentStore.chatMessages"
           />
@@ -201,6 +202,7 @@ const props = defineProps<{
 const chatSurface = useTemplateRef('chatSurface');
 const textInput = useTemplateRef('textInput');
 const modeMenu = useTemplateRef('modeMenu');
+const conversationArea = useTemplateRef('conversationArea');
 const agentStore = useAgentStore();
 const agentTransitions = useAgentTransitions();
 const coreStore = useCoreStore();
@@ -254,7 +256,6 @@ onMounted(async () => {
     agentStore.setIsTeleportedToBody(isTeleportedToBodyFromLocalStorage || props.meta.stickByDefault);
   }
   await agentStore.fetchSessionsList();
-  agentStore.setFullScreen(true);
 });
 
 function autoResize() {
@@ -286,6 +287,7 @@ async function sendMessage() {
   isModeMenuOpen.value = false;
   await agentStore.sendMessage();
   autoResize();
+  conversationArea.value?.handleSendMessage();
 }
 
 </script>

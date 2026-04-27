@@ -34,9 +34,10 @@
     > 
 
       <div 
-        v-for="(message, index) in props.messages" :key="message.id"
+        v-for="(message, index) in props.messages" :key="index"
         class="flex flex-col w-full mt-2"
         :class="message.role === 'user' ? 'self-end' : 'self-start'"
+        ref="messagesRefs"
       >
         <MessageRenderer :message="message" :isLastMessageInChat="index === props.messages.length - 1"/>
       </div>
@@ -50,7 +51,7 @@
         <p>{{ $t('Start the conversation') }}</p>
         <p class="tracking-normal text-base text">{{ $t('Give any input to begin') }}</p>
       </div>
-      <div></div>
+      <div v-if="showBottomSpacer" class="w-full" :style="{ height: spacerHeight + 'px' }"></div>
     </CustomAutoScrollContainer>
     <button @click="scrollContainer.scrollToBottom();">
       <IconArrowDownOutline 
@@ -64,8 +65,8 @@
 
 
 <script setup lang="ts">
-import type { IMessage, IPart } from '../types';
-import { useTemplateRef, ref, defineAsyncComponent, onMounted, onUnmounted, watch, computed, nextTick } from 'vue';
+import type { IMessage } from '../types';
+import { useTemplateRef, ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { IconArrowDownOutline } from '@iconify-prerendered/vue-flowbite';
 import SessionsHistory from '../SessionsHistory.vue';
 import { useAgentStore } from '../composables/useAgentStore';
@@ -77,17 +78,139 @@ const props = defineProps<{
   messages: IMessage[]
 }>();
 
+defineExpose({
+  handleSendMessage
+});
+
 const scrollContainer = useTemplateRef('scrollContainer');
 const showScrollToBottomButton = ref(false);
-const innerScrollContainerRef = ref(null);
+const innerScrollContainerRef = ref<HTMLElement | null>(null);
 const agentStore = useAgentStore();
 const agentTransitions = useAgentTransitions();
 const showScrollContainer = ref(true);
-const chatContainerRef = ref(null);
+const chatContainerRef = ref<HTMLElement | null>(null);
 
-const scrollHeight = computed(() => {
-  return scrollContainer.value ? scrollContainer.value.scrollParams.scrollHeight : 0;
+const messagesRefs = ref<Array<HTMLElement | null>>([]);
+const showBottomSpacer = ref(false);
+const spacerHeight = ref(0);
+const MASK_HEIGHT = 20;
+const EMPTY_MESSAGE_HEIGHT = 18;
+let messageResizeObserver: ResizeObserver | null = null;
+let observedLastUserMessageElement: HTMLElement | null = null;
+let observedLastAgentMessageElement: HTMLElement | null = null;
+
+function resetSpacer() {
+  showBottomSpacer.value = false;
+  spacerHeight.value = 0;
+}
+
+watch(() => agentStore.activeSessionId, () => {
+  resetSpacer();
 });
+
+function getLastMessageElement(role: 'user' | 'assistant') {
+  const lastMessageIndex = props.messages.findLastIndex((message: IMessage) => message.role === role);
+  return messagesRefs.value[lastMessageIndex] ?? null;
+}
+
+function getHeightOfLastUserMessage() {
+  return getLastMessageElement('user')?.clientHeight ?? 0;
+}
+
+function getHeightOfLastAgentMessage() {
+  return getLastMessageElement('assistant')?.clientHeight ?? 0;
+}
+
+function getScrollClientHeight() {
+  return scrollContainer.value?.container.scrollEl.clientHeight ?? scrollContainer.value?.scrollParams.clientHeight ?? 0;
+}
+
+async function waitForRealHeight(role: 'user' | 'assistant'): Promise<number> {
+  return new Promise((resolve) => {
+    const interval = setInterval(() => {
+      const height = role === 'user' ? getHeightOfLastUserMessage() : getHeightOfLastAgentMessage();
+
+      if (height > EMPTY_MESSAGE_HEIGHT) {
+        clearInterval(interval);
+        resolve(height);
+      }
+    }, 50);
+  });
+}
+
+const useWaitingForHeight = ref(false);
+async function updateSpacerHeight() {
+  if (!showBottomSpacer.value) {
+    return;
+  }
+
+  const clientHeight = getScrollClientHeight();
+
+  if (!clientHeight) {
+    return;
+  }
+
+  const lastUserMessageHeight = useWaitingForHeight.value ? await waitForRealHeight('user') : getHeightOfLastUserMessage();
+  const lastAgentMessageHeight = useWaitingForHeight.value ? await waitForRealHeight('assistant') : getHeightOfLastAgentMessage();
+
+  spacerHeight.value = Math.max(0, clientHeight - (lastUserMessageHeight + MASK_HEIGHT + lastAgentMessageHeight));
+}
+
+function stopObservingLastMessages() {
+  if (!messageResizeObserver) {
+    return;
+  }
+
+  if (observedLastUserMessageElement) {
+    messageResizeObserver.unobserve(observedLastUserMessageElement);
+    observedLastUserMessageElement = null;
+  }
+
+  if (observedLastAgentMessageElement) {
+    messageResizeObserver.unobserve(observedLastAgentMessageElement);
+    observedLastAgentMessageElement = null;
+  }
+}
+
+function observeLastMessages() {
+  if (!messageResizeObserver) {
+    return;
+  }
+
+  stopObservingLastMessages();
+
+  observedLastUserMessageElement = getLastMessageElement('user');
+  observedLastAgentMessageElement = getLastMessageElement('assistant');
+
+  if (observedLastUserMessageElement) {
+    messageResizeObserver.observe(observedLastUserMessageElement);
+  }
+
+  if (observedLastAgentMessageElement) {
+    messageResizeObserver.observe(observedLastAgentMessageElement);
+  }
+}
+
+async function refreshSpacerTracking() {
+  await nextTick();
+  observeLastMessages();
+  await updateSpacerHeight();
+}
+
+async function handleSendMessage() {
+  const clientHeight = getScrollClientHeight();
+
+  if (clientHeight) {
+    showBottomSpacer.value = true;
+    useWaitingForHeight.value = true;
+    setTimeout(() => {
+      useWaitingForHeight.value = false;
+    }, 1000);
+    await updateSpacerHeight();
+    await nextTick();
+    scrollContainer.value?.scrollToBottom();
+  }
+}
 
 function recalculateScroll() {
   if (scrollContainer.value) {
@@ -101,26 +224,44 @@ watch(() => agentStore.activeSessionId, async () => {
   showScrollContainer.value = false;
   await nextTick();
   showScrollContainer.value = true;
-  await nextTick();
+  await refreshSpacerTracking();
   recalculateScroll();
 });
 
+watch(() => props.messages.length, async () => {
+  await refreshSpacerTracking();
+});
+
 onMounted(async () => {
+  messageResizeObserver = new ResizeObserver(() => {
+    updateSpacerHeight();
+  });
+
   await import('@incremark/theme/styles.css')
   await agentStore.fetchPlaceholderMessages()
+  await refreshSpacerTracking();
 });
 
 onUnmounted(() => {
+  if (innerScrollContainerRef.value) {
+    innerScrollContainerRef.value.removeEventListener('scroll', recalculateScroll);
+  }
+
+  stopObservingLastMessages();
+  messageResizeObserver?.disconnect();
   agentStore.stopPlaceholderAnimation();
 });
 
-watch(scrollContainer, () => {
+watch(scrollContainer, async () => {
+  if (innerScrollContainerRef.value) {
+    innerScrollContainerRef.value.removeEventListener('scroll', recalculateScroll);
+  }
+
   if (scrollContainer.value) {
     innerScrollContainerRef.value = scrollContainer.value.container.scrollEl;
 
-    innerScrollContainerRef.value.addEventListener('scroll', () => {
-      recalculateScroll();
-    });
+    innerScrollContainerRef.value.addEventListener('scroll', recalculateScroll);
+    await refreshSpacerTracking();
   }
 })
 

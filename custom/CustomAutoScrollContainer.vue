@@ -2,7 +2,7 @@
   <CustomScrollbar
     ref="containerRef"
     class="auto-scroll-container mask-y"
-    :wrapperStyle = "wrapperStyle"
+    :wrapperStyle = "wrapperStyle" 
     :contentStyle = "contentStyle"
     @scroll="handleScroll"
   >

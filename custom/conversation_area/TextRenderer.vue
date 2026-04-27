@@ -17,7 +17,7 @@
       :incremark-options="incremarkOptions"
     />
     <p v-else class="text-red-500 py-2">
-      Error occured
+      Error occurred
     </p>
   </div>
 </template>
