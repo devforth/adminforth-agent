@@ -204,11 +204,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
   }
   
   validateConfigAfterDiscover(adminforth: IAdminForth, resourceConfig: AdminForthResource) {
-    this.apiBasedTools = buildApiBasedTools(adminforth);
-    for (const toolName of ALWAYS_AVAILABLE_API_TOOL_NAMES) {
-      assertRequiredApiTool(this.apiBasedTools, toolName);
-    }
-    assertRequiredApiTool(this.apiBasedTools, "update_record");
     this.agentSystemPromptPromise = buildAgentSystemPrompt(adminforth)
       .then((systemPrompt) => appendCustomSystemPrompt(systemPrompt, this.options.systemPrompt));
   }
@@ -248,7 +243,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     server.endpoint({
       method: 'POST',
       path: `/agent/response`,
-      handler: async ({ body, adminUser, _raw_express_res }) => {
+      handler: async ({ body, query, headers, cookies, adminUser, response, requestUrl, _raw_express_res }) => {
         const res = _raw_express_res;
         const messageId = randomUUID();
         const prompt = body.message;
@@ -346,6 +341,12 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           const { model, summaryModel, modelMiddleware } =
             await this.getModeModels(selectedMode, maxTokens);
           const systemPrompt = await this.agentSystemPromptPromise;
+          const apiBasedTools = buildApiBasedTools(this.adminforth);
+          for (const toolName of ALWAYS_AVAILABLE_API_TOOL_NAMES) {
+            assertRequiredApiTool(apiBasedTools, toolName);
+          }
+          assertRequiredApiTool(apiBasedTools, "update_record");
+          this.apiBasedTools = apiBasedTools;
           const stream = await callAgent({
             name: `adminforth-agent-${this.pluginInstanceId}`,
             model,
@@ -358,10 +359,18 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             ],
             adminUser,
             adminforth: this.adminforth,
-            apiBasedTools: this.apiBasedTools,
+            apiBasedTools,
             customComponentsDir: this.adminforth.config.customization.customComponentsDir,
             sessionId,
             turnId,
+            httpExtra: {
+              body,
+              query,
+              headers,
+              cookies,
+              requestUrl,
+              response,
+            },
             userTimeZone,
             emitToolCallEvent,
             sequenceDebugSink: sequenceDebugCollector,

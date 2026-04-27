@@ -1,16 +1,14 @@
 import {
   AdminForthDataTypes,
+  logger,
   type AdminUser,
   type HttpExtra,
   type IAdminForth,
-  type IAdminForthHttpResponse,
-  type IHttpServer,
   type IRegisteredApiSchema,
 } from 'adminforth';
 import dayjs from 'dayjs';
 import timezone from 'dayjs/plugin/timezone.js';
 import utc from 'dayjs/plugin/utc.js';
-import { PassThrough } from 'stream';
 import { inspect } from 'util';
 import YAML from 'yaml';
 
@@ -20,47 +18,6 @@ dayjs.extend(timezone);
 type CookieItem = {
   key: string;
   value: string;
-};
-
-type CapturedEndpointHandlerInput = {
-  body: Record<string, unknown>;
-  adminUser?: AdminUser;
-  query: Record<string, string>;
-  headers: Record<string, any>;
-  cookies: CookieItem[];
-  response: IAdminForthHttpResponse;
-  requestUrl: string;
-  abortSignal: AbortSignal;
-  _raw_express_req: any;
-  _raw_express_res: any;
-  tr: (
-    msg: string,
-    category: string,
-    params: any,
-    pluralizationNumber?: number,
-  ) => Promise<string>;
-};
-
-type EndpointWithSchemas = {
-  method: string;
-  noAuth?: boolean;
-  path: string;
-  description?: string;
-  request_schema?: unknown;
-  response_schema?: unknown;
-  responce_schema?: unknown;
-  handler: (input: CapturedEndpointHandlerInput) => Promise<any> | any;
-};
-
-type CapturedEndpoint = EndpointWithSchemas & {
-  normalizedResponseSchema?: unknown;
-};
-
-type ToolHttpResponse = IAdminForthHttpResponse & {
-  headers: Array<[string, string]>;
-  jsonPayload?: unknown;
-  status: number;
-  message?: string;
 };
 
 type ToolOverrideCallParams = Pick<ApiBasedToolCallParams, 'httpExtra' | 'inputs' | 'userTimeZone'>;
@@ -388,9 +345,9 @@ function formatDateTimeColumns(
 async function applyToolOverride(params: {
   adminforth: IAdminForth;
   adminUser?: AdminUser;
-  capturedEndpointsByToolName: Record<string, CapturedEndpoint>;
   httpExtra?: Partial<HttpExtra>;
   inputs?: Record<string, unknown>;
+  invokeTool: (toolName: string, params?: ToolOverrideCallParams) => Promise<unknown>;
   output: unknown;
   toolName: string;
   userTimeZone?: string;
@@ -398,9 +355,9 @@ async function applyToolOverride(params: {
   const {
     adminforth,
     adminUser,
-    capturedEndpointsByToolName,
     httpExtra,
     inputs,
+    invokeTool,
     output,
     toolName,
     userTimeZone,
@@ -427,19 +384,10 @@ async function applyToolOverride(params: {
     inputs,
     userTimeZone,
     invokeTool: async (nestedToolName, nestedParams = {}) => {
-      const nestedEndpoint = capturedEndpointsByToolName[nestedToolName];
-
-      if (!nestedEndpoint) {
-        throw new Error(`Tool ${nestedToolName} is not registered`);
-      }
-
       const nestedInputs = nestedParams.inputs ?? inputs;
       const nestedHttpExtra = nestedParams.httpExtra ?? httpExtra;
       const nestedUserTimeZone = nestedParams.userTimeZone ?? userTimeZone;
-      const nestedOutput = await callCapturedEndpoint({
-        adminforth,
-        endpoint: nestedEndpoint,
-        adminUser,
+      const nestedOutput = await invokeTool(nestedToolName, {
         inputs: nestedInputs,
         httpExtra: nestedHttpExtra,
         userTimeZone: nestedUserTimeZone,
@@ -448,9 +396,9 @@ async function applyToolOverride(params: {
       return applyToolOverride({
         adminforth,
         adminUser,
-        capturedEndpointsByToolName,
         httpExtra: nestedHttpExtra,
         inputs: nestedInputs,
+        invokeTool,
         output: nestedOutput,
         toolName: nestedToolName,
         userTimeZone: nestedUserTimeZone,
@@ -487,6 +435,10 @@ function openApiSchemaPathToToolName(path: string, adminforth: IAdminForth) {
   return endpointPathToToolName(stripAdminApiPrefix(path, adminforth));
 }
 
+function formatLogNameList(names: string[]) {
+  return names.length ? names.join(', ') : '(none)';
+}
+
 export async function formatApiBasedToolCall(params: {
   adminforth: IAdminForth;
   adminUser?: AdminUser;
@@ -521,84 +473,6 @@ function normalizeCookies(
   }
 
   return Object.entries(cookies).map(([key, value]) => ({ key, value }));
-}
-
-function createToolResponse(baseResponse?: IAdminForthHttpResponse): ToolHttpResponse {
-  return {
-    headers: [],
-    status: 200,
-    message: undefined,
-    setHeader(name, value) {
-      this.headers.push([name, value]);
-      baseResponse?.setHeader(name, value);
-    },
-    setStatus(code, message) {
-      this.status = code;
-      this.message = message;
-      baseResponse?.setStatus(code, message);
-    },
-    blobStream() {
-      return baseResponse?.blobStream() ?? new PassThrough();
-    },
-  };
-}
-
-function createRawExpressRequest(params: {
-  adminUser?: AdminUser;
-  body: Record<string, unknown>;
-  cookies: CookieItem[];
-  headers: Record<string, any>;
-  method: string;
-  query: Record<string, string>;
-  requestUrl: string;
-}) {
-  const cookieHeader = params.cookies
-    .map(({ key, value }) => `${key}=${value}`)
-    .join('; ');
-
-  return {
-    adminUser: params.adminUser,
-    body: params.body,
-    destroyed: false,
-    headers: {
-      ...params.headers,
-      ...(cookieHeader ? { cookie: cookieHeader } : {}),
-    },
-    method: params.method.toUpperCase(),
-    on: () => undefined,
-    query: params.query,
-    url: params.requestUrl,
-  };
-}
-
-function createRawExpressResponse(response: ToolHttpResponse) {
-  const rawResponse = {
-    destroyed: false,
-    on: () => undefined,
-    setHeader(name: string, value: string) {
-      response.setHeader(name, value);
-      return rawResponse;
-    },
-    status(code: number) {
-      response.status = code;
-      return rawResponse;
-    },
-    send(message: string) {
-      response.message = message;
-      return rawResponse;
-    },
-    json(payload: unknown) {
-      response.jsonPayload = payload;
-      response.message = JSON.stringify(payload);
-      return rawResponse;
-    },
-    write: () => true,
-    writeHead: () => rawResponse,
-    writableEnded: false,
-    end: () => rawResponse,
-  };
-
-  return rawResponse;
 }
 
 function normalizeDateTimeInputsToUtc(
@@ -679,100 +553,192 @@ function normalizeDateTimeInputsToUtc(
   return normalizeValue(body) as Record<string, unknown>;
 }
 
-async function callCapturedEndpoint(params: {
-  adminforth: IAdminForth;
-  adminUser?: AdminUser;
-  endpoint: CapturedEndpoint;
+const METHODS_WITHOUT_REQUEST_BODY = new Set(['GET', 'HEAD']);
+const HEADERS_NOT_FORWARDED_TO_API_TOOL = new Set([
+  'connection',
+  'content-length',
+  'host',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+]);
+
+function getHeaderValue(
+  headers: Partial<HttpExtra>['headers'] | undefined,
+  headerName: string,
+) {
+  const normalizedHeaderName = headerName.toLowerCase();
+  const value = Object.entries(headers ?? {}).find(
+    ([name]) => name.toLowerCase() === normalizedHeaderName,
+  )?.[1];
+
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  return value.split(',')[0].trim();
+}
+
+function isAbsoluteHttpUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function getRequestOrigin(httpExtra?: Partial<HttpExtra>) {
+  const requestUrl = httpExtra?.requestUrl;
+
+  if (requestUrl && isAbsoluteHttpUrl(requestUrl)) {
+    return new URL(requestUrl).origin;
+  }
+
+  const host = getHeaderValue(httpExtra?.headers, 'x-forwarded-host')
+    ?? getHeaderValue(httpExtra?.headers, 'host');
+
+  if (!host) {
+    return undefined;
+  }
+
+  const protocol = getHeaderValue(httpExtra?.headers, 'x-forwarded-proto') ?? 'http';
+  return `${protocol}://${host}`;
+}
+
+function resolveOpenApiRequestUrl(params: {
   httpExtra?: Partial<HttpExtra>;
-  inputs?: Record<string, unknown>;
-  userTimeZone?: string;
+  path: string;
+  toolName: string;
 }) {
-  const { adminforth, adminUser, endpoint, httpExtra, inputs, userTimeZone } = params;
-  const response = createToolResponse(httpExtra?.response);
-  const headers = {
-    'content-type': 'application/json',
-    'X-TimeZone': userTimeZone,
-    ...(httpExtra?.headers ?? {}),
-  };
-  const body = normalizeDateTimeInputsToUtc(
-    (inputs ?? httpExtra?.body ?? {}) as Record<string, unknown>,
-    adminforth,
-    headers['X-TimeZone'],
-  );
-  const query = httpExtra?.query ?? {};
-  const cookies = normalizeCookies(httpExtra?.cookies);
-  const requestUrl = httpExtra?.requestUrl ?? `${adminforth.config.baseUrl}/adminapi/v1${endpoint.path}`;
-  const abortController = new AbortController();
-  const rawRequest = createRawExpressRequest({
-    adminUser,
-    body,
-    cookies,
-    headers,
-    method: endpoint.method,
-    query,
-    requestUrl,
-  });
-  const rawResponse = createRawExpressResponse(response);
-  const acceptLanguage = headers['accept-language'];
-  const tr = (
-    msg: string,
-    category: string = 'default',
-    translationParams: any,
-    pluralizationNumber?: number,
-  ) => adminforth.tr(msg, category, acceptLanguage, translationParams, pluralizationNumber);
-
-  const output = await endpoint.handler({
-    body,
-    adminUser,
-    query,
-    headers,
-    cookies,
-    response,
-    requestUrl,
-    abortSignal: abortController.signal,
-    _raw_express_req: rawRequest,
-    _raw_express_res: rawResponse,
-    tr,
-  });
-
-  if (output !== undefined && output !== null) {
-    return output;
+  if (isAbsoluteHttpUrl(params.path)) {
+    return params.path;
   }
 
-  if (response.jsonPayload !== undefined) {
-    return response.jsonPayload;
+  const origin = getRequestOrigin(params.httpExtra);
+
+  if (!origin) {
+    throw new Error(
+      `Tool "${params.toolName}" has relative OpenAPI path "${params.path}" but request host header is unavailable.`,
+    );
   }
 
-  if (response.message !== undefined) {
-    return response.message;
+  return new URL(params.path, origin).toString();
+}
+
+function createToolRequestHeaders(
+  httpExtra: Partial<HttpExtra> | undefined,
+  userTimeZone?: string,
+) {
+  const headers: Record<string, string> = {};
+
+  for (const [name, value] of Object.entries(httpExtra?.headers ?? {})) {
+    const headerName = name.toLowerCase();
+
+    if (typeof value === 'string' && !HEADERS_NOT_FORWARDED_TO_API_TOOL.has(headerName)) {
+      headers[headerName] = value;
+    }
+  }
+
+  headers.accept = 'application/json';
+  headers['content-type'] = 'application/json';
+
+  if (userTimeZone) {
+    headers['x-timezone'] = userTimeZone;
+  }
+
+  const cookieHeader = normalizeCookies(httpExtra?.cookies)
+    .map(({ key, value }) => `${key}=${value}`)
+    .join('; ');
+
+  if (cookieHeader && !headers.cookie) {
+    headers.cookie = cookieHeader;
+  }
+
+  return headers;
+}
+
+function appendInputsToQueryString(url: string, inputs: Record<string, unknown>) {
+  const nextUrl = new URL(url);
+
+  for (const [key, value] of Object.entries(inputs)) {
+    if (value === undefined) {
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        nextUrl.searchParams.append(
+          key,
+          typeof item === 'object' && item !== null ? JSON.stringify(item) : String(item),
+        );
+      }
+      continue;
+    }
+
+    nextUrl.searchParams.set(
+      key,
+      typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value),
+    );
+  }
+
+  return nextUrl.toString();
+}
+
+async function parseOpenApiToolResponse(response: Response) {
+  const responseText = await response.text();
+  const payload = responseText && response.headers.get('content-type')?.includes('application/json')
+    ? JSON.parse(responseText)
+    : responseText;
+
+  if (response.ok) {
+    return responseText ? payload : { status: response.status };
   }
 
   return {
-    headers: response.headers,
+    error: 'HTTP_ERROR',
     status: response.status,
+    statusText: response.statusText,
+    response: payload,
   };
 }
 
-export function prepareApiBasedTools(adminforth: IAdminForth): Record<string, ApiBasedTool> {
-  const capturedEndpoints: CapturedEndpoint[] = [];
-
-  const captureServer: IHttpServer = {
-    setupSpaServer() {},
-    endpoint: ((options: EndpointWithSchemas) => {
-      capturedEndpoints.push({
-        ...options,
-        response_schema: options.response_schema ?? options.responce_schema,
-        normalizedResponseSchema: options.response_schema ?? options.responce_schema,
-      });
-    }) as IHttpServer['endpoint'],
-  };
-
-  adminforth.setupEndpoints(captureServer);
-
-  const apiBasedTools: Record<string, ApiBasedTool> = {};
-  const capturedEndpointsByToolName = Object.fromEntries(
-    capturedEndpoints.map((endpoint) => [endpointPathToToolName(endpoint.path), endpoint]),
+async function callOpenApiSchema(params: {
+  adminforth: IAdminForth;
+  httpExtra?: Partial<HttpExtra>;
+  inputs?: Record<string, unknown>;
+  schema: IRegisteredApiSchema;
+  toolName: string;
+  userTimeZone?: string;
+}) {
+  const { adminforth, httpExtra, inputs, schema, toolName, userTimeZone } = params;
+  const method = schema.method.toUpperCase();
+  const body = normalizeDateTimeInputsToUtc(
+    (inputs ?? httpExtra?.body ?? {}) as Record<string, unknown>,
+    adminforth,
+    userTimeZone,
   );
+  const requestUrl = resolveOpenApiRequestUrl({
+    httpExtra,
+    path: schema.path,
+    toolName,
+  });
+  const hasRequestBody = !METHODS_WITHOUT_REQUEST_BODY.has(method);
+  const response = await fetch(hasRequestBody ? requestUrl : appendInputsToQueryString(requestUrl, body), {
+    method,
+    headers: createToolRequestHeaders(httpExtra, userTimeZone),
+    body: hasRequestBody ? JSON.stringify(body) : undefined,
+  });
+
+  return parseOpenApiToolResponse(response);
+}
+
+export function prepareApiBasedTools(adminforth: IAdminForth): Record<string, ApiBasedTool> {
+  const apiBasedTools: Record<string, ApiBasedTool> = {};
   const openApiSchemas = adminforth.openApi.registeredSchemas.filter(
     (schema) => schema.request_schema || schema.response_schema,
   );
@@ -783,24 +749,43 @@ export function prepareApiBasedTools(adminforth: IAdminForth): Record<string, Ap
     openApiSchemasByToolName.set(toolName, schema);
   }
 
+  logger.info(
+    `AdminForth Agent OpenAPI APIs: ${formatLogNameList(
+      adminforth.openApi.registeredSchemas.map((schema) => openApiSchemaPathToToolName(schema.path, adminforth)),
+    )}`,
+  );
+  logger.info(
+    `AdminForth Agent OpenAPI tools connected: ${formatLogNameList([...openApiSchemasByToolName.keys()])}`,
+  );
+
   for (const [toolName, schema] of openApiSchemasByToolName.entries()) {
-    const endpoint = capturedEndpointsByToolName[toolName];
     apiBasedTools[toolName] = {
       description: schema.description,
       input_schema: schema.request_schema,
       input_schma: schema.request_schema,
       output_schema: schema.response_schema,
       call: async ({ adminUser, adminuser, inputs, httpExtra, userTimeZone } = {}) => {
-        if (!endpoint) {
-          throw new Error(
-            `Tool "${toolName}" is defined in OpenAPI but has no callable AdminForth endpoint handler.`,
-          );
-        }
+        const invokeTool = async (
+          nextToolName: string,
+          nextParams: ToolOverrideCallParams = {},
+        ) => {
+          const nextSchema = openApiSchemasByToolName.get(nextToolName);
 
-        const output = await callCapturedEndpoint({
-          adminforth,
-          endpoint,
-          adminUser: adminUser ?? adminuser,
+          if (!nextSchema) {
+            throw new Error(`Tool ${nextToolName} is not registered in OpenAPI`);
+          }
+
+          return callOpenApiSchema({
+            adminforth,
+            schema: nextSchema,
+            toolName: nextToolName,
+            inputs: nextParams.inputs,
+            httpExtra: nextParams.httpExtra,
+            userTimeZone: nextParams.userTimeZone,
+          });
+        };
+
+        const output = await invokeTool(toolName, {
           inputs,
           httpExtra,
           userTimeZone,
@@ -809,9 +794,9 @@ export function prepareApiBasedTools(adminforth: IAdminForth): Record<string, Ap
         const processedOutput = await applyToolOverride({
           adminforth,
           adminUser: adminUser ?? adminuser,
-          capturedEndpointsByToolName,
           httpExtra,
           inputs,
+          invokeTool,
           output,
           toolName,
           userTimeZone,

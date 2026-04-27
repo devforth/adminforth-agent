@@ -4,6 +4,7 @@ import {
   logger,
   type AdminUser,
   type CompletionAdapter,
+  type HttpExtra,
   type IAdminForth,
 } from "adminforth";
 import { BaseCallbackHandler } from "@langchain/core/callbacks/base";
@@ -24,6 +25,7 @@ export const contextSchema = z.object({
   userTimeZone: z.string(),
   sessionId: z.string(),
   turnId: z.string(),
+  httpExtra: z.custom<Partial<HttpExtra>>().optional(),
   emitToolCallEvent: z.custom<ToolCallEventSink>(),
 });
 
@@ -229,6 +231,7 @@ export async function callAgent(params: {
   customComponentsDir: string;
   sessionId: string;
   turnId: string;
+  httpExtra?: Partial<HttpExtra>;
   userTimeZone: string;
   emitToolCallEvent: ToolCallEventSink;
   sequenceDebugSink: SequenceDebugModelCallSink;
@@ -246,6 +249,7 @@ export async function callAgent(params: {
     customComponentsDir,
     sessionId,
     turnId,
+    httpExtra,
     userTimeZone,
     emitToolCallEvent,
     sequenceDebugSink,
@@ -289,6 +293,7 @@ export async function callAgent(params: {
       userTimeZone,
       sessionId,
       turnId,
+      httpExtra,
       emitToolCallEvent,
     },
   });
