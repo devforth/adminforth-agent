@@ -110,11 +110,17 @@ const TOOL_OVERRIDES: Record<string, ToolOverride> = {
         return output;
       }
 
-      const localizedTimeZone = userTimeZone ?? DEFAULT_USER_TIME_ZONE;
-      const response = output as GetResourceDataToolResponse;
-      formatDateTimeColumns(response.data, dateTimeColumnNames, localizedTimeZone);
+      if (!hasGetResourceDataRows(output)) {
+        logger.warn(
+          `Skipping datetime formatting for get_resource_data because response.data is not an array for resource ${getInputString(inputs, 'resourceId') ?? 'unknown'}`,
+        );
+        return output;
+      }
 
-      return response;
+      const localizedTimeZone = userTimeZone ?? DEFAULT_USER_TIME_ZONE;
+      formatDateTimeColumns(output.data, dateTimeColumnNames, localizedTimeZone);
+
+      return output;
     },
   },
   aggregate: {
@@ -286,6 +292,14 @@ function wipePath(target: unknown, pathParts: string[]): void {
 
 function hasToolError(output: unknown): output is { error: unknown } {
   return typeof output === 'object' && output !== null && 'error' in output;
+}
+
+function hasGetResourceDataRows(output: unknown): output is GetResourceDataToolResponse {
+  if (typeof output !== 'object' || output === null || !('data' in output)) {
+    return false;
+  }
+
+  return Array.isArray((output as { data?: unknown }).data);
 }
 
 function getDateTimeColumnNames(
