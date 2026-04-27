@@ -21,7 +21,7 @@
       :wrapperStyle="{
         marginRight: '8rem',
       }"
-      :enabled="true"
+      :enabled="isStreaming"
     >
       <IncremarkContent
         :content="reasoningText"
@@ -38,18 +38,14 @@ import type { IPart } from '../types';
 import { ref, computed, watch, defineAsyncComponent } from 'vue';
 import ThreeDotsAnimation from './ThreeDotsAnimation.vue';
 import { extractTitleAndTextFromReasoning } from '../utils';
-import { useAgentStore } from '../composables/useAgentStore';
 import CustomAutoScrollContainer from '../CustomAutoScrollContainer.vue';
 
 const IncremarkContent = defineAsyncComponent(() => import('@incremark/vue').then(module => module.IncremarkContent))
-// const AutoScrollContainer = defineAsyncComponent(() => import('@incremark/vue').then(module => module.AutoScrollContainer))
 
 const props = defineProps<{
   state?: IPart['state']
   text?: string
 }>();
-
-const agentStore = useAgentStore();
 
 const isStreaming = computed(() => props.state === 'streaming');
 const isExpanded = ref(true);

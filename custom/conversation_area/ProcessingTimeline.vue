@@ -14,7 +14,7 @@
     </div>
     <transition name="expand" class="max-h-96 overflow-y-auto mb-4 pt-1">
       <CustomAutoScrollContainer
-        :enabled="true"
+        :enabled="isResponseInProgress"
         behavior="smooth"
         v-if="ToolOrReasoningParts.length > 0" 
         v-show="isExpanded"
