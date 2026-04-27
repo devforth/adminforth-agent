@@ -106,13 +106,13 @@
               transition: `transform ${agentTransitions.TRANSITION_DURATION}ms ease-in-out`
             }"            
           >
-            <div class="w-full border rounded-lg pb-8">
+            <div class="w-full border rounded-lg pb-8 dark:bg-gray-700">
               <textarea
                 v-model="agentStore.userMessageInput"
                 ref="textInput"
                 @input="autoResize"
                 :class="[
-                  'min-h-12 px-4 pt-4  w-full resize-none overflow-hidden text-lightInputText dark:text-darkInputText rounded-md bg-transparent text-sm bg-gray-50 dark:bg-gray-700 dark:border-gray-600 focus:outline-none',
+                  'min-h-12 px-4 pt-4 rounded-xl w-full resize-none overflow-hidden text-lightInputText dark:text-darkInputText rounded-md bg-transparent text-sm bg-gray-50 dark:bg-gray-700 dark:border-gray-600 focus:outline-none',
                 ]"
                 :placeholder="agentStore.userMessagePlaceholder"
                 @keydown.enter.exact.prevent="sendMessage"
