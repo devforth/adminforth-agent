@@ -148,8 +148,8 @@ defineExpose({
     mask-image: linear-gradient(
       to bottom,
       transparent,
-      black 20px,
-      black calc(100% - 20px),
+      black 1.25rem,
+      black calc(100% - 1.25rem),
       transparent
     );
   }
