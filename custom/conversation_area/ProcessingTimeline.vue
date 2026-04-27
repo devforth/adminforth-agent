@@ -14,6 +14,7 @@
     </div>
     <transition name="expand" class="max-h-96 overflow-y-auto mb-4 pt-1">
       <CustomAutoScrollContainer
+        ref="scrollContainerRef"
         :enabled="isResponseInProgress"
         behavior="smooth"
         v-if="ToolOrReasoningParts.length > 0" 
@@ -38,7 +39,7 @@
 
 <script setup lang="ts">
   import type { IFormattedToolCallPart, IMessage, IPart, IToolGroup } from '../types';
-  import { ref, computed, watch, defineAsyncComponent, onMounted } from 'vue';
+  import { ref, computed, watch, onUnmounted, onMounted } from 'vue';
   import ReasoningRenderer from './ReasoningRenderer.vue';
   import { IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
   import ThreeDotsAnimation from './ThreeDotsAnimation.vue';
@@ -52,14 +53,34 @@
     isLastMessageInChat: boolean
   }>()
 
-  // const AutoScrollContainer = defineAsyncComponent(() => import('@incremark/vue').then(module => module.AutoScrollContainer))
   const agentStore = useAgentStore();
   const thinkingStartTime = ref<number | null>(null);
   const thinkingDuration = ref(0);
+  const scrollContainerRef = ref<InstanceType<typeof CustomAutoScrollContainer> | null>(null);
+  const innerScrollContainerRef = ref<HTMLElement | null>(null);
 
   onMounted(() => {
     thinkingStartTime.value = Date.now();
   })
+
+  watch(scrollContainerRef, async () => {
+    if (innerScrollContainerRef.value) {
+      innerScrollContainerRef.value.removeEventListener('scroll', handleScroll);
+    }
+
+    if (scrollContainerRef.value) {
+      innerScrollContainerRef.value = scrollContainerRef.value.container.scrollEl;
+      innerScrollContainerRef.value.addEventListener('scroll', handleScroll);
+    }
+  })
+
+  onUnmounted(() => {
+    scrollContainerRef.value?.container.scrollEl?.removeEventListener('scroll', handleScroll);
+  })
+
+  function handleScroll() {
+    scrollContainerRef.value?.handleScroll();
+  }
 
   const ToolOrReasoningParts = computed(() => {
     return props.message.parts.filter((part: IPart) => part.type === 'data-tool-call' || part.type === 'reasoning');

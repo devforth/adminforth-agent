@@ -18,7 +18,7 @@
     </h3>
     <transition name="expand">
       <CustomAutoScrollContainer
-        v-if="isExpanded" v-show="isExpanded" class="mb-4 text-sm max-h-64 pl-4"
+        v-if="isExpanded" v-show="isExpanded" class="text-sm max-h-64 pl-4"
         :wrapperStyle="{
           marginRight: '8rem',
         }"
