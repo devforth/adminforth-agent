@@ -1,20 +1,22 @@
 <template >
   <template v-if="toolGroup.length > 0">
-    <span class="text-listTableHeadingText dark:text-darkListTableHeadingText bg-lightNavbar dark:bg-darkNavbar absolute flex items-center justify-center w-5 h-5 bg-brand-softer rounded-full -start-[0.68rem] ring-4 ring-lightNavbar dark:ring-darkNavbar ring-default">
-      <div class="w-5 h-5 rounded-full flex items-center justify-center">
-        <IconWrenchSolid class="w-4 h-4" />
+    <li class="mb-6 ms-2 z-50">
+      <span class="text-listTableHeadingText dark:text-darkListTableHeadingText bg-lightNavbar dark:bg-darkNavbar absolute flex items-center justify-center w-5 h-5 bg-brand-softer rounded-full -start-[0.68rem] ring-4 ring-lightNavbar dark:ring-darkNavbar ring-default">
+        <div class="w-5 h-5 rounded-full flex items-center justify-center">
+          <IconWrenchSolid class="w-4 h-4" />
+        </div>
+      </span>
+      <h3 
+        class="flex items-center mb-1 text-sm my-2 ml-3 gap-1 text-listTableHeadingText dark:text-darkListTableHeadingText"      
+      >
+        <span class="font-semibold select-none ">Call tools</span>
+      </h3>
+      <div class="flex flex-wrap">
+        <template v-for="group in props.toolGroup" :key="group.title">
+          <ToolRenderer v-for="part in group.groupedTools" :key="part.toolInfo.toolCallId" :data="part"/>
+        </template> 
       </div>
-    </span>
-    <h3 
-      class="flex items-center mb-1 text-sm my-2 ml-3 gap-1 text-listTableHeadingText dark:text-darkListTableHeadingText"      
-    >
-      <span class="font-semibold select-none ">Call tools</span>
-    </h3>
-    <div class="flex flex-wrap">
-      <template v-for="group in props.toolGroup" :key="group.title">
-        <ToolRenderer v-for="part in group.groupedTools" :key="part.toolInfo.toolCallId" :data="part"/>
-      </template> 
-    </div>
+    </li>
   </template>
 </template>
 

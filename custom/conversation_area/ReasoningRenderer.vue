@@ -1,33 +1,35 @@
 <template>
-  <span class="bg-lightNavbar dark:bg-darkNavbar absolute flex items-center text-listTableHeadingText dark:text-darkListTableHeadingText justify-center w-5 h-5 bg-brand-softer rounded-full -start-[0.68rem] ring-4 ring-lightNavbar dark:ring-darkNavbar ring-default">
-    <div class="w-5 h-5 rounded-full flex items-center justify-center">
-      <IconBrainOutline class="w-4 h-4" />
-    </div>
-  </span>
-  <h3 
-    class="flex items-center mb-1 text-sm my-2 ml-3 gap-1 cursor-pointer select-none hover:opacity-80 text-listTableHeadingText dark:text-darkListTableHeadingText"      
-    @click="isExpanded = !isExpanded"
-  >
-    <span class="font-semibold">{{ reasoningTitle }}</span>
-    <ThreeDotsAnimation v-if="isStreaming"/>
-    <IconAngleDownOutline           
-      :class="isExpanded ? 'rotate-180' : 'rotate-0'"
-      class="transition-transform duration-200"
-    />
-  </h3>
-  <transition name="expand">
-    <CustomAutoScrollContainer
-      v-if="isExpanded" v-show="isExpanded" class="mb-4 text-sm max-h-64 pl-4"
-      :wrapperStyle="{
-        marginRight: '8rem',
-      }"
-      :enabled="isStreaming"
+  <li class="mb-6 ms-2 z-50 overflow-hidden">
+    <span class="bg-lightNavbar dark:bg-darkNavbar absolute flex items-center text-listTableHeadingText dark:text-darkListTableHeadingText justify-center w-5 h-5 bg-brand-softer rounded-full -start-[0.68rem] ring-4 ring-lightNavbar dark:ring-darkNavbar ring-default">
+      <div class="w-5 h-5 rounded-full flex items-center justify-center">
+        <IconBrainOutline class="w-4 h-4" />
+      </div>
+    </span>
+    <h3 
+      class=" flex items-center mb-1 text-sm ml-3 gap-1 cursor-pointer select-none hover:opacity-80 text-listTableHeadingText dark:text-darkListTableHeadingText"      
+      @click="isExpanded = !isExpanded"
     >
-      <IncremarkContent
-        :content="reasoningText"
+      <span class="font-semibold">{{ reasoningTitle }}</span>
+      <ThreeDotsAnimation v-if="isStreaming"/>
+      <IconAngleDownOutline           
+        :class="isExpanded ? 'rotate-180' : 'rotate-0'"
+        class="transition-transform duration-200"
       />
-    </CustomAutoScrollContainer>
-  </transition>    
+    </h3>
+    <transition name="expand">
+      <CustomAutoScrollContainer
+        v-if="isExpanded" v-show="isExpanded" class="mb-4 text-sm max-h-64 pl-4"
+        :wrapperStyle="{
+          marginRight: '8rem',
+        }"
+        :enabled="isStreaming"
+      >
+        <IncremarkContent
+          :content="reasoningText"
+        />
+      </CustomAutoScrollContainer>
+    </transition>    
+  </li>
 </template>
 
 
@@ -67,7 +69,7 @@ watch(() => props.state, (newValue: IPart['state']) => {
 <style scoped>
 .expand-enter-active,
 .expand-leave-active {
-  transition: all 0.3s ease;
+  transition: all 300ms ease;
 }
 
 .expand-enter-from,

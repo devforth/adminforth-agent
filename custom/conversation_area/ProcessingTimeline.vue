@@ -18,15 +18,16 @@
         behavior="smooth"
         v-if="ToolOrReasoningParts.length > 0" 
         v-show="isExpanded"
+        :threshold="5"
         :wrapperStyle="{
           marginRight: '8rem',
         }"
       >
-        <ol class="ml-8 relative border-l border-l-2 border-black border-default border-listTableHeadingText dark:border-darkListTableHeadingText">
-          <li class="mb-6 ms-2 z-50" v-for="(part, index) in ToolOrReasoningParts" :key="index"> 
+        <ol class="ml-8 my-2 relative border-l border-l-2 border-black border-default border-listTableHeadingText dark:border-darkListTableHeadingText">
+          <template v-for="(part, index) in ToolOrReasoningParts" :key="index">
             <ReasoningRenderer v-if="part.type === 'reasoning'" :state="part.state" :text="part.text" />
-            <ToolsGroup v-else :toolGroup="groupToolCallParts(message, part)" />
-          </li>      
+            <ToolsGroup v-else-if="part.type==='data-tool-call'" :toolGroup="groupToolCallParts(message, part)" />
+          </template>
         </ol>
       </CustomAutoScrollContainer>
     </transition>
