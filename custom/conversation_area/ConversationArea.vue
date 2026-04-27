@@ -1,6 +1,4 @@
 <template>
-  <!-- Scroll height:{{ scrollHeight }}
-  Spacer height:{{ spacerHeight }} -->
   <SessionsHistory 
     :class="agentStore.isSessionHistoryOpen ? 'translate-x-0' : '-translate-x-full'"
   />
@@ -67,8 +65,8 @@
 
 
 <script setup lang="ts">
-import type { IMessage, IPart } from '../types';
-import { useTemplateRef, ref, defineAsyncComponent, onMounted, onUnmounted, watch, computed, nextTick } from 'vue';
+import type { IMessage } from '../types';
+import { useTemplateRef, ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { IconArrowDownOutline } from '@iconify-prerendered/vue-flowbite';
 import SessionsHistory from '../SessionsHistory.vue';
 import { useAgentStore } from '../composables/useAgentStore';
@@ -86,89 +84,112 @@ defineExpose({
 
 const scrollContainer = useTemplateRef('scrollContainer');
 const showScrollToBottomButton = ref(false);
-const innerScrollContainerRef = ref(null);
+const innerScrollContainerRef = ref<HTMLElement | null>(null);
 const agentStore = useAgentStore();
 const agentTransitions = useAgentTransitions();
 const showScrollContainer = ref(true);
-const chatContainerRef = ref(null);
+const chatContainerRef = ref<HTMLElement | null>(null);
 
 const messagesRefs = ref<Array<HTMLElement | null>>([]);
 const showBottomSpacer = ref(false);
 const spacerHeight = ref(0);
-const scrollHeightBeforeChatResponse = ref(0);
-const lastUserMessageHeight = ref(0);
 const MASK_HEIGHT = 20;
+let messageResizeObserver: ResizeObserver | null = null;
+let observedLastUserMessageElement: HTMLElement | null = null;
+let observedLastAgentMessageElement: HTMLElement | null = null;
 
 function resetSpacer() {
   showBottomSpacer.value = false;
   spacerHeight.value = 0;
-  scrollHeightBeforeChatResponse.value = 0;
-  lastUserMessageHeight.value = 0;
 }
 
-watch(() => agentStore.activeSessionId, (newValue) => {
+watch(() => agentStore.activeSessionId, () => {
   resetSpacer();
 });
 
+function getLastMessageElement(role: 'user' | 'assistant') {
+  const lastMessageIndex = props.messages.findLastIndex((message: IMessage) => message.role === role);
+  return messagesRefs.value[lastMessageIndex] ?? null;
+}
+
 function getHeightOfLastUserMessage() {
-  const lastUserMessageIndex = props.messages.findLastIndex((msg: IMessage) => msg.role === 'user');
-  const lastUserMessageElement = messagesRefs.value[lastUserMessageIndex];
-  if (lastUserMessageElement) {
-    return  lastUserMessageElement.clientHeight;
-  }
+  return getLastMessageElement('user')?.clientHeight ?? 0;
 }
 
 function getHeightOfLastAgentMessage() {
-  const lastAgentMessageIndex = props.messages.findLastIndex((msg: IMessage) => msg.role === 'assistant');
-  const lastAgentMessageElement = messagesRefs.value[lastAgentMessageIndex];
-  if (lastAgentMessageElement) {
-    return  lastAgentMessageElement.clientHeight;
+  return getLastMessageElement('assistant')?.clientHeight ?? 0;
+}
+
+function getScrollClientHeight() {
+  return scrollContainer.value?.container.scrollEl.clientHeight ?? scrollContainer.value?.scrollParams.clientHeight ?? 0;
+}
+
+function updateSpacerHeight() {
+  if (!showBottomSpacer.value) {
+    return;
   }
+
+  const clientHeight = getScrollClientHeight();
+
+  if (!clientHeight) {
+    return;
+  }
+  console.log('Client height:', clientHeight, 'Last user message height:', getHeightOfLastUserMessage(), 'Last agent message height:', getHeightOfLastAgentMessage());
+  spacerHeight.value = Math.max(0, clientHeight - (getHeightOfLastUserMessage() + MASK_HEIGHT + getHeightOfLastAgentMessage()));
+  console.log('Updated spacer height:', spacerHeight.value);
+}
+
+function stopObservingLastMessages() {
+  if (!messageResizeObserver) {
+    return;
+  }
+
+  if (observedLastUserMessageElement) {
+    messageResizeObserver.unobserve(observedLastUserMessageElement);
+    observedLastUserMessageElement = null;
+  }
+
+  if (observedLastAgentMessageElement) {
+    messageResizeObserver.unobserve(observedLastAgentMessageElement);
+    observedLastAgentMessageElement = null;
+  }
+}
+
+function observeLastMessages() {
+  if (!messageResizeObserver) {
+    return;
+  }
+
+  stopObservingLastMessages();
+
+  observedLastUserMessageElement = getLastMessageElement('user');
+  observedLastAgentMessageElement = getLastMessageElement('assistant');
+
+  if (observedLastUserMessageElement) {
+    messageResizeObserver.observe(observedLastUserMessageElement);
+  }
+
+  if (observedLastAgentMessageElement) {
+    messageResizeObserver.observe(observedLastAgentMessageElement);
+  }
+}
+
+async function refreshSpacerTracking() {
+  await nextTick();
+  observeLastMessages();
+  updateSpacerHeight();
 }
 
 async function handleSendMessage() {
-  lastUserMessageHeight.value = getHeightOfLastUserMessage() + MASK_HEIGHT;
-  const clientHeight = scrollContainer.value ? scrollContainer.value.scrollParams.clientHeight : 0;
+  const clientHeight = getScrollClientHeight();
+
   if (clientHeight) {
     showBottomSpacer.value = true;
-    spacerHeight.value = clientHeight - lastUserMessageHeight.value;
+    updateSpacerHeight();
     await nextTick();
-    scrollHeightBeforeChatResponse.value = scrollHeight.value;
     scrollContainer.value?.scrollToBottom();
   }
 }
-
-const scrollHeight = computed(() => {
-  return scrollContainer.value ? scrollContainer.value.scrollParams.scrollHeight : 0;
-});
-
-const lastScrollHeight = ref(0);
-let skipNextScrollAdjustment = false;
-
-watch(scrollHeight, (newScrollHeight) => {
-  if (skipNextScrollAdjustment) {
-    skipNextScrollAdjustment = false;
-    lastScrollHeight.value = newScrollHeight;
-    return;
-  }
-  // if (!agentStore.isResponseInProgress) {
-  //   lastScrollHeight.value = newScrollHeight;
-  //   return;
-  // }
-  if (lastScrollHeight.value === 0) {
-    lastScrollHeight.value = newScrollHeight;
-    return;
-  }
-  const lastUserMessageHeight = getHeightOfLastUserMessage() + MASK_HEIGHT;
-  const lastAgentMessageHeight = getHeightOfLastAgentMessage();
-  // console.log('Last agent message height:', lastAgentMessageHeight);
-  const clientHeight = scrollContainer.value ? scrollContainer.value.scrollParams.clientHeight : 0;
-  spacerHeight.value = clientHeight - (lastUserMessageHeight + lastAgentMessageHeight);
-  // console.log('Calculated spacer height:', spacerHeight.value);
-  lastScrollHeight.value = newScrollHeight;
-  skipNextScrollAdjustment = true;
-});
-
 
 function recalculateScroll() {
   if (scrollContainer.value) {
@@ -182,26 +203,44 @@ watch(() => agentStore.activeSessionId, async () => {
   showScrollContainer.value = false;
   await nextTick();
   showScrollContainer.value = true;
-  await nextTick();
+  await refreshSpacerTracking();
   recalculateScroll();
 });
 
+watch(() => props.messages.length, async () => {
+  await refreshSpacerTracking();
+});
+
 onMounted(async () => {
+  messageResizeObserver = new ResizeObserver(() => {
+    updateSpacerHeight();
+  });
+
   await import('@incremark/theme/styles.css')
   await agentStore.fetchPlaceholderMessages()
+  await refreshSpacerTracking();
 });
 
 onUnmounted(() => {
+  if (innerScrollContainerRef.value) {
+    innerScrollContainerRef.value.removeEventListener('scroll', recalculateScroll);
+  }
+
+  stopObservingLastMessages();
+  messageResizeObserver?.disconnect();
   agentStore.stopPlaceholderAnimation();
 });
 
-watch(scrollContainer, () => {
+watch(scrollContainer, async () => {
+  if (innerScrollContainerRef.value) {
+    innerScrollContainerRef.value.removeEventListener('scroll', recalculateScroll);
+  }
+
   if (scrollContainer.value) {
     innerScrollContainerRef.value = scrollContainer.value.container.scrollEl;
 
-    innerScrollContainerRef.value.addEventListener('scroll', () => {
-      recalculateScroll();
-    });
+    innerScrollContainerRef.value.addEventListener('scroll', recalculateScroll);
+    await refreshSpacerTracking();
   }
 })
 

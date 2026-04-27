@@ -256,7 +256,6 @@ onMounted(async () => {
     agentStore.setIsTeleportedToBody(isTeleportedToBodyFromLocalStorage || props.meta.stickByDefault);
   }
   await agentStore.fetchSessionsList();
-  agentStore.setFullScreen(true);
 });
 
 function autoResize() {
