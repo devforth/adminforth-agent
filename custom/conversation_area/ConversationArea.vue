@@ -1,5 +1,6 @@
 <template>
-  <button @click="handleSendMessage">Send Message</button>
+  <!-- Scroll height:{{ scrollHeight }}
+  Spacer height:{{ spacerHeight }} -->
   <SessionsHistory 
     :class="agentStore.isSessionHistoryOpen ? 'translate-x-0' : '-translate-x-full'"
   />
@@ -52,7 +53,7 @@
         <p>{{ $t('Start the conversation') }}</p>
         <p class="tracking-normal text-base text">{{ $t('Give any input to begin') }}</p>
       </div>
-      <div class="w-full" :style="{ height: spacerHeight + 'px' }"></div>
+      <div v-if="showBottomSpacer" class="w-full" :style="{ height: spacerHeight + 'px' }"></div>
     </CustomAutoScrollContainer>
     <button @click="scrollContainer.scrollToBottom();">
       <IconArrowDownOutline 
@@ -96,6 +97,7 @@ const showBottomSpacer = ref(false);
 const spacerHeight = ref(0);
 const scrollHeightBeforeChatResponse = ref(0);
 const lastUserMessageHeight = ref(0);
+const MASK_HEIGHT = 20;
 
 function resetSpacer() {
   showBottomSpacer.value = false;
@@ -105,24 +107,28 @@ function resetSpacer() {
 }
 
 watch(() => agentStore.activeSessionId, (newValue) => {
-  console.log('Active session changed, resetting spacer and scroll parameters.');
   resetSpacer();
 });
 
 function getHeightOfLastUserMessage() {
   const lastUserMessageIndex = props.messages.findLastIndex((msg: IMessage) => msg.role === 'user');
   const lastUserMessageElement = messagesRefs.value[lastUserMessageIndex];
-  console.log('Last user message element:', lastUserMessageElement);
-  console.log('Last user message height:', lastUserMessageElement ? lastUserMessageElement.clientHeight : 'N/A');
   if (lastUserMessageElement) {
     return  lastUserMessageElement.clientHeight;
   }
 }
 
+function getHeightOfLastAgentMessage() {
+  const lastAgentMessageIndex = props.messages.findLastIndex((msg: IMessage) => msg.role === 'assistant');
+  const lastAgentMessageElement = messagesRefs.value[lastAgentMessageIndex];
+  if (lastAgentMessageElement) {
+    return  lastAgentMessageElement.clientHeight;
+  }
+}
+
 async function handleSendMessage() {
-  lastUserMessageHeight.value = getHeightOfLastUserMessage();
+  lastUserMessageHeight.value = getHeightOfLastUserMessage() + MASK_HEIGHT;
   const clientHeight = scrollContainer.value ? scrollContainer.value.scrollParams.clientHeight : 0;
-  console.log('Client height:', clientHeight, 'Last user message height:', lastUserMessageHeight.value);
   if (clientHeight) {
     showBottomSpacer.value = true;
     spacerHeight.value = clientHeight - lastUserMessageHeight.value;
@@ -138,22 +144,27 @@ const scrollHeight = computed(() => {
 
 const lastScrollHeight = ref(0);
 let skipNextScrollAdjustment = false;
+
 watch(scrollHeight, (newScrollHeight) => {
   if (skipNextScrollAdjustment) {
     skipNextScrollAdjustment = false;
     lastScrollHeight.value = newScrollHeight;
     return;
   }
-  if (!agentStore.isResponseInProgress) {
-    lastScrollHeight.value = newScrollHeight;
-    return;
-  }
+  // if (!agentStore.isResponseInProgress) {
+  //   lastScrollHeight.value = newScrollHeight;
+  //   return;
+  // }
   if (lastScrollHeight.value === 0) {
     lastScrollHeight.value = newScrollHeight;
     return;
   }
-  const heightDifference = newScrollHeight - lastScrollHeight.value;
-  spacerHeight.value = spacerHeight.value - heightDifference;
+  const lastUserMessageHeight = getHeightOfLastUserMessage() + MASK_HEIGHT;
+  const lastAgentMessageHeight = getHeightOfLastAgentMessage();
+  // console.log('Last agent message height:', lastAgentMessageHeight);
+  const clientHeight = scrollContainer.value ? scrollContainer.value.scrollParams.clientHeight : 0;
+  spacerHeight.value = clientHeight - (lastUserMessageHeight + lastAgentMessageHeight);
+  // console.log('Calculated spacer height:', spacerHeight.value);
   lastScrollHeight.value = newScrollHeight;
   skipNextScrollAdjustment = true;
 });
