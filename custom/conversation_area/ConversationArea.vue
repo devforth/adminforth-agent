@@ -94,6 +94,7 @@ const messagesRefs = ref<Array<HTMLElement | null>>([]);
 const showBottomSpacer = ref(false);
 const spacerHeight = ref(0);
 const MASK_HEIGHT = 20;
+const EMPTY_MESSAGE_HEIGHT = 18;
 let messageResizeObserver: ResizeObserver | null = null;
 let observedLastUserMessageElement: HTMLElement | null = null;
 let observedLastAgentMessageElement: HTMLElement | null = null;
@@ -124,7 +125,21 @@ function getScrollClientHeight() {
   return scrollContainer.value?.container.scrollEl.clientHeight ?? scrollContainer.value?.scrollParams.clientHeight ?? 0;
 }
 
-function updateSpacerHeight() {
+async function waitForRealHeight(role: 'user' | 'assistant'): Promise<number> {
+  return new Promise((resolve) => {
+    const interval = setInterval(() => {
+      const height = role === 'user' ? getHeightOfLastUserMessage() : getHeightOfLastAgentMessage();
+
+      if (height > EMPTY_MESSAGE_HEIGHT) {
+        clearInterval(interval);
+        resolve(height);
+      }
+    }, 50);
+  });
+}
+
+const useWaitingForHeight = ref(false);
+async function updateSpacerHeight() {
   if (!showBottomSpacer.value) {
     return;
   }
@@ -134,9 +149,11 @@ function updateSpacerHeight() {
   if (!clientHeight) {
     return;
   }
-  console.log('Client height:', clientHeight, 'Last user message height:', getHeightOfLastUserMessage(), 'Last agent message height:', getHeightOfLastAgentMessage());
-  spacerHeight.value = Math.max(0, clientHeight - (getHeightOfLastUserMessage() + MASK_HEIGHT + getHeightOfLastAgentMessage()));
-  console.log('Updated spacer height:', spacerHeight.value);
+
+  const lastUserMessageHeight = useWaitingForHeight.value ? await waitForRealHeight('user') : getHeightOfLastUserMessage();
+  const lastAgentMessageHeight = useWaitingForHeight.value ? await waitForRealHeight('assistant') : getHeightOfLastAgentMessage();
+
+  spacerHeight.value = Math.max(0, clientHeight - (lastUserMessageHeight + MASK_HEIGHT + lastAgentMessageHeight));
 }
 
 function stopObservingLastMessages() {
@@ -177,7 +194,7 @@ function observeLastMessages() {
 async function refreshSpacerTracking() {
   await nextTick();
   observeLastMessages();
-  updateSpacerHeight();
+  await updateSpacerHeight();
 }
 
 async function handleSendMessage() {
@@ -185,7 +202,11 @@ async function handleSendMessage() {
 
   if (clientHeight) {
     showBottomSpacer.value = true;
-    updateSpacerHeight();
+    useWaitingForHeight.value = true;
+    setTimeout(() => {
+      useWaitingForHeight.value = false;
+    }, 1000);
+    await updateSpacerHeight();
     await nextTick();
     scrollContainer.value?.scrollToBottom();
   }
