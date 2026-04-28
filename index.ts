@@ -76,6 +76,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
   options: PluginOptions;
   apiBasedTools: Record<string, ApiBasedTool> = {};
   agentSystemPromptPromise: Promise<string>;
+  pluginsScope: "resource" | "global" = "global";
   private checkpointer: BaseCheckpointSaver | null = null;
   private readonly modelsByModeName = new Map<
     string,
@@ -181,8 +182,8 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     this.shouldHaveSingleInstancePerWholeApp = () => false;
   }
 
-  async modifyResourceConfig(adminforth: IAdminForth, resourceConfig: AdminForthResource) {
-    super.modifyResourceConfig(adminforth, resourceConfig);
+  async modifyGlobalConfig(adminforth: IAdminForth) {
+    super.modifyGlobalConfig(adminforth);
     if (!this.options.modes?.length) {
       throw new Error("modes is required for AdminForthAgentPlugin");
     }
