@@ -21,8 +21,9 @@
         v-show="isExpanded"
         :threshold="5"
         :wrapperStyle="{
-          marginRight: '8rem',
+          marginRight: '1rem',
         }"
+        :scrollBarAutoHide="false"
       >
         <ol class="ml-8 my-2 relative border-l border-l-2 border-black border-default border-listTableHeadingText dark:border-darkListTableHeadingText">
           <template v-for="(part, index) in ToolOrReasoningParts" :key="index">

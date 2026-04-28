@@ -4,6 +4,7 @@
     class="auto-scroll-container mask-y"
     :wrapperStyle = "wrapperStyle" 
     :contentStyle = "contentStyle"
+    :autoHide = "scrollBarAutoHide"
     @scroll="handleScroll"
   >
     <slot />
@@ -28,10 +29,12 @@ const props = withDefaults(defineProps<{
   behavior?: ScrollBehavior
   wrapperStyle?: Record<string, string>
   contentStyle?: Record<string, string>
+  scrollBarAutoHide?: boolean
 }>(), {
   enabled: true,
   threshold: 50,
-  behavior: 'instant'
+  behavior: 'instant',
+  scrollBarAutoHide: true
 })
 
 const containerRef = ref<HTMLDivElement | null>(null)
@@ -152,5 +155,9 @@ defineExpose({
       black calc(100% - 1.25rem),
       transparent
     );
+  }
+
+  .scrollbar__thumb {
+    border-radius: 0.25rem;
   }
 </style>
