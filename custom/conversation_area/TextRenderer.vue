@@ -1,10 +1,10 @@
 <template>
   <div
-    class="max-w-[80%] flex px-4 m-2 rounded-xl border border-gray-200 dark:border-gray-700"
+    class="flex px-4 m-2 rounded-xl border border-gray-200 dark:border-gray-700"
     @click="handleMarkdownLinkClick"
     :class="[
       hasVegaLite ? 'w-full' : '',
-      props.role === 'user' ? 'bg-lightListTableHeading dark:bg-darkListTableHeading self-end' 
+      props.role === 'user' ? 'bg-lightListTableHeading dark:bg-darkListTableHeading self-end max-w-[80%]' 
         : 'border-none self-start'
     ]"
   >
