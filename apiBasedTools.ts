@@ -46,9 +46,11 @@ type GetResourceDataToolResponse = {
 };
 
 type DateTimeColumnType = AdminForthDataTypes.DATETIME | AdminForthDataTypes.TIME;
+type InternalApiOriginProvider = {
+  getInternalApiOrigin?: () => string | undefined;
+};
 
 const DEFAULT_USER_TIME_ZONE = 'UTC';
-const DEFAULT_REQUEST_PROTOCOL = process.env.NODE_ENV === 'production' ? 'https' : 'http';
 
 function getInputString(inputs: Record<string, unknown> | undefined, key: string) {
   const value = inputs?.[key];
@@ -580,22 +582,6 @@ const HEADERS_NOT_FORWARDED_TO_API_TOOL = new Set([
   'upgrade',
 ]);
 
-function getHeaderValue(
-  headers: Partial<HttpExtra>['headers'] | undefined,
-  headerName: string,
-) {
-  const normalizedHeaderName = headerName.toLowerCase();
-  const value = Object.entries(headers ?? {}).find(
-    ([name]) => name.toLowerCase() === normalizedHeaderName,
-  )?.[1];
-
-  if (typeof value !== 'string') {
-    return undefined;
-  }
-
-  return value.split(',')[0].trim();
-}
-
 function isAbsoluteHttpUrl(value: string) {
   try {
     const url = new URL(value);
@@ -605,42 +591,25 @@ function isAbsoluteHttpUrl(value: string) {
   }
 }
 
-function getRequestOrigin(httpExtra?: Partial<HttpExtra>) {
-  const requestUrl = httpExtra?.requestUrl;
-
-  if (requestUrl && isAbsoluteHttpUrl(requestUrl)) {
-    return new URL(requestUrl).origin;
-  }
-
-  const host = getHeaderValue(httpExtra?.headers, 'x-forwarded-host')
-    ?? getHeaderValue(httpExtra?.headers, 'host');
-
-  if (!host) {
-    return undefined;
-  }
-
-  const protocol = getHeaderValue(httpExtra?.headers, 'x-forwarded-proto') ?? DEFAULT_REQUEST_PROTOCOL;
-  return `${protocol}://${host}`;
-}
-
 function resolveOpenApiRequestUrl(params: {
-  httpExtra?: Partial<HttpExtra>;
+  adminforth: IAdminForth;
   path: string;
   toolName: string;
 }) {
-  if (isAbsoluteHttpUrl(params.path)) {
-    return params.path;
+  const internalApiOrigin = (params.adminforth.express as InternalApiOriginProvider)
+    .getInternalApiOrigin?.();
+
+  if (internalApiOrigin) {
+    const path = isAbsoluteHttpUrl(params.path)
+      ? `${new URL(params.path).pathname}${new URL(params.path).search}`
+      : params.path;
+
+    return new URL(path, internalApiOrigin).toString();
   }
 
-  const origin = getRequestOrigin(params.httpExtra);
-
-  if (!origin) {
-    throw new Error(
-      `Tool "${params.toolName}" has relative OpenAPI path "${params.path}" but request host header is unavailable.`,
-    );
-  }
-
-  return new URL(params.path, origin).toString();
+  throw new Error(
+    `Tool "${params.toolName}" cannot call OpenAPI path "${params.path}" because internal API origin is unavailable.`,
+  );
 }
 
 function createToolRequestHeaders(
@@ -736,7 +705,7 @@ async function callOpenApiSchema(params: {
     userTimeZone,
   );
   const requestUrl = resolveOpenApiRequestUrl({
-    httpExtra,
+    adminforth,
     path: schema.path,
     toolName,
   });
