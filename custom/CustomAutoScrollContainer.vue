@@ -15,13 +15,7 @@
 import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import CustomScrollbar from 'custom-vue-scrollbar';
 import 'custom-vue-scrollbar/dist/style.css';
-import { useAgentStore } from './composables/useAgentStore';
 
-const scrollParams = ref({
-  scrollTop: 0,
-  scrollHeight: 0,
-  clientHeight: 0
-});
 
 const props = withDefaults(defineProps<{
   enabled?: boolean
@@ -43,6 +37,57 @@ const scrollElement = ref<HTMLElement | null>(null)
 
 let lastScrollTop = 0
 let lastScrollHeight = 0
+let observer: MutationObserver | null = null
+
+const scrollParams = ref({
+  scrollTop: 0,
+  scrollHeight: 0,
+  clientHeight: 0
+});
+
+defineExpose({
+  scrollToBottom: () => scrollToBottom(true),
+  isUserScrolledUp: () => isUserScrolledUp.value,
+  container: containerRef,
+  handleScroll,
+  scrollParams
+})
+
+onMounted(() => {
+  if (!containerRef.value) return
+  
+  scrollElement.value = containerRef.value.scrollEl
+  lastScrollTop = containerRef.value.scrollEl.scrollTop
+  lastScrollHeight = containerRef.value.scrollEl.scrollHeight
+  
+  observer = new MutationObserver(() => {
+    nextTick(() => {
+      if (!containerRef.value?.scrollEl) return
+      
+      if (!hasScrollbar()) {
+        isUserScrolledUp.value = false
+      }
+      
+      lastScrollHeight = containerRef.value.scrollEl.scrollHeight
+      scrollParams.value.scrollTop = containerRef.value.scrollEl.scrollTop
+      scrollParams.value.scrollHeight = containerRef.value.scrollEl.scrollHeight
+      scrollParams.value.clientHeight = containerRef.value.scrollEl.clientHeight
+      if (props.enabled && !isUserScrolledUp.value) {
+        scrollToBottom()
+      }
+    })
+  })
+  
+  observer.observe(containerRef.value?.scrollEl, {
+    childList: true,
+    subtree: true,
+    characterData: true
+  })
+})
+
+onUnmounted(() => {
+  observer?.disconnect()
+})
 
 function isNearBottom(): boolean {
   const container = containerRef.value?.scrollEl
@@ -99,51 +144,6 @@ function handleScroll(detectScrollDown = true): void {
   lastScrollHeight = scrollHeight
 }
 
-let observer: MutationObserver | null = null
-
-onMounted(() => {
-  if (!containerRef.value) return
-  
-  scrollElement.value = containerRef.value.scrollEl
-  lastScrollTop = containerRef.value.scrollEl.scrollTop
-  lastScrollHeight = containerRef.value.scrollEl.scrollHeight
-  
-  observer = new MutationObserver(() => {
-    nextTick(() => {
-      if (!containerRef.value?.scrollEl) return
-      
-      if (!hasScrollbar()) {
-        isUserScrolledUp.value = false
-      }
-      
-      lastScrollHeight = containerRef.value.scrollEl.scrollHeight
-      scrollParams.value.scrollTop = containerRef.value.scrollEl.scrollTop
-      scrollParams.value.scrollHeight = containerRef.value.scrollEl.scrollHeight
-      scrollParams.value.clientHeight = containerRef.value.scrollEl.clientHeight
-      if (props.enabled && !isUserScrolledUp.value) {
-        scrollToBottom()
-      }
-    })
-  })
-  
-  observer.observe(containerRef.value?.scrollEl, {
-    childList: true,
-    subtree: true,
-    characterData: true
-  })
-})
-
-onUnmounted(() => {
-  observer?.disconnect()
-})
-
-defineExpose({
-  scrollToBottom: () => scrollToBottom(true),
-  isUserScrolledUp: () => isUserScrolledUp.value,
-  container: containerRef,
-  handleScroll,
-  scrollParams
-})
 </script>
 
 <style>

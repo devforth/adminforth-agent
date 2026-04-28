@@ -178,14 +178,14 @@
 <script setup lang="ts">
 import { IconChatBubbleLeft20Solid, IconSparklesSolid, IconArrowsPointingOut, IconArrowsPointingIn } from '@iconify-prerendered/vue-heroicons';
 import { IconCloseOutline, IconBarsOutline, IconArrowUpOutline, IconCloseSidebarSolid, IconOpenSidebarSolid, IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
-import { useTemplateRef, onMounted, ref,computed } from 'vue';
+import { useTemplateRef, onMounted, ref } from 'vue';
 import { onClickOutside } from '@vueuse/core'
 import ConversationArea from './conversation_area/ConversationArea.vue';
 import { useAgentStore } from './composables/useAgentStore';
 import { useAgentTransitions } from './composables/useAgentTransitions';
 import { Button } from '@/afcl';
 import { useCoreStore } from '@/stores/core';
-import { remToPx, pxToRem } from './utils';
+import { remToPx } from './utils';
 
 const props = defineProps<{
   meta: {
@@ -209,6 +209,23 @@ const coreStore = useCoreStore();
 const isModeMenuOpen = ref(false);
 let startX = 0
 let startWidth = 0
+
+onClickOutside(chatSurface, () => {if (!agentStore.isTeleportedToBody) agentStore.setIsChatOpen(false);});
+onClickOutside(modeMenu, () => { isModeMenuOpen.value = false; });
+
+onMounted(async () => {
+  agentStore.setAvailableModes(props.meta.modes, props.meta.defaultModeName);
+  agentStore.regisrerTextInput(textInput.value);
+  textInput.value?.focus();
+  const isTeleportedToBodyFromLocalStorage = agentStore.getLocalStorageItem('isTeleportedToBody') === 'true' || agentStore.getLocalStorageItem('isTeleportedToBodyBeforeFullScreen') === 'true';
+  if( coreStore.isMobile ) {
+    agentStore.setIsTeleportedToBody(false);
+  } else {
+    agentStore.setIsTeleportedToBody(isTeleportedToBodyFromLocalStorage || props.meta.stickByDefault);
+  }
+  await agentStore.fetchSessionsList();
+});
+
 
 const startResize = (e: MouseEvent) => {
   startX = e.clientX
@@ -241,22 +258,6 @@ const stopResize = () => {
     agentTransitions.setChatSurfaceTransition(false);
   }
 }
-
-onClickOutside(chatSurface, () => {if (!agentStore.isTeleportedToBody) agentStore.setIsChatOpen(false);});
-onClickOutside(modeMenu, () => { isModeMenuOpen.value = false; });
-
-onMounted(async () => {
-  agentStore.setAvailableModes(props.meta.modes, props.meta.defaultModeName);
-  agentStore.regisrerTextInput(textInput.value);
-  textInput.value?.focus();
-  const isTeleportedToBodyFromLocalStorage = agentStore.getLocalStorageItem('isTeleportedToBody') === 'true' || agentStore.getLocalStorageItem('isTeleportedToBodyBeforeFullScreen') === 'true';
-  if( coreStore.isMobile ) {
-    agentStore.setIsTeleportedToBody(false);
-  } else {
-    agentStore.setIsTeleportedToBody(isTeleportedToBodyFromLocalStorage || props.meta.stickByDefault);
-  }
-  await agentStore.fetchSessionsList();
-});
 
 function autoResize() {
   const el = textInput.value
