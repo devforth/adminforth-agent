@@ -51,7 +51,7 @@
           </header>
           <div class="select-all grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 px-3 py-3 font-mono text-xs leading-5 text-gray-700 dark:text-gray-200">
             <template v-for="line in section.lines" :key="`${section.label}-${line.number}`">
-              <span class=" text-[0.7rem] text-gray-400 dark:text-gray-500">{{ line.number }}</span>
+              <span class=" text-[0.7rem] text-gray-400 dark:text-gray-500 select-none">{{ line.number }}</span>
               <span class="whitespace-pre-wrap break-words">{{ line.content || ' ' }}</span>
             </template>
           </div>
