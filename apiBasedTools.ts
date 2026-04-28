@@ -48,6 +48,7 @@ type GetResourceDataToolResponse = {
 type DateTimeColumnType = AdminForthDataTypes.DATETIME | AdminForthDataTypes.TIME;
 
 const DEFAULT_USER_TIME_ZONE = 'UTC';
+const DEFAULT_REQUEST_PROTOCOL = process.env.NODE_ENV === 'production' ? 'https' : 'http';
 
 function getInputString(inputs: Record<string, unknown> | undefined, key: string) {
   const value = inputs?.[key];
@@ -618,7 +619,7 @@ function getRequestOrigin(httpExtra?: Partial<HttpExtra>) {
     return undefined;
   }
 
-  const protocol = getHeaderValue(httpExtra?.headers, 'x-forwarded-proto') ?? 'http';
+  const protocol = getHeaderValue(httpExtra?.headers, 'x-forwarded-proto') ?? DEFAULT_REQUEST_PROTOCOL;
   return `${protocol}://${host}`;
 }
 
@@ -740,11 +741,13 @@ async function callOpenApiSchema(params: {
     toolName,
   });
   const hasRequestBody = !METHODS_WITHOUT_REQUEST_BODY.has(method);
+  logger.info(`Calling OpenAPI tool "${toolName}" with method ${method} at URL ${requestUrl}`);
   const response = await fetch(hasRequestBody ? requestUrl : appendInputsToQueryString(requestUrl, body), {
     method,
     headers: createToolRequestHeaders(httpExtra, userTimeZone),
     body: hasRequestBody ? JSON.stringify(body) : undefined,
   });
+  logger.info(`Received response with status ${response.status} from OpenAPI tool "${toolName}"`);
 
   return parseOpenApiToolResponse(response);
 }
