@@ -619,7 +619,7 @@ function getRequestOrigin(httpExtra?: Partial<HttpExtra>) {
     return undefined;
   }
 
-  const protocol = getHeaderValue(httpExtra?.headers, 'x-forwarded-proto') ?? DEFAULT_REQUEST_PROTOCOL;
+  const protocol = DEFAULT_REQUEST_PROTOCOL;
   return `${protocol}://${host}`;
 }
 
