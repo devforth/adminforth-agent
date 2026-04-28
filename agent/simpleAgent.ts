@@ -267,7 +267,7 @@ export async function callAgent(params: {
     sequenceDebugMiddleware,
     summarizationMiddleware({
       model: summaryModel,
-      trigger: { tokens: 1024 * 128 },
+      trigger: { tokens: 1024 * 64 },
       keep: { messages: 10 },
     }),
   ] as const;
