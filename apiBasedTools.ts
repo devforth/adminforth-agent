@@ -48,6 +48,7 @@ type GetResourceDataToolResponse = {
 type DateTimeColumnType = AdminForthDataTypes.DATETIME | AdminForthDataTypes.TIME;
 
 const DEFAULT_USER_TIME_ZONE = 'UTC';
+const DEFAULT_REQUEST_PROTOCOL = process.env.NODE_ENV === 'production' ? 'https' : 'http';
 
 function getInputString(inputs: Record<string, unknown> | undefined, key: string) {
   const value = inputs?.[key];
@@ -618,7 +619,7 @@ function getRequestOrigin(httpExtra?: Partial<HttpExtra>) {
     return undefined;
   }
 
-  const protocol = getHeaderValue(httpExtra?.headers, 'x-forwarded-proto') ?? 'http';
+  const protocol = getHeaderValue(httpExtra?.headers, 'x-forwarded-proto') ?? DEFAULT_REQUEST_PROTOCOL;
   return `${protocol}://${host}`;
 }
 
