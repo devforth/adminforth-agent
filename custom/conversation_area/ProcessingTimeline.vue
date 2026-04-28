@@ -14,19 +14,21 @@
     </div>
     <transition name="expand" class="max-h-96 overflow-y-auto mb-4 pt-1">
       <CustomAutoScrollContainer
-        :enabled="true"
+        ref="scrollContainerRef"
+        :enabled="isResponseInProgress"
         behavior="smooth"
         v-if="ToolOrReasoningParts.length > 0" 
         v-show="isExpanded"
+        :threshold="5"
         :wrapperStyle="{
           marginRight: '8rem',
         }"
       >
-        <ol class="ml-8 relative border-l border-l-2 border-black border-default border-listTableHeadingText dark:border-darkListTableHeadingText">
-          <li class="mb-6 ms-2 z-50" v-for="(part, index) in ToolOrReasoningParts" :key="index"> 
+        <ol class="ml-8 my-2 relative border-l border-l-2 border-black border-default border-listTableHeadingText dark:border-darkListTableHeadingText">
+          <template v-for="(part, index) in ToolOrReasoningParts" :key="index">
             <ReasoningRenderer v-if="part.type === 'reasoning'" :state="part.state" :text="part.text" />
-            <ToolsGroup v-else :toolGroup="groupToolCallParts(message, part)" />
-          </li>      
+            <ToolsGroup v-else-if="part.type==='data-tool-call'" :toolGroup="groupToolCallParts(message, part)" />
+          </template>
         </ol>
       </CustomAutoScrollContainer>
     </transition>
@@ -37,7 +39,7 @@
 
 <script setup lang="ts">
   import type { IFormattedToolCallPart, IMessage, IPart, IToolGroup } from '../types';
-  import { ref, computed, watch, defineAsyncComponent, onMounted } from 'vue';
+  import { ref, computed, watch, onUnmounted, onMounted } from 'vue';
   import ReasoningRenderer from './ReasoningRenderer.vue';
   import { IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
   import ThreeDotsAnimation from './ThreeDotsAnimation.vue';
@@ -51,14 +53,34 @@
     isLastMessageInChat: boolean
   }>()
 
-  // const AutoScrollContainer = defineAsyncComponent(() => import('@incremark/vue').then(module => module.AutoScrollContainer))
   const agentStore = useAgentStore();
   const thinkingStartTime = ref<number | null>(null);
   const thinkingDuration = ref(0);
+  const scrollContainerRef = ref<InstanceType<typeof CustomAutoScrollContainer> | null>(null);
+  const innerScrollContainerRef = ref<HTMLElement | null>(null);
 
   onMounted(() => {
     thinkingStartTime.value = Date.now();
   })
+
+  watch(scrollContainerRef, async () => {
+    if (innerScrollContainerRef.value) {
+      innerScrollContainerRef.value.removeEventListener('scroll', handleScroll);
+    }
+
+    if (scrollContainerRef.value) {
+      innerScrollContainerRef.value = scrollContainerRef.value.container.scrollEl;
+      innerScrollContainerRef.value.addEventListener('scroll', handleScroll);
+    }
+  })
+
+  onUnmounted(() => {
+    scrollContainerRef.value?.container.scrollEl?.removeEventListener('scroll', handleScroll);
+  })
+
+  function handleScroll() {
+    scrollContainerRef.value?.handleScroll();
+  }
 
   const ToolOrReasoningParts = computed(() => {
     return props.message.parts.filter((part: IPart) => part.type === 'data-tool-call' || part.type === 'reasoning');

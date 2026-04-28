@@ -93,7 +93,8 @@
         <div 
           class="relative flex-1 min-h-0 flex flex-col overflow-hidden"
         >
-          <ConversationArea 
+          <ConversationArea
+            ref="conversationArea" 
             v-if="agentStore.isChatOpen"
             :messages="agentStore.chatMessages"
           />
@@ -105,13 +106,13 @@
               transition: `transform ${agentTransitions.TRANSITION_DURATION}ms ease-in-out`
             }"            
           >
-            <div class="w-full border rounded-lg pb-8">
+            <div class="w-full border rounded-lg pb-8 dark:bg-gray-700">
               <textarea
                 v-model="agentStore.userMessageInput"
                 ref="textInput"
                 @input="autoResize"
                 :class="[
-                  'min-h-12 px-4 pt-4  w-full resize-none overflow-hidden text-lightInputText dark:text-darkInputText rounded-md bg-transparent text-sm bg-gray-50 dark:bg-gray-700 dark:border-gray-600 focus:outline-none',
+                  'min-h-12 px-4 pt-4 rounded-xl w-full resize-none overflow-hidden text-lightInputText dark:text-darkInputText rounded-md bg-transparent text-sm bg-gray-50 dark:bg-gray-700 dark:border-gray-600 focus:outline-none',
                 ]"
                 :placeholder="agentStore.userMessagePlaceholder"
                 @keydown.enter.exact.prevent="sendMessage"
@@ -201,6 +202,7 @@ const props = defineProps<{
 const chatSurface = useTemplateRef('chatSurface');
 const textInput = useTemplateRef('textInput');
 const modeMenu = useTemplateRef('modeMenu');
+const conversationArea = useTemplateRef('conversationArea');
 const agentStore = useAgentStore();
 const agentTransitions = useAgentTransitions();
 const coreStore = useCoreStore();
@@ -254,7 +256,6 @@ onMounted(async () => {
     agentStore.setIsTeleportedToBody(isTeleportedToBodyFromLocalStorage || props.meta.stickByDefault);
   }
   await agentStore.fetchSessionsList();
-  agentStore.setFullScreen(true);
 });
 
 function autoResize() {
@@ -286,6 +287,7 @@ async function sendMessage() {
   isModeMenuOpen.value = false;
   await agentStore.sendMessage();
   autoResize();
+  conversationArea.value?.handleSendMessage();
 }
 
 </script>
