@@ -213,6 +213,14 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     return this.checkpointer;
   }
 
+  private getInternalAgentResourceIds() {
+    return [
+      this.options.sessionResource.resourceId,
+      this.options.turnResource.resourceId,
+      this.options.checkpointResource?.resourceId,
+    ].filter((resourceId): resourceId is string => Boolean(resourceId));
+  }
+
   constructor(options: PluginOptions) {
     super(options, import.meta.url);
     this.options = options;
@@ -245,7 +253,10 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
   }
   
   validateConfigAfterDiscover(adminforth: IAdminForth, resourceConfig: AdminForthResource) {
-    this.agentSystemPromptPromise = buildAgentSystemPrompt(adminforth)
+    this.agentSystemPromptPromise = buildAgentSystemPrompt(
+      adminforth,
+      this.getInternalAgentResourceIds(),
+    )
       .then((systemPrompt) => appendCustomSystemPrompt(systemPrompt, this.options.systemPrompt));
   }
 
@@ -392,7 +403,10 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             formatAdminUserPrompt(adminUser, this.adminforth.config.auth.usernameField),
             formatLanguagePrompt(userLanguage),
           ].join("\n\n");
-          const apiBasedTools = buildApiBasedTools(this.adminforth);
+          const apiBasedTools = buildApiBasedTools(
+            this.adminforth,
+            this.getInternalAgentResourceIds(),
+          );
           for (const toolName of ALWAYS_AVAILABLE_API_TOOL_NAMES) {
             assertRequiredApiTool(apiBasedTools, toolName);
           }
