@@ -4,7 +4,7 @@
     @click="handleMarkdownLinkClick"
     :class="[
       hasVegaLite ? 'w-full' : '',
-      props.role === 'user' ? 'bg-lightListTableHeading dark:bg-darkListTableHeading self-end max-w-[80%]' 
+      props.role === 'user' ? 'bg-lightListTableHeading dark:bg-darkListTableHeading self-end max-w-[80%] mr-4' 
         : 'border-none self-start'
     ]"
   >

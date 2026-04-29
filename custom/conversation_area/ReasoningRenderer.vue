@@ -1,5 +1,5 @@
 <template>
-  <li class="mb-6 ms-2 z-50 overflow-hidden">
+  <li class="mb-6 mx-2 mt-2 px-2 z-50 overflow-hidden">
     <span class="bg-lightNavbar dark:bg-darkNavbar absolute flex items-center text-listTableHeadingText dark:text-darkListTableHeadingText justify-center w-5 h-5 bg-brand-softer rounded-full -start-[0.68rem] ring-4 ring-lightNavbar dark:ring-darkNavbar ring-default">
       <div class="w-5 h-5 rounded-full flex items-center justify-center">
         <IconBrainOutline class="w-4 h-4" />
