@@ -163,6 +163,10 @@ a.incremark-link::after {
   mask-size: contain;
 }
 
+.incremark-table a.incremark-link {
+  word-break: break-word;
+}
+
 .incremark-list {
   list-style: disc;
 }
