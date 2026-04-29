@@ -81,13 +81,22 @@
               @click="agentStore.setFullScreen(false)" 
             />
           </div>
-
-          <IconCloseOutline 
-            class="m-2 w-8 h-8 p-1 cursor-pointer hover:scale-110 rounded transition-colors duration-200
-              text-lightNavbarIcons hover:text-lightNavbarIcons/80 hover:bg-lightNavbarIcons/20 
-              dark:text-darkNavbarIcons hover:text-darkNavbarIcons/80 hover:bg-darkNavbarIcons/20 " 
-            @click="agentStore.setIsChatOpen(false)" 
-          />
+          <div class="flex items-center justify-center">
+            <Button 
+              @click="agentStore.createPreSession(); agentStore.setSessionHistoryOpen(false); agentStore.focusTextInput();" 
+              :disabled="agentStore.isResponseInProgress" 
+              class="!py-2 !px-2 rounded-3xl text-gray-800 dark:text-gray-200 max-w-64 mr-2"
+            >
+              <IconPlusOutline class="w-5 h-5" />
+              {{ $t('New chat') }}
+            </Button>
+            <IconCloseOutline 
+              class="m-2 w-8 h-8 p-1 cursor-pointer hover:scale-110 rounded transition-colors duration-200
+                text-lightNavbarIcons hover:text-lightNavbarIcons/80 hover:bg-lightNavbarIcons/20 
+                dark:text-darkNavbarIcons hover:text-darkNavbarIcons/80 hover:bg-darkNavbarIcons/20 " 
+              @click="agentStore.setIsChatOpen(false)" 
+            />
+          </div>
 
         </div>
         <div 
@@ -177,7 +186,7 @@
 
 <script setup lang="ts">
 import { IconChatBubbleLeft20Solid, IconSparklesSolid, IconArrowsPointingOut, IconArrowsPointingIn } from '@iconify-prerendered/vue-heroicons';
-import { IconCloseOutline, IconBarsOutline, IconArrowUpOutline, IconCloseSidebarSolid, IconOpenSidebarSolid, IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
+import { IconCloseOutline, IconBarsOutline, IconArrowUpOutline, IconCloseSidebarSolid, IconOpenSidebarSolid, IconAngleDownOutline, IconPlusOutline } from '@iconify-prerendered/vue-flowbite';
 import { useTemplateRef, onMounted, ref } from 'vue';
 import { onClickOutside } from '@vueuse/core'
 import ConversationArea from './conversation_area/ConversationArea.vue';

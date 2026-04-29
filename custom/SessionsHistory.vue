@@ -7,14 +7,6 @@
   >
     <h3 :class="h3Style">{{ $t('Chat history') }}</h3>
     <div class="w-full flex items-center justify-center">
-      <Button 
-        @click="agentStore.createPreSession(); agentStore.setSessionHistoryOpen(false); agentStore.focusTextInput();" 
-        :disabled="agentStore.isResponseInProgress" 
-        class="w-[90%] my-2 mb-4 rounded-3xl text-gray-800 dark:text-gray-200"
-      >
-        <IconPlusOutline class="w-5 h-5" />
-        {{ $t('New chat') }}
-      </Button>
     </div>
     <div class="w-full border-b border-gray-200 dark:border-gray-700"/>
     <div class="absolute w-full h-full flex flex-col items-center justify-center bg-gray-100/50 dark:bg-gray-700/50 z-10" v-if="agentStore.isResponseInProgress">
@@ -62,7 +54,7 @@ import { useAgentStore } from './composables/useAgentStore';
 
 const agentStore = useAgentStore();
 
-const h3Style = "text-gray-800 dark:text-gray-200 font-medium text-xl tracking-widest mt-4"
+const h3Style = "text-gray-800 dark:text-gray-200 font-medium text-xl tracking-widest my-2"
 
 const dayLabelFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
 const dayLabelWithYearFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
