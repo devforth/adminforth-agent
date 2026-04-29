@@ -85,7 +85,7 @@
             <Button 
               @click="agentStore.createPreSession(); agentStore.setSessionHistoryOpen(false); agentStore.focusTextInput();" 
               :disabled="agentStore.isResponseInProgress" 
-              class="!py-2 !px-2 rounded-3xl text-gray-800 dark:text-gray-200 max-w-64 mr-2"
+              class="!py-1 !px-2 rounded-3xl text-gray-800 dark:text-gray-200 max-w-64 mr-2"
             >
               <IconPlusOutline class="w-5 h-5" />
               {{ $t('New chat') }}
