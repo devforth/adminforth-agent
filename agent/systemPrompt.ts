@@ -58,17 +58,24 @@ function formatSkills(skills: AgentSkillManifest[], label: "skill_name" | "tool_
     .join("\n");
 }
 
-export async function buildAgentSystemPrompt(adminforth: IAdminForth) {
+export async function buildAgentSystemPrompt(
+  adminforth: IAdminForth,
+  hiddenResourceIds: Iterable<string> = [],
+) {
   const [primarySkills, defaultSkills] = await Promise.all([
     listProjectSkillManifests(adminforth.config.customization.customComponentsDir),
     listBundledSkillManifests(),
   ]);
   const alwaysAvailableTools = ALWAYS_AVAILABLE_API_TOOL_NAMES.join(", ");
   const adminBasePath = adminforth.config.baseUrlSlashed;
+  const hiddenResourceIdSet = new Set(hiddenResourceIds);
+  const visibleResources = adminforth.config.resources.filter(
+    (resource) => !hiddenResourceIdSet.has(resource.resourceId),
+  );
   const sections = [
     DEFAULT_AGENT_SYSTEM_PROMPT,
     `ADMIN_BASE_PATH: ${adminBasePath}`,
-    `List of resources:\n${formatResources(adminforth.config.resources)}`,
+    `List of resources:\n${formatResources(visibleResources)}`,
     `You have always-available base tools: ${alwaysAvailableTools}.`,
     primarySkills.length > 0
       ? `You have primary skills set:\n${formatSkills(primarySkills, "skill_name")}`

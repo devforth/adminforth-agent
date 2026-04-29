@@ -58,6 +58,15 @@ function getInputString(inputs: Record<string, unknown> | undefined, key: string
   return typeof value === 'string' && value ? value : undefined;
 }
 
+function isHiddenResourceCall(
+  hiddenResourceIds: ReadonlySet<string>,
+  inputs: Record<string, unknown> | undefined,
+) {
+  const resourceId = getInputString(inputs, 'resourceId');
+
+  return resourceId ? hiddenResourceIds.has(resourceId) : false;
+}
+
 function getInputArrayLength(inputs: Record<string, unknown> | undefined, key: string) {
   const value = inputs?.[key];
 
@@ -721,12 +730,16 @@ async function callOpenApiSchema(params: {
   return parseOpenApiToolResponse(response);
 }
 
-export function prepareApiBasedTools(adminforth: IAdminForth): Record<string, ApiBasedTool> {
+export function prepareApiBasedTools(
+  adminforth: IAdminForth,
+  hiddenResourceIds: Iterable<string> = [],
+): Record<string, ApiBasedTool> {
   const apiBasedTools: Record<string, ApiBasedTool> = {};
   const openApiSchemas = adminforth.openApi.registeredSchemas.filter(
     (schema) => schema.request_schema || schema.response_schema,
   );
   const openApiSchemasByToolName = new Map<string, IRegisteredApiSchema>();
+  const hiddenResourceIdSet = new Set(hiddenResourceIds);
 
   for (const schema of openApiSchemas) {
     const toolName = openApiSchemaPathToToolName(schema.path, adminforth);
@@ -749,6 +762,13 @@ export function prepareApiBasedTools(adminforth: IAdminForth): Record<string, Ap
       input_schma: schema.request_schema,
       output_schema: schema.response_schema,
       call: async ({ adminUser, adminuser, inputs, httpExtra, userTimeZone } = {}) => {
+        if (isHiddenResourceCall(hiddenResourceIdSet, inputs)) {
+          return YAML.stringify({
+            error: 'RESOURCE_NOT_AVAILABLE',
+            message: 'This resource is not available to the agent.',
+          });
+        }
+
         const invokeTool = async (
           nextToolName: string,
           nextParams: ToolOverrideCallParams = {},
