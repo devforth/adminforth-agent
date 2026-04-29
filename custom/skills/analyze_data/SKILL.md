@@ -1,14 +1,16 @@
 name: analyze_data
-description: Analyze AdminForth resource data, summarize trends, and compare distributions from fetched rows.
+description: Universal skill to analyze AdminForth resource data, summarize trends, and compare distributions from fetched rows.
 ---
 
 # Involved tools
 
-Use `get_resource` first if you need to inspect resource structure and column names.
+Always call `get_resource` first if you need to inspect resource structure and column names.
 
-Use `aggregate` to fetch data for analytics whenever possible. This is the main tool for fast server-side aggregations, including filtered data, grouped metrics, and date buckets such as day, week, or month.
+Then you need to select between two main tools for fetching data:
 
-Use `get_resource_data` only when the requested analysis cannot be answered with `aggregate`. This is heavier because it returns original rows with all fields, but it allows complex calculations, comparisons, and custom groupings in-memory.
+- Load and call `aggregate` tool to fetch data for analytics. This is the main tool for fast server-side aggregations, including filtered data, grouped metrics, and date buckets such as day, week, or month. Always prioritize this way of fetching data for analytics, as it is optimized for performance and reduces the amount of data transferred and processed in-memory.
+
+- Load and call `get_resource_data` tool only when the requested analysis cannot be answered with `aggregate`. This is heavier because it returns original rows with all fields, but it allows complex calculations, comparisons, and custom groupings in-memory.
 
 # Instructions
 
