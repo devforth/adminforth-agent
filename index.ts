@@ -1,4 +1,5 @@
 import type {
+  AdminUser,
   AdminForthResource,
   IAdminForth,
   IHttpServer
@@ -14,7 +15,6 @@ import {
   createAgentChatModel,
   callAgent,
   type AgentChatModel,
-  type AgentModeCompletionAdapter,
 } from "./agent/simpleAgent.js";
 import { AdminForthCheckpointSaver } from "./agent/checkpointer.js";
 import { createSequenceDebugCollector } from "./agent/middleware/sequenceDebug.js";
@@ -29,6 +29,17 @@ import {
 } from "./agent/systemPrompt.js";
 import { ALWAYS_AVAILABLE_API_TOOL_NAMES } from "./agent/tools/index.js";
 import type { ToolCallEvent } from "./agent/toolCallEvents.js";
+
+type CurrentPageRequestBody = {
+  currentPage?: CurrentPageContext;
+};
+
+type CurrentPageContext = {
+  path: string;
+  fullPath: string;
+  title: string;
+  url: string;
+};
 
 function isAggregateErrorLike(
   error: unknown,
@@ -56,6 +67,33 @@ function formatAgentError(error: unknown) {
   }
 
   return String(error);
+}
+
+function formatAdminUserPrompt(adminUser: AdminUser, usernameField: string) {
+  const dbUser = adminUser.dbUser as Record<string, unknown>;
+  const adminUserContext = {
+    id: adminUser.pk,
+    email: dbUser[usernameField],
+  };
+
+  return [
+    "Current admin user context:",
+    JSON.stringify(adminUserContext, null, 2),
+    "Use this admin user email when the user asks to send information to themselves, the current admin, or the logged-in user.",
+  ].join("\n");
+}
+
+function formatCurrentPagePrompt(currentPage: CurrentPageContext | undefined) {
+  console.log("Current page context:", currentPage);
+  if (!currentPage) {
+    return null;
+  }
+
+  return [
+    "Current user page context for the latest message:",
+    JSON.stringify(currentPage, null, 2),
+    "When the user says here, this page, current page, or opened page, treat it as this page.",
+  ].join("\n");
 }
 
 function assertRequiredApiTool(
@@ -248,6 +286,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         const messageId = randomUUID();
         const prompt = body.message;
         const userTimeZone = (body.timeZone as string | undefined) ?? 'UTC';
+        const currentPage = (body as CurrentPageRequestBody).currentPage;
         const sessionId = body.sessionId || adminUser?.pk || adminUser?.username || 'default';
         const turnId = await this.createNewTurn(sessionId, prompt);
         await this.updateSessionDate(sessionId);
@@ -340,13 +379,17 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           const selectedMode = this.options.modes.find((mode) => mode.name === body.mode) ?? this.options.modes[0];
           const { model, summaryModel, modelMiddleware } =
             await this.getModeModels(selectedMode, maxTokens);
-          const systemPrompt = await this.agentSystemPromptPromise;
+          const systemPrompt = [
+            await this.agentSystemPromptPromise,
+            formatAdminUserPrompt(adminUser, this.adminforth.config.auth.usernameField),
+          ].join("\n\n");
           const apiBasedTools = buildApiBasedTools(this.adminforth);
           for (const toolName of ALWAYS_AVAILABLE_API_TOOL_NAMES) {
             assertRequiredApiTool(apiBasedTools, toolName);
           }
           assertRequiredApiTool(apiBasedTools, "update_record");
           this.apiBasedTools = apiBasedTools;
+          const currentPagePrompt = formatCurrentPagePrompt(currentPage);
           const stream = await callAgent({
             name: `adminforth-agent-${this.pluginInstanceId}`,
             model,
@@ -355,6 +398,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             checkpointer: this.getCheckpointer(),
             messages: [
               new SystemMessage(systemPrompt),
+              ...(currentPagePrompt ? [new SystemMessage(currentPagePrompt)] : []),
               new HumanMessage(prompt),
             ],
             adminUser,

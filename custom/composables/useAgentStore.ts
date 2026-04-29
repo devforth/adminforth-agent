@@ -14,6 +14,15 @@ type AgentMode = {
   name: string;
 };
 
+function getCurrentPageContext() {
+  return {
+    path: window.location.pathname,
+    fullPath: `${window.location.pathname}${window.location.search}${window.location.hash}`,
+    title: document.title,
+    url: window.location.href,
+  };
+}
+
 const DEFAULT_TEXTAREA_PLACEHOLDER = 'Type a message...';
 const PLACEHOLDER_TYPING_DELAY_MS = 60;
 const PLACEHOLDER_DELETING_DELAY_MS = 35;
@@ -206,6 +215,7 @@ export const useAgentStore = defineStore('agent', () => {
               sessionId,
               timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
               mode: activeModeName.value,
+              currentPage: getCurrentPageContext(),
             };
 
             return {
