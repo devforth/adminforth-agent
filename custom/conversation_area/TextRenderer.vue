@@ -169,4 +169,8 @@ a.incremark-link::after {
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='currentColor' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M13 12H2m12 0l-4 4m4-4l-4-4'/%3E%3C/svg%3E") no-repeat center;
   mask-size: contain;
 }
+
+.incremark-list {
+  list-style: disc;
+}
 </style>
