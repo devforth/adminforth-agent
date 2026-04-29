@@ -89,7 +89,7 @@ onUnmounted(() => {
   observer?.disconnect()
 })
 
-function isNearBottom(): boolean {
+function isNearBottom(customThreshold?: number): boolean {
   const container = containerRef.value?.scrollEl
   if (!container) return true
   
@@ -97,7 +97,8 @@ function isNearBottom(): boolean {
   scrollParams.value.scrollTop = scrollTop
   scrollParams.value.scrollHeight = scrollHeight
   scrollParams.value.clientHeight = clientHeight
-  return scrollHeight - scrollTop - clientHeight <= props.threshold
+  const threshold = customThreshold ?? props.threshold
+  return scrollHeight - scrollTop - clientHeight <= threshold
 }
 
 function scrollToBottom(force = false): void {
@@ -119,7 +120,7 @@ function hasScrollbar(): boolean {
 }
 
 
-function handleScroll(detectScrollDown = true): void {
+function handleScroll(detectScrollDown = true, customThreshold?: number): void {
   const container = containerRef.value.scrollEl
   if (!container) return
   
@@ -130,7 +131,7 @@ function handleScroll(detectScrollDown = true): void {
     lastScrollHeight = scrollHeight
     return
   }
-  if (isNearBottom()) {
+  if (isNearBottom(customThreshold)) {
     isUserScrolledUp.value = false
   } else {
     const isScrollingUp = scrollTop < lastScrollTop

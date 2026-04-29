@@ -14,7 +14,7 @@
       :enabled="!showScrollToBottomButton" 
       class="relative h-full flex flex-col overflow-y-auto translate-x-[-50%] left-1/2"
       ref="scrollContainer"
-      :threshold="10"
+      :threshold="THRESHOLD_TO_SHOW_BUTTON"
       behavior="smooth"
       :wrapperStyle = "{ 
         height: '100%',
@@ -111,6 +111,7 @@ const showBottomSpacer = ref(false);
 const spacerHeight = ref(0);
 const MASK_HEIGHT = 20;
 const EMPTY_MESSAGE_HEIGHT = 18;
+const THRESHOLD_TO_SHOW_BUTTON = 10;
 let messageResizeObserver: ResizeObserver | null = null;
 let observedLastUserMessageElement: HTMLElement | null = null;
 let observedLastAgentMessageElement: HTMLElement | null = null;
@@ -275,7 +276,7 @@ async function handleSendMessage() {
 
 function recalculateScroll() {
   if (scrollContainer.value) {
-    scrollContainer.value.handleScroll(false);
+    scrollContainer.value.handleScroll(false,spacerHeight.value + THRESHOLD_TO_SHOW_BUTTON);
     const isScrolledUp = scrollContainer.value.isUserScrolledUp();
     showScrollToBottomButton.value = !!isScrolledUp;
   }
