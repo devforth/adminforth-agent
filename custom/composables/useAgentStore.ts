@@ -118,6 +118,10 @@ export const useAgentStore = defineStore('agent', () => {
     if (coreStore.isMobile) {
       setChatWidth(window.innerWidth);
     }
+    const ativeModeNameFromLocalStorage = getLocalStorageItem('activeModeName');
+    if (ativeModeNameFromLocalStorage) {
+      setActiveMode(ativeModeNameFromLocalStorage);
+    }
     appRoot.value = document.getElementById('app');
     header.value = document.getElementById('af-header-nav');
     if (appRoot.value && header.value) {
@@ -183,7 +187,7 @@ export const useAgentStore = defineStore('agent', () => {
     if (!availableModes.value.some((mode: AgentMode) => mode.name === modeName)) {
       return;
     }
-
+    setLocalStorageItem('activeModeName', modeName);
     activeModeName.value = modeName;
   }
 
