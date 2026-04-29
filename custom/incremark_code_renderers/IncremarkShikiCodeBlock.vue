@@ -39,7 +39,7 @@ import type { Code } from 'mdast';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import embed from 'vega-embed';
 
-import { highlightCodeSnippetHtml, type IncremarkCodeTheme } from './incremarkCodeHighlight';
+import type { IncremarkCodeTheme } from './incremarkCodeHighlight';
 
 const props = withDefaults(defineProps<{
   node: Code;
@@ -67,6 +67,7 @@ let renderRequestId = 0;
 let scheduledFrameId: number | null = null;
 let themeObserver: MutationObserver | null = null;
 let vegaResult: { finalize: () => void } | null = null;
+let highlightModulePromise: Promise<typeof import('./incremarkCodeHighlight')> | null = null;
 
 const sourceCode = computed(() => props.node.value ?? '');
 const language = computed(() => props.node.lang?.trim().toLowerCase() || 'text');
@@ -165,6 +166,14 @@ function scheduleHighlight() {
   });
 }
 
+function loadHighlightModule() {
+  if (!highlightModulePromise) {
+    highlightModulePromise = import('./incremarkCodeHighlight');
+  }
+
+  return highlightModulePromise;
+}
+
 async function renderHighlight() {
   const requestId = ++renderRequestId;
 
@@ -219,6 +228,7 @@ async function renderHighlight() {
   }
 
   try {
+    const { highlightCodeSnippetHtml } = await loadHighlightModule();
     const html = await highlightCodeSnippetHtml(sourceCode.value, language.value, codeTheme.value);
 
     if (requestId === renderRequestId) {
