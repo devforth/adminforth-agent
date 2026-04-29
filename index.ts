@@ -19,6 +19,10 @@ import {
 import { AdminForthCheckpointSaver } from "./agent/checkpointer.js";
 import { createSequenceDebugCollector } from "./agent/middleware/sequenceDebug.js";
 import {
+  detectUserLanguage,
+  formatLanguagePrompt,
+} from "./agent/languageDetect.js";
+import {
   prepareApiBasedTools as buildApiBasedTools,
 } from './apiBasedTools.js';
 import type { ApiBasedTool } from './apiBasedTools.js';
@@ -84,7 +88,6 @@ function formatAdminUserPrompt(adminUser: AdminUser, usernameField: string) {
 }
 
 function formatCurrentPagePrompt(currentPage: CurrentPageContext | undefined) {
-  console.log("Current page context:", currentPage);
   if (!currentPage) {
     return null;
   }
@@ -379,9 +382,15 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           const selectedMode = this.options.modes.find((mode) => mode.name === body.mode) ?? this.options.modes[0];
           const { model, summaryModel, modelMiddleware } =
             await this.getModeModels(selectedMode, maxTokens);
+          const userLanguage = await detectUserLanguage(selectedMode.completionAdapter, prompt)
+            .catch((error) => {
+              logger.warn(`Failed to detect user language: ${error instanceof Error ? error.message : String(error)}`);
+              return null;
+            });
           const systemPrompt = [
             await this.agentSystemPromptPromise,
             formatAdminUserPrompt(adminUser, this.adminforth.config.auth.usernameField),
+            formatLanguagePrompt(userLanguage),
           ].join("\n\n");
           const apiBasedTools = buildApiBasedTools(this.adminforth);
           for (const toolName of ALWAYS_AVAILABLE_API_TOOL_NAMES) {
