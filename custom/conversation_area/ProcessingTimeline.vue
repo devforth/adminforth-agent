@@ -4,7 +4,7 @@
       class="ml-2 px-4 flex items-center gap-1 cursor-pointer select-none hover:opacity-80 tracking-wide font-medium text-sm text-listTableHeadingText dark:text-darkListTableHeadingText"
       @click="isExpanded = !isExpanded"
     >
-      Thoughts
+      {{ $t('Thoughts') }}
       <span v-if="thinkingDuration > 0">({{ (thinkingDuration/1000).toFixed(2) }} s)</span>
       <ThreeDotsAnimation v-if="isResponseInProgress || showFakeThinkingMessage" />
       <IconAngleDownOutline 
@@ -59,9 +59,25 @@
   const thinkingDuration = ref(0);
   const scrollContainerRef = ref<InstanceType<typeof CustomAutoScrollContainer> | null>(null);
   const innerScrollContainerRef = ref<HTMLElement | null>(null);
+  const isExpanded = ref(true);
+  const ToolOrReasoningParts = computed(() => {
+    return props.message.parts.filter((part: IPart) => part.type === 'data-tool-call' || part.type === 'reasoning');
+  });
+  const isResponseInProgress = computed(() =>{
+    return props.isLastMessageInChat && agentStore.isResponseInProgress; 
+  });
+  
+  const showFakeThinkingMessage = computed(() => {
+    if (props.message.parts.length === 0) return true;
+    return false;
+  })
 
   onMounted(() => {
     thinkingStartTime.value = Date.now();
+  })
+
+  onUnmounted(() => {
+    scrollContainerRef.value?.container.scrollEl?.removeEventListener('scroll', handleScroll);
   })
 
   watch(scrollContainerRef, async () => {
@@ -75,34 +91,12 @@
     }
   })
 
-  onUnmounted(() => {
-    scrollContainerRef.value?.container.scrollEl?.removeEventListener('scroll', handleScroll);
-  })
-
-  function handleScroll() {
-    scrollContainerRef.value?.handleScroll();
-  }
-
-  const ToolOrReasoningParts = computed(() => {
-    return props.message.parts.filter((part: IPart) => part.type === 'data-tool-call' || part.type === 'reasoning');
-  });
-  const isExpanded = ref(true);
-
-  const isResponseInProgress = computed(() =>{
-    return props.isLastMessageInChat && agentStore.isResponseInProgress; 
-  });
-  
   watch(isResponseInProgress, (newValue: boolean) => {
     if (!newValue) {
       isExpanded.value = false;
       thinkingDuration.value = Date.now() - (thinkingStartTime.value ?? Date.now());
     }
   });
-  
-  const showFakeThinkingMessage = computed(() => {
-    if (props.message.parts.length === 0) return true;
-    return false;
-  })
 
   const formatToolCallPart = (part: IPart, currentMessage: IMessage): IFormattedToolCallPart | null => {
     if (part.type !== 'data-tool-call' || part.data?.phase !== 'start') {
@@ -182,7 +176,9 @@
     return groupedParts;
   };
 
-
+  function handleScroll() {
+    scrollContainerRef.value?.handleScroll();
+  }
 </script>
 
 <style scoped>

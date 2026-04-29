@@ -9,7 +9,7 @@
       <h3 
         class="flex items-center mb-1 text-sm my-2 ml-3 gap-1 text-listTableHeadingText dark:text-darkListTableHeadingText"      
       >
-        <span class="font-semibold select-none ">Call tools</span>
+        <span class="font-semibold select-none ">{{ $t('Call tools') }}</span>
       </h3>
       <div class="flex flex-wrap">
         <template v-for="group in props.toolGroup" :key="group.title">
@@ -23,23 +23,11 @@
 <script setup lang="ts">
 import ToolRenderer from './ToolRenderer.vue';
 import type { IToolGroup } from '../types';
-import { ref } from 'vue';
 import { IconWrenchSolid } from '@iconify-prerendered/vue-heroicons';
-
 
 const props = defineProps<{
   toolGroup: IToolGroup[]
 }>();
-
-const expandedGroups = ref<string[]>([]);
-
-function toggleGroup(groupTitle: string) {
-  if (expandedGroups.value.includes(groupTitle)) {
-    expandedGroups.value = expandedGroups.value.filter((title: string) => title !== groupTitle);
-  } else {
-    expandedGroups.value.push(groupTitle);
-  }
-}
 
 </script>
 

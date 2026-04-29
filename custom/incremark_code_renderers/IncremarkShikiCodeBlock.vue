@@ -12,7 +12,7 @@
         :disabled="!sourceCode"
         @click="copyCode"
       >
-        {{ copied ? 'Copied' : 'Copy' }}
+        {{ copied ? $t('Copied') : $t('Copy') }}
       </button>
     </div>
 

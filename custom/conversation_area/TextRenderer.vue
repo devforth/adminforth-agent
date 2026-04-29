@@ -17,39 +17,17 @@
       :incremark-options="incremarkOptions"
     />
     <p v-else class="text-red-500 py-2">
-      Error occurred
+      {{ $t('Error occurred') }}
     </p>
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup lang="ts">const isExpanded = ref(true);
+
   import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue';
   import { useRouter } from 'vue-router';
   import { useAgentStore } from '../composables/useAgentStore';
   import { useCoreStore } from '@/stores/core';
-
-  const IncremarkContent = defineAsyncComponent(() => import('@incremark/vue').then(module => module.IncremarkContent))
-  const ShikiCodeBlock = defineAsyncComponent(() => import('../incremark_code_renderers/IncremarkShikiCodeBlock.vue'))
-
-  const agentStore = useAgentStore();
-  const coreStore = useCoreStore();
-
-  const incremarkComponents = {
-    code: ShikiCodeBlock,
-  };
-
-  const incremarkOptions = {
-		gfm: true,
-		math: { tex: true },
-		containers: true,
-		htmlTree: true,
-	};
-
-  const router = useRouter();
-
-  onMounted(async () => {
-    void import('katex/dist/katex.min.css')
-  })
 
   const props = defineProps<{
     message: string | undefined,
@@ -59,12 +37,33 @@
 
   const emit = defineEmits(['toggle-thoughts']);
 
+  const IncremarkContent = defineAsyncComponent(() => import('@incremark/vue').then(module => module.IncremarkContent))
+  const ShikiCodeBlock = defineAsyncComponent(() => import('../incremark_code_renderers/IncremarkShikiCodeBlock.vue'))
+
+  const agentStore = useAgentStore();
+  const coreStore = useCoreStore();
+  const router = useRouter();
+
+  const isThoughtsExpanded = ref(true);
+
   const content = computed(() => props.message)
   const isFinished = computed(() => props.state === 'done')
-  const isThoughtsExpanded = ref(true);
   const hasVegaLite = computed(() => props.message?.includes('```vega-lite'))
-
   const isStateStreaming = computed(() => props.state === 'streaming')
+
+  const incremarkComponents = {
+    code: ShikiCodeBlock,
+  };
+  const incremarkOptions = {
+		gfm: true,
+		math: { tex: true },
+		containers: true,
+		htmlTree: true,
+	};
+
+  onMounted(async () => {
+    void import('katex/dist/katex.min.css')
+  })
 
   watch(isStateStreaming, (newValue: boolean) => {
     if (!newValue) {
@@ -126,12 +125,6 @@
 </script>
 
 <style lang="scss">
-  .incremark-paragraph {
-    margin: 8px 0;
-  }
-</style>
-
-<style lang="scss">
 .incremark a.incremark-link,
 .incremark a.incremark-link:visited {
   display: inline-block;
@@ -172,5 +165,9 @@ a.incremark-link::after {
 
 .incremark-list {
   list-style: disc;
+}
+
+.incremark-paragraph {
+  margin: 8px 0;
 }
 </style>

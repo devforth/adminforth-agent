@@ -89,9 +89,8 @@ const agentStore = useAgentStore();
 const agentTransitions = useAgentTransitions();
 const showScrollContainer = ref(true);
 const chatContainerRef = ref<HTMLElement | null>(null);
-
 const messagesRefs = ref<Array<HTMLElement | null>>([]);
-
+const useWaitingForHeight = ref(false);
 
 /*
 * Whenever user sends a message, it adds a bottom spacer, that takes the remaining height
@@ -116,14 +115,59 @@ let messageResizeObserver: ResizeObserver | null = null;
 let observedLastUserMessageElement: HTMLElement | null = null;
 let observedLastAgentMessageElement: HTMLElement | null = null;
 
-function resetSpacer() {
-  showBottomSpacer.value = false;
-  spacerHeight.value = 0;
-}
+onMounted(async () => {
+  messageResizeObserver = new ResizeObserver(() => {
+    updateSpacerHeight();
+  });
+
+  await import('@incremark/theme/styles.css')
+  await agentStore.fetchPlaceholderMessages()
+  await refreshSpacerTracking();
+});
+
+onUnmounted(() => {
+  if (innerScrollContainerRef.value) {
+    innerScrollContainerRef.value.removeEventListener('scroll', recalculateScroll);
+  }
+
+  stopObservingLastMessages();
+  messageResizeObserver?.disconnect();
+  agentStore.stopPlaceholderAnimation();
+});
 
 watch(() => agentStore.activeSessionId, () => {
   resetSpacer();
 });
+
+watch(() => agentStore.activeSessionId, async () => {
+  showScrollContainer.value = false;
+  await nextTick();
+  showScrollContainer.value = true;
+  await refreshSpacerTracking();
+  recalculateScroll();
+});
+
+watch(() => props.messages.length, async () => {
+  await refreshSpacerTracking();
+});
+
+watch(scrollContainer, async () => {
+  if (innerScrollContainerRef.value) {
+    innerScrollContainerRef.value.removeEventListener('scroll', recalculateScroll);
+  }
+
+  if (scrollContainer.value) {
+    innerScrollContainerRef.value = scrollContainer.value.container.scrollEl;
+
+    innerScrollContainerRef.value.addEventListener('scroll', recalculateScroll);
+    await refreshSpacerTracking();
+  }
+})
+
+function resetSpacer() {
+  showBottomSpacer.value = false;
+  spacerHeight.value = 0;
+}
 
 function getLastMessageElement(role: 'user' | 'assistant') {
   const lastMessageIndex = props.messages.findLastIndex((message: IMessage) => message.role === role);
@@ -156,7 +200,6 @@ async function waitForRealHeight(role: 'user' | 'assistant'): Promise<number> {
   });
 }
 
-const useWaitingForHeight = ref(false);
 async function updateSpacerHeight() {
   if (!showBottomSpacer.value) {
     return;
@@ -237,52 +280,5 @@ function recalculateScroll() {
     showScrollToBottomButton.value = !!isScrolledUp;
   }
 }
-
-watch(() => agentStore.activeSessionId, async () => {
-  showScrollContainer.value = false;
-  await nextTick();
-  showScrollContainer.value = true;
-  await refreshSpacerTracking();
-  recalculateScroll();
-});
-
-watch(() => props.messages.length, async () => {
-  await refreshSpacerTracking();
-});
-
-onMounted(async () => {
-  messageResizeObserver = new ResizeObserver(() => {
-    updateSpacerHeight();
-  });
-
-  await import('@incremark/theme/styles.css')
-  await agentStore.fetchPlaceholderMessages()
-  await refreshSpacerTracking();
-});
-
-onUnmounted(() => {
-  if (innerScrollContainerRef.value) {
-    innerScrollContainerRef.value.removeEventListener('scroll', recalculateScroll);
-  }
-
-  stopObservingLastMessages();
-  messageResizeObserver?.disconnect();
-  agentStore.stopPlaceholderAnimation();
-});
-
-watch(scrollContainer, async () => {
-  if (innerScrollContainerRef.value) {
-    innerScrollContainerRef.value.removeEventListener('scroll', recalculateScroll);
-  }
-
-  if (scrollContainer.value) {
-    innerScrollContainerRef.value = scrollContainer.value.container.scrollEl;
-
-    innerScrollContainerRef.value.addEventListener('scroll', recalculateScroll);
-    await refreshSpacerTracking();
-  }
-})
-
-
 
 </script>

@@ -35,17 +35,16 @@ import type { IPart } from '../types';
 import { ref, computed, watch, defineAsyncComponent } from 'vue';
 import ThreeDotsAnimation from './ThreeDotsAnimation.vue';
 import { extractTitleAndTextFromReasoning } from '../utils';
-import CustomAutoScrollContainer from '../CustomAutoScrollContainer.vue';
-
-const IncremarkContent = defineAsyncComponent(() => import('@incremark/vue').then(module => module.IncremarkContent))
 
 const props = defineProps<{
   state?: IPart['state']
   text?: string
 }>();
 
-const isStreaming = computed(() => props.state === 'streaming');
+const IncremarkContent = defineAsyncComponent(() => import('@incremark/vue').then(module => module.IncremarkContent))
+
 const isExpanded = ref(true);
+const isStreaming = computed(() => props.state === 'streaming');
 const parsedReasoning = computed(() => extractTitleAndTextFromReasoning(props.text ?? ''));
 const reasoningTitle = computed(() => parsedReasoning.value.title ?? '');
 const reasoningText = computed(() => parsedReasoning.value.body);
@@ -55,8 +54,6 @@ watch(() => props.state, (newValue: IPart['state']) => {
     isExpanded.value = false;
   } 
 });
-
-
 
 </script>
 

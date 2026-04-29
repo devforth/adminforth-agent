@@ -55,17 +55,8 @@ import { useAgentStore } from './composables/useAgentStore';
 const agentStore = useAgentStore();
 
 const h3Style = "text-gray-800 dark:text-gray-200 font-medium text-xl tracking-widest my-2"
-
 const dayLabelFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
 const dayLabelWithYearFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-
-function getLocalDayKey(date: Date) {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, '0');
-  const day = `${date.getDate()}`.padStart(2, '0');
-
-  return `${year}-${month}-${day}`;
-}
 
 const groupedSessions = computed(() => {
   const groups = new Map<string, { dayKey: string; label: string; sessions: ISessionsListItem[] }>();
@@ -90,5 +81,14 @@ const groupedSessions = computed(() => {
 
   return Array.from(groups.values());
 });
+
+
+function getLocalDayKey(date: Date) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+}
 
 </script>

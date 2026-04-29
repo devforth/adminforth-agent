@@ -24,10 +24,6 @@
       </div>
 
       <div class="min-w-0">
-        <!-- <p class="text-xs text-gray-500 dark:text-gray-400 font-bold">
-          {{ statusLabel }}
-          <span v-if="props.data?.toolInfo?.durationMs" class="text-xs">({{ (props.data.toolInfo.durationMs / 1000).toFixed(2) }}s)</span>
-        </p> -->
         <p class="break-all font-mono text-sm leading-5 text-nowrap">
           {{ props.data?.toolInfo?.toolInfo ? props.data.toolInfo.toolInfo : props.data?.toolInfo?.toolName}}
         </p>
@@ -67,42 +63,9 @@
   import { Spinner } from '@/afcl';
   import { IconAngleDownOutline, IconCheckOutline } from '@iconify-prerendered/vue-flowbite';
 
-  const isInputOutputExpanded = ref(false);
-  const activateShrinkedStyle = ref(true);
-  const isAnimatingShrinkFinal = ref(false);
-  const toolRendererInitialWidth = ref<number | null>(null);
-  const toolRendererRef = ref<HTMLElement | null>(null);
-  const activateFullWidth = ref(false);
-  const blockClicksDuringAnimation = ref(false);
-  const ANIMATION_DURATION = 300;
-
-  onMounted(() => {
-    if (toolRendererRef.value) {
-      toolRendererInitialWidth.value = toolRendererRef.value.offsetWidth;
-    }
-  });  
-
-  function finishTransition() {
-    if (!isInputOutputExpanded.value) {
-      activateFullWidth.value = false;
-      activateShrinkedStyle.value = true;
-    }
-  }
-  watch(isInputOutputExpanded, (newValue) => {
-    if (newValue) {
-      activateShrinkedStyle.value = false;
-      activateFullWidth.value = true;
-    }
-  });
-
-  function toggleInputOutput() {
-    if (blockClicksDuringAnimation.value) return;
-    isInputOutputExpanded.value = !isInputOutputExpanded.value;
-    blockClicksDuringAnimation.value = true;
-    setTimeout(() => {
-      blockClicksDuringAnimation.value = false;
-    }, ANIMATION_DURATION);
-  }
+  const props = defineProps<{
+    data: IFormattedToolCallPart
+  }>();
 
   interface IToolSection {
     label: string;
@@ -112,25 +75,15 @@
     }>;
   }
 
-  const props = defineProps<{
-    data: IFormattedToolCallPart
-  }>();
+  const isInputOutputExpanded = ref(false);
+  const activateShrinkedStyle = ref(true);
+  const toolRendererInitialWidth = ref<number | null>(null);
+  const toolRendererRef = ref<HTMLElement | null>(null);
+  const activateFullWidth = ref(false);
+  const blockClicksDuringAnimation = ref(false);
+  const ANIMATION_DURATION = 300;
 
   const isRunning = computed(() => props.data?.toolInfo?.phase === 'start');
-  const statusLabel = computed(() => isRunning.value ? 'Running tool' : 'Tool finished');
-
-  const normalizeToolPayload = (value: unknown): string | null => {
-    if (value === null || value === undefined || value === '') {
-      return null;
-    }
-
-    if (typeof value === 'string') {
-      return value.trim();
-    }
-
-    return JSON.stringify(value, null, 2);
-  };
-
   const toolSections = computed<IToolSection[]>(() => {
     const sections = [
       {
@@ -153,8 +106,49 @@
         })),
       }));
   });
-
   const hasToolSections = computed(() => toolSections.value.length > 0);
+
+  onMounted(() => {
+    if (toolRendererRef.value) {
+      toolRendererInitialWidth.value = toolRendererRef.value.offsetWidth;
+    }
+  });  
+
+  watch(isInputOutputExpanded, (newValue) => {
+    if (newValue) {
+      activateShrinkedStyle.value = false;
+      activateFullWidth.value = true;
+    }
+  });
+
+  function finishTransition() {
+    if (!isInputOutputExpanded.value) {
+      activateFullWidth.value = false;
+      activateShrinkedStyle.value = true;
+    }
+  }
+
+  function toggleInputOutput() {
+    if (blockClicksDuringAnimation.value) return;
+    isInputOutputExpanded.value = !isInputOutputExpanded.value;
+    blockClicksDuringAnimation.value = true;
+    setTimeout(() => {
+      blockClicksDuringAnimation.value = false;
+    }, ANIMATION_DURATION);
+  }
+
+  const normalizeToolPayload = (value: unknown): string | null => {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+
+    if (typeof value === 'string') {
+      return value.trim();
+    }
+
+    return JSON.stringify(value, null, 2);
+  };
+
 </script>
 
 
