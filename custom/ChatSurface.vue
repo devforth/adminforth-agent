@@ -219,7 +219,7 @@ const isModeMenuOpen = ref(false);
 let startX = 0
 let startWidth = 0
 
-onClickOutside(chatSurface, () => {if (!agentStore.isTeleportedToBody) agentStore.setIsChatOpen(false);});
+onClickOutside(chatSurface, () => {if (!agentStore.isTeleportedToBody && !agentStore.isFullScreen) agentStore.setIsChatOpen(false);});
 onClickOutside(modeMenu, () => { isModeMenuOpen.value = false; });
 
 onMounted(async () => {
