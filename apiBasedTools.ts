@@ -50,7 +50,20 @@ type InternalApiOriginProvider = {
   getInternalApiOrigin?: () => string | undefined;
 };
 
+type RegisteredApiSchemaWithMeta = IRegisteredApiSchema & {
+  meta?: Record<string, unknown>;
+};
+
 const DEFAULT_USER_TIME_ZONE = 'UTC';
+
+export const MUTATING_API_TOOL_NAMES = [
+  'create_record',
+  'update_record',
+  'delete_record',
+  'start_custom_action',
+  'start_custom_bulk_action',
+  'start_bulk_action',
+] as const;
 
 function getInputString(inputs: Record<string, unknown> | undefined, key: string) {
   const value = inputs?.[key];
@@ -182,6 +195,7 @@ export type ApiBasedTool = {
   input_schma?: unknown;
   output_schema?: unknown;
   call: (params?: ApiBasedToolCallParams) => Promise<string>;
+  meta?: Record<string, unknown>;
 };
 
 function sanitizeForYaml(
@@ -738,10 +752,10 @@ export function prepareApiBasedTools(
   const openApiSchemas = adminforth.openApi.registeredSchemas.filter(
     (schema) => schema.request_schema || schema.response_schema,
   );
-  const openApiSchemasByToolName = new Map<string, IRegisteredApiSchema>();
+  const openApiSchemasByToolName = new Map<string, RegisteredApiSchemaWithMeta>();
   const hiddenResourceIdSet = new Set(hiddenResourceIds);
 
-  for (const schema of openApiSchemas) {
+  for (const schema of openApiSchemas as RegisteredApiSchemaWithMeta[]) {
     const toolName = openApiSchemaPathToToolName(schema.path, adminforth);
     openApiSchemasByToolName.set(toolName, schema);
   }
@@ -758,6 +772,7 @@ export function prepareApiBasedTools(
   for (const [toolName, schema] of openApiSchemasByToolName.entries()) {
     apiBasedTools[toolName] = {
       description: schema.description,
+      meta: schema.meta,
       input_schema: schema.request_schema,
       input_schma: schema.request_schema,
       output_schema: schema.response_schema,
@@ -821,6 +836,7 @@ export function serializeApiBasedTool(tool: ApiBasedTool | undefined) {
 
   return {
     description: tool.description,
+    meta: tool.meta,
     input_schema: tool.input_schema,
     input_schma: tool.input_schma,
     output_schema: tool.output_schema,

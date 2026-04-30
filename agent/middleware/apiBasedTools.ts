@@ -1,8 +1,10 @@
 import { ToolMessage } from "@langchain/core/messages";
+import { interrupt } from "@langchain/langgraph";
 import { createMiddleware } from "langchain";
 import { logger, type AdminUser, type IAdminForth } from "adminforth";
 import {
   formatApiBasedToolCall,
+  MUTATING_API_TOOL_NAMES,
   type ApiBasedTool,
 } from "../../apiBasedTools.js";
 import {
@@ -11,6 +13,16 @@ import {
 } from "../toolCallEvents.js";
 import { ALWAYS_AVAILABLE_API_TOOL_NAMES } from "../tools/index.js";
 import { createApiTool } from "../tools/apiTool.js";
+
+type MutationApprovalResume =
+  | {
+      decisions: Array<
+        | { type: "approve" }
+        | { type: "reject"; message?: string }
+      >;
+    };
+
+const mutatingApiToolNames = new Set<string>(MUTATING_API_TOOL_NAMES);
 
 function getEnabledApiToolNames(messages: unknown[]) {
   const enabledToolNames = new Set<string>();
@@ -45,6 +57,28 @@ function getEnabledApiToolNames(messages: unknown[]) {
   }
 
   return enabledToolNames;
+}
+
+function isApprovedMutationDecision(
+  decision: MutationApprovalResume,
+) {
+  return decision.decisions[0]?.type === "approve";
+}
+
+function getRejectedMutationMessage(
+  decision: MutationApprovalResume,
+) {
+  const firstDecision = decision.decisions[0];
+
+  return firstDecision?.type === "reject" ? firstDecision.message : undefined;
+}
+
+function toolRequiresApproval(
+  toolName: string,
+  apiBasedTools: Record<string, ApiBasedTool>,
+) {
+  return mutatingApiToolNames.has(toolName)
+    || apiBasedTools[toolName]?.meta?.requiresApproval === true;
 }
 
 export function createApiBasedToolsMiddleware(
@@ -104,6 +138,39 @@ export function createApiBasedToolsMiddleware(
         input: toolArgs,
         startedAt,
       });
+
+      if (toolRequiresApproval(request.toolCall.name, apiBasedTools)) {
+        const decision = interrupt<
+          {
+            type: "mutation_approval";
+            toolCallId?: string;
+            toolName: string;
+            toolInfo?: string;
+            input: Record<string, unknown>;
+          },
+          MutationApprovalResume
+        >({
+          type: "mutation_approval",
+          toolCallId: request.toolCall.id,
+          toolName: request.toolCall.name,
+          toolInfo,
+          input: toolArgs,
+        });
+
+        if (!isApprovedMutationDecision(decision)) {
+          const rejectedMutationMessage = getRejectedMutationMessage(decision);
+
+          return new ToolMessage({
+            content: rejectedMutationMessage
+              ? `Mutation rejected by user: ${rejectedMutationMessage}`
+              : "Mutation rejected by user.",
+            tool_call_id: request.toolCall.id ?? "",
+            name: request.toolCall.name,
+            status: "error",
+          });
+        }
+      }
+
       toolCallTracker.start();
       logger.info(
         `Invoking tool "${request.toolCall.name}" with input: ${toolInput}`,

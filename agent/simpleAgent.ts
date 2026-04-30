@@ -1,4 +1,5 @@
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import type { BaseMessage } from "@langchain/core/messages";
 import { createAgent, summarizationMiddleware } from "langchain";
 import {
   logger,
@@ -9,6 +10,7 @@ import {
 } from "adminforth";
 import { BaseCallbackHandler } from "@langchain/core/callbacks/base";
 import {type BaseCheckpointSaver, type Messages } from "@langchain/langgraph";
+import type { Command } from "@langchain/langgraph";
 import type { LLMResult } from "@langchain/core/outputs";
 import { z } from "zod";
 import { createAgentTools } from "./tools/index.js";
@@ -65,6 +67,12 @@ type PendingLlmRun = {
   startedAt: number;
   firstTokenAt?: number;
 };
+
+export type AgentStreamChunk =
+  | ["messages", [BaseMessage, Record<string, any>]]
+  | ["updates", Record<string, any>];
+
+export type AgentStream = AsyncIterable<AgentStreamChunk>;
 
 function isLangChainAgentCompletionAdapter(
   adapter: CompletionAdapter,
@@ -224,7 +232,7 @@ export async function callAgent(params: {
   summaryModel: AgentChatModel;
   modelMiddleware?: AgentMiddleware[];
   checkpointer?: BaseCheckpointSaver;
-  messages: Messages;
+  input: { messages: Messages } | Command;
   adminUser: AdminUser;
   adminforth: IAdminForth;
   apiBasedTools: Record<string, ApiBasedTool>;
@@ -235,14 +243,14 @@ export async function callAgent(params: {
   userTimeZone: string;
   emitToolCallEvent: ToolCallEventSink;
   sequenceDebugSink: SequenceDebugModelCallSink;
-}) {
+}): Promise<AgentStream> {
   const {
     name,
     model,
     summaryModel,
     modelMiddleware = [],
     checkpointer,
-    messages,
+    input,
     adminUser,
     adminforth,
     apiBasedTools,
@@ -281,8 +289,8 @@ export async function callAgent(params: {
     middleware,
   });
 
-  return await agent.stream({ messages } as any, {
-    streamMode: "messages",
+  return await agent.stream(input as any, {
+    streamMode: ["messages", "updates"],
     recursionLimit: 100,
     callbacks: [createAgentLlmMetricsLogger()],
     configurable: {
@@ -296,5 +304,5 @@ export async function callAgent(params: {
       httpExtra,
       emitToolCallEvent,
     },
-  });
+  }) as unknown as AgentStream;
 }

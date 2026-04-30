@@ -10,7 +10,7 @@ import { AdminForthPlugin, logger, Filters, Sorts } from "adminforth";
 import type { PluginOptions } from './types.js';
 import { randomUUID } from 'crypto';
 import { HumanMessage, SystemMessage } from "langchain";
-import { MemorySaver, type BaseCheckpointSaver } from "@langchain/langgraph";
+import { Command, MemorySaver, type BaseCheckpointSaver } from "@langchain/langgraph";
 import {
   createAgentChatModel,
   callAgent,
@@ -118,6 +118,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
   apiBasedTools: Record<string, ApiBasedTool> = {};
   agentSystemPromptPromise: Promise<string>;
   private checkpointer: BaseCheckpointSaver | null = null;
+  private readonly pendingInterruptSessionIds = new Set<string>();
   private readonly modelsByModeName = new Map<
     string,
     Promise<{
@@ -299,13 +300,49 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         const res = _raw_express_res;
         const messageId = randomUUID();
         const prompt = body.message;
+        const decision = body.decision ?? body.type;
+        const isConfirmation = decision === "approve" || decision === "reject";
+
+        if (decision !== undefined && !isConfirmation) {
+          return {
+            error: "INVALID_CONFIRMATION_DECISION",
+            message: 'Confirmation decision should be "approve" or "reject".',
+          };
+        }
+
         const userTimeZone = (body.timeZone as string | undefined) ?? 'UTC';
         const currentPage = (body as CurrentPageRequestBody).currentPage;
         const sessionId = body.sessionId || adminUser?.pk || adminUser?.username || 'default';
-        const turnId = await this.createNewTurn(sessionId, prompt);
-        await this.updateSessionDate(sessionId);
+        const hasPendingInterrupt = this.pendingInterruptSessionIds.has(sessionId);
+        const shouldResume = isConfirmation || hasPendingInterrupt;
+        let turnId: string;
         let fullResponse = "";
+
+        if (shouldResume) {
+          const latestTurn = await this.adminforth.resource(this.options.turnResource.resourceId).list(
+            [Filters.EQ(this.options.turnResource.sessionIdField, sessionId)],
+            1,
+            undefined,
+            [Sorts.DESC(this.options.turnResource.createdAtField)],
+          );
+          const latestTurnRecord = latestTurn[0];
+
+          if (!latestTurnRecord) {
+            return {
+              error: "SESSION_TURN_NOT_FOUND",
+              message: `No agent turn found for session "${sessionId}".`,
+            };
+          }
+
+          turnId = latestTurnRecord.id;
+          fullResponse = latestTurnRecord.response;
+        } else {
+          turnId = await this.createNewTurn(sessionId, prompt);
+        }
+
+        await this.updateSessionDate(sessionId);
         let isStreamClosed = false;
+        let streamInterrupted = false;
         const sequenceDebugCollector = createSequenceDebugCollector();
 
         res.writeHead(200, {
@@ -393,16 +430,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           const selectedMode = this.options.modes.find((mode) => mode.name === body.mode) ?? this.options.modes[0];
           const { model, summaryModel, modelMiddleware } =
             await this.getModeModels(selectedMode, maxTokens);
-          const userLanguage = await detectUserLanguage(selectedMode.completionAdapter, prompt)
-            .catch((error) => {
-              logger.warn(`Failed to detect user language: ${error instanceof Error ? error.message : String(error)}`);
-              return null;
-            });
-          const systemPrompt = [
-            await this.agentSystemPromptPromise,
-            formatAdminUserPrompt(adminUser, this.adminforth.config.auth.usernameField),
-            formatLanguagePrompt(userLanguage),
-          ].join("\n\n");
           const apiBasedTools = buildApiBasedTools(
             this.adminforth,
             this.getInternalAgentResourceIds(),
@@ -412,18 +439,55 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           }
           assertRequiredApiTool(apiBasedTools, "update_record");
           this.apiBasedTools = apiBasedTools;
-          const currentPagePrompt = formatCurrentPagePrompt(currentPage);
+          const input = shouldResume
+            ? new Command({
+                resume: decision === "approve"
+                  ? {
+                      decisions: [
+                        {
+                          type: "approve" as const,
+                        },
+                      ],
+                    }
+                  : {
+                      decisions: [
+                        {
+                          type: "reject" as const,
+                          message: hasPendingInterrupt && !isConfirmation && typeof body.message === "string"
+                            ? `User rejected the pending tool execution and sent a new instruction instead: ${body.message}`
+                            : typeof body.message === "string"
+                              ? body.message
+                              : "User reject executing this tool",
+                        },
+                      ],
+                    },
+              })
+            : {
+                messages: [
+                  new SystemMessage([
+                    await this.agentSystemPromptPromise,
+                    formatAdminUserPrompt(adminUser, this.adminforth.config.auth.usernameField),
+                    formatLanguagePrompt(
+                      await detectUserLanguage(selectedMode.completionAdapter, prompt)
+                        .catch((error) => {
+                          logger.warn(`Failed to detect user language: ${error instanceof Error ? error.message : String(error)}`);
+                          return null;
+                        }),
+                    ),
+                  ].join("\n\n")),
+                  ...(formatCurrentPagePrompt(currentPage)
+                    ? [new SystemMessage(formatCurrentPagePrompt(currentPage) as string)]
+                    : []),
+                  new HumanMessage(prompt),
+                ],
+              };
           const stream = await callAgent({
             name: `adminforth-agent-${this.pluginInstanceId}`,
             model,
             summaryModel,
             modelMiddleware,
             checkpointer: this.getCheckpointer(),
-            messages: [
-              new SystemMessage(systemPrompt),
-              ...(currentPagePrompt ? [new SystemMessage(currentPagePrompt)] : []),
-              new HumanMessage(prompt),
-            ],
+            input,
             adminUser,
             adminforth: this.adminforth,
             apiBasedTools,
@@ -443,51 +507,63 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             sequenceDebugSink: sequenceDebugCollector,
           });
 
-          for await (const rawChunk of stream as AsyncIterable<[any, any]>) {
-            const [token, metadata] = rawChunk;
+          if (shouldResume) {
+            this.pendingInterruptSessionIds.delete(sessionId);
+          }
 
-            const nodeName =
-              typeof metadata?.langgraph_node === "string"
-                ? metadata.langgraph_node
-                : "";
+          for await (const [mode, chunk] of stream) {
+            if (mode === "messages") {
+              const [token, metadata] = chunk;
+              if (metadata.langgraph_node && !["model", "model_request"].includes(metadata.langgraph_node)) {
+                continue;
+              }
+              const blocks = Array.isArray(token.content) ? token.content : [];
 
-            if (nodeName && !["model", "model_request"].includes(nodeName)) {
-              continue;
-            }
+              const reasoningDelta = blocks
+                .filter((block: any) => block?.type === "reasoning")
+                .map((block: any) => String(block.reasoning ?? ""))
+                .join("");
 
-            const blocks = Array.isArray(token?.contentBlocks)
-              ? token.contentBlocks
-              : Array.isArray(token?.content)
-                ? token.content
-                : [];
-            const reasoningDelta = blocks
-              .filter((b: any) => b?.type === "reasoning")
-              .map((b: any) => String(b.reasoning ?? ""))
-              .join("");
+              const textDelta = blocks
+                .filter((block: any) => block?.type === "text")
+                .map((block: any) => String(block.text ?? ""))
+                .join("");
 
-            const textDelta = blocks
-              .filter((b: any) => b?.type === "text")
-              .map((b: any) => String(b.text ?? ""))
-              .join("");
-
-            if (reasoningDelta) {
-              const reasoningId = startBlock('reasoning');
+              if (reasoningDelta) {
+                const reasoningId = startBlock('reasoning');
                 send({
                   type: 'reasoning-delta',
                   id: reasoningId,
                   delta: reasoningDelta,
                 });
+              }
+              if (textDelta) {
+                const textId = startBlock('text');
+                fullResponse += textDelta;
+                send({
+                  type: 'text-delta',
+                  id: textId,
+                  delta: textDelta,
+                });
+              }
             }
-
-            if (textDelta) {
-              const textId = startBlock('text');
-              fullResponse += textDelta;
-              send({
-                type: 'text-delta',
-                id: textId,
-                delta: textDelta,
-              });
+            if (mode === "updates") {
+              if ("__interrupt__" in chunk) {
+                streamInterrupted = true;
+                this.pendingInterruptSessionIds.add(sessionId);
+                send({
+                  type: "data-interrupt",
+                  data: {
+                    sessionId,
+                    interrupt: chunk.__interrupt__,
+                  },
+                });
+                console.log(`\n\nInterrupt: ${JSON.stringify(chunk.__interrupt__)}`);
+              }
             }
+          }
+          if (!streamInterrupted) {
+            this.pendingInterruptSessionIds.delete(sessionId);
           }
         } catch (error) {
           logger.error(`Agent response streaming failed:\n${formatAgentError(error)}`);
