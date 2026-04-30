@@ -225,10 +225,6 @@ const isModeMenuOpen = ref(false);
 
 const dvh = ref(Math.round(window.visualViewport?.height || window.innerHeight));
 const viewportOffsetTop = ref(Math.round(window.visualViewport?.offsetTop || 0));
-const headerRef = useTemplateRef('headerRef');
-const promptInputRef = useTemplateRef('promptInput');
-const screenHeight = window.innerHeight;
-const dynamicPromptInputMarginBottom = ref(0);
 
 let startX = 0
 let startWidth = 0
