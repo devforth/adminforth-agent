@@ -21,9 +21,13 @@
       ref="chatSurface"
       id="adminforth-agent-chat-surface"
       class="fixed bg-lightNavbar dark:bg-darkNavbar top-0 right-0 border-x border-b border-gray-200 dark:border-gray-700 
-            flex flex z-40 h-screen"
+            flex flex z-40 "
       :class="[agentStore.isChatOpen ? 'translate-x-0' : 'translate-x-full', !agentStore.isTeleportedToBody ? 'shadow-2xl' : '']"
-      :style="{ width: agentStore.chatWidth + 'rem' }"
+      :style="{
+        width: agentStore.chatWidth + 'rem',
+        top: viewportOffsetTop + 'px',
+        height: dvh + 1 + 'px',
+      }"
     > 
       <div 
         v-if="!(coreStore.isMobile || agentStore.isFullScreen)"
@@ -31,10 +35,7 @@
         @mousedown="startResize"
       ></div>
       <div 
-        class="w-full min-h-0 max-h-full flex flex-col"
-        :style="{
-          height: !agentStore.isIos ? dvh + 'px' : 100 + 'dvh',
-        }"
+        class="w-full h-full min-h-0 max-h-full flex flex-col"
       >
         <div 
           ref="headerRef"
@@ -192,10 +193,11 @@
 <script setup lang="ts">
 import { IconChatBubbleLeft20Solid, IconSparklesSolid, IconArrowsPointingOut, IconArrowsPointingIn } from '@iconify-prerendered/vue-heroicons';
 import { IconCloseOutline, IconBarsOutline, IconArrowUpOutline, IconCloseSidebarSolid, IconOpenSidebarSolid, IconAngleDownOutline, IconPlusOutline } from '@iconify-prerendered/vue-flowbite';
-import { useTemplateRef, onMounted, ref, onUnmounted } from 'vue';
+import { useTemplateRef, onMounted, ref } from 'vue';
 import { onClickOutside } from '@vueuse/core'
 import ConversationArea from './conversation_area/ConversationArea.vue';
 import { useAgentStore } from './composables/useAgentStore';
+import { useChatSurfaceMobileSupport } from './composables/useChatSurfaceMobileSupport';
 import { useAgentTransitions } from './composables/useAgentTransitions';
 import { Button } from '@/afcl';
 import { useCoreStore } from '@/stores/core';
@@ -222,11 +224,8 @@ const agentTransitions = useAgentTransitions();
 const coreStore = useCoreStore();
 const isModeMenuOpen = ref(false);
 
-const dvh = ref(window.innerHeight)
-const headerRef = useTemplateRef('headerRef');
-const promptInputRef = useTemplateRef('promptInput');
-const screenHeight = window.innerHeight;
-const dynamicPromptInputMarginBottom = ref(0);
+const { dvh, viewportOffsetTop } = useChatSurfaceMobileSupport(chatSurface);
+
 
 let startX = 0
 let startWidth = 0
@@ -237,7 +236,6 @@ onClickOutside(modeMenu, () => { isModeMenuOpen.value = false; });
 onMounted(async () => {
   agentStore.setAvailableModes(props.meta.modes, props.meta.defaultModeName);
   agentStore.regisrerTextInput(textInput.value);
-  window.addEventListener('resize', updateHeight)
   textInput.value?.focus();
   const isTeleportedToBodyFromLocalStorage = agentStore.getLocalStorageItem('isTeleportedToBody') === 'true' || agentStore.getLocalStorageItem('isTeleportedToBodyBeforeFullScreen') === 'true';
   if( coreStore.isMobile ) {
@@ -247,10 +245,6 @@ onMounted(async () => {
   }
   await agentStore.fetchSessionsList();
 });
-
-onUnmounted(() => {
-  window.removeEventListener('resize', updateHeight)
-})
 
 const startResize = (e: MouseEvent) => {
   startX = e.clientX
@@ -314,10 +308,6 @@ async function sendMessage() {
   await agentStore.sendMessage();
   autoResize();
   conversationArea.value?.handleSendMessage();
-}
-
-function updateHeight() {
-  dvh.value = Math.round(window.visualViewport?.height || window.innerHeight);
 }
 
 </script>

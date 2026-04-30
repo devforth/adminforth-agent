@@ -57,6 +57,7 @@ onMounted(() => {
   if (!containerRef.value) return
   
   scrollElement.value = containerRef.value.scrollEl
+  scrollElement.value.style.overscrollBehaviorY = 'contain'
   lastScrollTop = containerRef.value.scrollEl.scrollTop
   lastScrollHeight = containerRef.value.scrollEl.scrollHeight
   

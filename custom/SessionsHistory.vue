@@ -2,7 +2,7 @@
   <div class="absolute top-0 left-0 transition-transform 
     duration-200 ease-in-out border-y border-r dark:border-gray-600 z-20 
     bg-lightNavbar dark:bg-darkNavbar w-96 h-full flex flex-col items-center
-    overflow-y-auto overflow-x-hidden
+    overflow-y-auto overflow-x-hidden overscroll-contain
     "
   >
     <h3 :class="h3Style">{{ $t('Chat history') }}</h3>
