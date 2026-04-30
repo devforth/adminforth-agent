@@ -20,8 +20,8 @@
     <div 
       ref="chatSurface"
       id="adminforth-agent-chat-surface"
-      class="fixed bg-lightNavbar dark:bg-darkNavbar h-screen top-0 right-0 border-x border-b border-gray-200 dark:border-gray-700 
-            flex flex z-40"
+      class="fixed bg-lightNavbar dark:bg-darkNavbar top-0 right-0 border-x border-b border-gray-200 dark:border-gray-700 
+            flex flex z-40 h-screen"
       :class="[agentStore.isChatOpen ? 'translate-x-0' : 'translate-x-full', !agentStore.isTeleportedToBody ? 'shadow-2xl' : '']"
       :style="{ width: agentStore.chatWidth + 'rem' }"
     > 
@@ -30,11 +30,14 @@
         class="w-2 cursor-ew-resize absolute left-0 top-0 h-full z-30"
         @mousedown="startResize"
       ></div>
-
       <div 
         class="w-full min-h-0 max-h-full flex flex-col"
+        :style="{
+          height: !agentStore.isIos ? dvh + 'px' : 100 + 'dvh',
+        }"
       >
         <div 
+          ref="headerRef"
           class="flex items-center justify-between h-14 border-b border-gray-200 dark:border-gray-700"         
         >
           <div 
@@ -108,7 +111,8 @@
             :messages="agentStore.chatMessages"
           />
 
-          <div 
+          <div
+            ref="promptInput" 
             class="w-full mb-2 flex items-center justify-center px-2 bg-transparent relative translate-x-[-50%] left-1/2"
             :style="{ 
               maxWidth: agentStore.isFullScreen ? remToPx(agentStore.MAX_WIDTH)+'px' : '100%',
@@ -122,6 +126,7 @@
                 @input="autoResize"
                 :class="[
                   'min-h-12 px-4 pt-4 rounded-xl w-full resize-none overflow-hidden text-lightInputText dark:text-darkInputText rounded-md bg-transparent text-sm bg-gray-50 dark:bg-gray-700 dark:border-gray-600 focus:outline-none',
+                  { '!text-base': coreStore.isIos }
                 ]"
                 :placeholder="agentStore.userMessagePlaceholder"
                 @keydown.enter.exact.prevent="sendMessage"
@@ -187,7 +192,7 @@
 <script setup lang="ts">
 import { IconChatBubbleLeft20Solid, IconSparklesSolid, IconArrowsPointingOut, IconArrowsPointingIn } from '@iconify-prerendered/vue-heroicons';
 import { IconCloseOutline, IconBarsOutline, IconArrowUpOutline, IconCloseSidebarSolid, IconOpenSidebarSolid, IconAngleDownOutline, IconPlusOutline } from '@iconify-prerendered/vue-flowbite';
-import { useTemplateRef, onMounted, ref } from 'vue';
+import { useTemplateRef, onMounted, ref, onUnmounted } from 'vue';
 import { onClickOutside } from '@vueuse/core'
 import ConversationArea from './conversation_area/ConversationArea.vue';
 import { useAgentStore } from './composables/useAgentStore';
@@ -216,6 +221,13 @@ const agentStore = useAgentStore();
 const agentTransitions = useAgentTransitions();
 const coreStore = useCoreStore();
 const isModeMenuOpen = ref(false);
+
+const dvh = ref(window.innerHeight)
+const headerRef = useTemplateRef('headerRef');
+const promptInputRef = useTemplateRef('promptInput');
+const screenHeight = window.innerHeight;
+const dynamicPromptInputMarginBottom = ref(0);
+
 let startX = 0
 let startWidth = 0
 
@@ -225,6 +237,7 @@ onClickOutside(modeMenu, () => { isModeMenuOpen.value = false; });
 onMounted(async () => {
   agentStore.setAvailableModes(props.meta.modes, props.meta.defaultModeName);
   agentStore.regisrerTextInput(textInput.value);
+  window.addEventListener('resize', updateHeight)
   textInput.value?.focus();
   const isTeleportedToBodyFromLocalStorage = agentStore.getLocalStorageItem('isTeleportedToBody') === 'true' || agentStore.getLocalStorageItem('isTeleportedToBodyBeforeFullScreen') === 'true';
   if( coreStore.isMobile ) {
@@ -235,6 +248,9 @@ onMounted(async () => {
   await agentStore.fetchSessionsList();
 });
 
+onUnmounted(() => {
+  window.removeEventListener('resize', updateHeight)
+})
 
 const startResize = (e: MouseEvent) => {
   startX = e.clientX
@@ -298,6 +314,10 @@ async function sendMessage() {
   await agentStore.sendMessage();
   autoResize();
   conversationArea.value?.handleSendMessage();
+}
+
+function updateHeight() {
+  dvh.value = Math.round(window.visualViewport?.height || window.innerHeight);
 }
 
 </script>
