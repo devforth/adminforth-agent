@@ -143,14 +143,20 @@ export const useAgentStore = defineStore('agent', () => {
   const isFullScreen = ref(false);
   function setFullScreen(fullScreen: boolean) {
     isFullScreen.value = fullScreen;
+    const appElement = document.getElementById('app');
+
     if (fullScreen) {
       document.body.style.overflow = 'hidden';
+      setTimeout(() => {
+        appElement?.setAttribute('style', `opacity: 0; pointer-events: none;`);
+      }, agentTransitions.TRANSITION_DURATION);
       setLocalStorageItem('chatWidthBeforeFullScreen', chatWidth.value.toString());
       setLocalStorageItem('isTeleportedToBodyBeforeFullScreen', isTeleportedToBody.value ? 'true' : 'false');
       setIsTeleportedToBody(false);
       useAgentTransitions().setChatSurfaceTransition(false);
       setChatWidth(window.innerWidth, false);
     } else {
+      appElement?.setAttribute('style', `opacity: 100; pointer-events: all;`);
       document.body.style.overflow = '';
       const lastChatWidth = parseInt(getLocalStorageItem('chatWidthBeforeFullScreen') || DEFAULT_CHAT_WIDTH.toString(), 10);
       const isTeleportedBeforeFullScreen = getLocalStorageItem('isTeleportedToBodyBeforeFullScreen') === 'true';

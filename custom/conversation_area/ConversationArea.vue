@@ -55,7 +55,9 @@
     </CustomAutoScrollContainer>
     <button @click="scrollContainer.scrollToBottom();">
       <IconArrowDownOutline 
-        class="absolute z-10 bottom-8 left-1/2 bg-lightPrimary dark:bg-darkPrimary text-white p-2 w-10 h-10 rounded-full transition-opacity duration-100 ease-in" 
+        class="absolute z-10 bottom-8 left-1/2 -translate-x-1/2 bg-lightPrimary/20 dark:bg-darkPrimary/10
+          border border-lightPrimary dark:border-darkPrimary text-lightPrimary dark:text-darkPrimary p-2 w-10 h-10
+          rounded-full transition-opacity duration-100 ease-in backdrop-blur-sm" 
         :class="showScrollToBottomButton ? 'opacity-100' : 'opacity-0 pointer-events-none'"
         :disabled="!showScrollToBottomButton"
       />
