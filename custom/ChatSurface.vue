@@ -15,27 +15,26 @@
       />
     </div>
   </div>
-  
+
   <Teleport to="body">
     <div 
       ref="chatSurface"
       id="adminforth-agent-chat-surface"
       class="fixed bg-lightNavbar dark:bg-darkNavbar top-0 right-0 border-x border-b border-gray-200 dark:border-gray-700 
-            flex flex z-40"
+            flex flex z-40 h-screen"
       :class="[agentStore.isChatOpen ? 'translate-x-0' : 'translate-x-full', !agentStore.isTeleportedToBody ? 'shadow-2xl' : '']"
-      :style="{
-        width: agentStore.chatWidth + 'rem',
-        top: viewportOffsetTop + 'px',
-        height: dvh + 'px',
-      }"
+      :style="{ width: agentStore.chatWidth + 'rem' }"
     > 
       <div 
         v-if="!(coreStore.isMobile || agentStore.isFullScreen)"
-        class="w-2 cursor-ew-resize absolute left-0 top-0 h-full z-30"
+        class="w-2 cursor-ew-resize absolute left-0 top-0 z-30"
         @mousedown="startResize"
       ></div>
       <div 
-        class="w-full h-full min-h-0 max-h-full flex flex-col"
+        class="w-full min-h-0 max-h-full flex flex-col h-dvh"
+        :style="{
+          height: !agentStore.isIos ? dvh + 'px' : '100dvh',
+        }"
       >
         <div 
           ref="headerRef"
@@ -222,8 +221,7 @@ const agentTransitions = useAgentTransitions();
 const coreStore = useCoreStore();
 const isModeMenuOpen = ref(false);
 
-const dvh = ref(Math.round(window.visualViewport?.height || window.innerHeight));
-const viewportOffsetTop = ref(Math.round(window.visualViewport?.offsetTop || 0));
+const dvh = ref(window.innerHeight)
 
 let startX = 0
 let startWidth = 0
@@ -235,9 +233,6 @@ onMounted(async () => {
   agentStore.setAvailableModes(props.meta.modes, props.meta.defaultModeName);
   agentStore.regisrerTextInput(textInput.value);
   window.addEventListener('resize', updateHeight)
-  window.visualViewport?.addEventListener('resize', updateHeight);
-  window.visualViewport?.addEventListener('scroll', updateHeight);
-  updateHeight();
   textInput.value?.focus();
   const savedIsTeleportedToBody = agentStore.getLocalStorageItem('isTeleportedToBody');
   const savedIsTeleportedToBodyBeforeFullScreen = agentStore.getLocalStorageItem('isTeleportedToBodyBeforeFullScreen');
@@ -255,8 +250,6 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', updateHeight)
-  window.visualViewport?.removeEventListener('resize', updateHeight);
-  window.visualViewport?.removeEventListener('scroll', updateHeight);
 })
 
 const startResize = (e: MouseEvent) => {
@@ -325,7 +318,6 @@ async function sendMessage() {
 
 function updateHeight() {
   dvh.value = Math.round(window.visualViewport?.height || window.innerHeight);
-  viewportOffsetTop.value = Math.round(window.visualViewport?.offsetTop || 0);
 }
 
 </script>

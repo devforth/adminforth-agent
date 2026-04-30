@@ -120,16 +120,19 @@ export const useAgentStore = defineStore('agent', () => {
         }
       }
     }
-    const savedIsTeleportedToBody = getLocalStorageItem('isTeleportedToBody');
-    const savedIsChatOpen = getLocalStorageItem('isChatOpen');
-    const shouldTeleportToBody = savedIsTeleportedToBody === null ? true : savedIsTeleportedToBody === 'true';
-    setIsTeleportedToBody(shouldTeleportToBody);
+    if (!coreStore.isMobile) {
+      const savedIsTeleportedToBody = getLocalStorageItem('isTeleportedToBody');
+      const savedIsChatOpen = getLocalStorageItem('isChatOpen');
+      const shouldTeleportToBody = savedIsTeleportedToBody === null ? true : savedIsTeleportedToBody === 'true';
+
+      setIsTeleportedToBody(shouldTeleportToBody);
+      if (isTeleportedToBody.value) {
+        isChatOpen.value = savedIsChatOpen === null ? true : savedIsChatOpen === 'true';
+      }
+    }
     lastSessionId.value = getLocalStorageItem('lastSessionId');
     if (lastSessionId.value && lastSessionId.value !== 'pre-session') {
       setActiveSession(lastSessionId.value);
-    }
-    if (isTeleportedToBody.value) {
-      isChatOpen.value = savedIsChatOpen === null ? true : savedIsChatOpen === 'true';
     }
     if (coreStore.isMobile) {
       setChatWidth(window.innerWidth);
@@ -154,6 +157,7 @@ export const useAgentStore = defineStore('agent', () => {
 
     if (fullScreen) {
       document.body.style.overflow = 'hidden';
+      document.body.classList.add('bg-lightHtml', 'dark:bg-darkHtml');
       setTimeout(() => {
         appElement?.setAttribute('style', `opacity: 0; pointer-events: none;`);
       }, agentTransitions.TRANSITION_DURATION);
@@ -351,6 +355,7 @@ export const useAgentStore = defineStore('agent', () => {
       return;
     }
     isChatOpen.value = false;
+    setFullScreen(false);
     isSessionHistoryOpen.value = false;
   }
 
@@ -582,6 +587,18 @@ export const useAgentStore = defineStore('agent', () => {
     }
   }
 
+  function addDebugMessage(message: string) {
+    const debugMessage = {
+      role: 'assistant',
+      parts: [{
+        type: 'text',
+        text: message,
+        state: 'done',
+      }]
+    };
+    currentChat.value?.messages.push(debugMessage);
+  }
+
   return {
     //_________-Sessions management-_____________
     activeSessionId,
@@ -620,6 +637,7 @@ export const useAgentStore = defineStore('agent', () => {
     DEFAULT_CHAT_WIDTH,
     MAX_WIDTH,
     MIN_WIDTH,
-    getLocalStorageItem
+    getLocalStorageItem,
+    addDebugMessage
   }
 })
