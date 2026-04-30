@@ -25,6 +25,7 @@
   "description": "AI agent plugin for AdminForth with tool-based workflows and persistent chat sessions",
   "devDependencies": {
     "@types/node": "latest",
+    "adminforth": "2.50.0",
     "semantic-release": "^24.2.1",
     "semantic-release-slack-bot": "^4.0.2",
     "typescript": "^5.7.3"
@@ -33,7 +34,6 @@
     "@langchain/core": "^1.1.40",
     "@langchain/langgraph": "^1.2.8",
     "@langchain/langgraph-checkpoint": "^1.0.1",
-    "adminforth": "2.42.0",
     "dayjs": "^1.11.20",
     "langchain": "^1.3.3",
     "yaml": "^2.8.3",
@@ -63,5 +63,8 @@
       "name": "next",
       "prerelease": true
     }
-  ]
+  ],
+  "peerDependencies": {
+    "adminforth": "2.50.0"
+  }
 }
