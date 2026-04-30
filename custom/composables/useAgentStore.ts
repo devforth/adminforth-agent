@@ -60,6 +60,10 @@ export const useAgentStore = defineStore('agent', () => {
   const activeModeName = ref<string | null>(null);
   const hasTypedMessageInPageSession = ref(false);
   const { width: windowWidth } = useWindowSize();
+
+  const chats = new Map<string, Chat<any>>();
+  const currentChat = shallowRef<Chat<any>>();
+
   let placeholderAnimationTimer: ReturnType<typeof setTimeout> | null = null;
 
   function setLocalStorageItem(key: string, value: string) {
@@ -189,8 +193,6 @@ export const useAgentStore = defineStore('agent', () => {
       }
     }
   })
-  const chats = new Map<string, Chat<any>>();
-  const currentChat = shallowRef<Chat<any>>();
 
   function setAvailableModes(modes: AgentMode[], defaultModeName?: string | null) {
     availableModes.value = modes;
@@ -549,14 +551,16 @@ export const useAgentStore = defineStore('agent', () => {
     }
     currentSession.value = sessions.value[sessionId];
     setCurrentChat(sessionId);
-    currentChat.value.messages = currentSession.value?.messages.map((m: any) => ({
-      role: m.role,
-      parts:[{
-        type: 'text',
-        text: m.text,
-        state: 'done',
-      }]
-    }));
+    if (currentChat.value.messages.length === 0) {
+      currentChat.value.messages = currentSession.value?.messages.map((m: any) => ({
+        role: m.role,
+        parts:[{
+          type: 'text',
+          text: m.text,
+          state: 'done',
+        }]
+      }));
+    }
   }
 
   async function fetchSessionsList() {

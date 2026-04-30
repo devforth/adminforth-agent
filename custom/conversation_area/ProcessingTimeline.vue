@@ -74,6 +74,11 @@
 
   onMounted(() => {
     thinkingStartTime.value = Date.now();
+    if (isResponseInProgress.value) {
+      isExpanded.value = true;
+    } else {
+      isExpanded.value = false;
+    }
   })
 
   onUnmounted(() => {

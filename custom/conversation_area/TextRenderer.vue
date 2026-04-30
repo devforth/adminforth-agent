@@ -17,12 +17,12 @@
       :incremark-options="incremarkOptions"
     />
     <p v-else class="text-red-500 py-2">
-      {{ $t('Error occurred') }}
+      {{ $t('No content to render') }}
     </p>
   </div>
 </template>
 
-<script setup lang="ts">const isExpanded = ref(true);
+<script setup lang="ts">
 
   import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue';
   import { useRouter } from 'vue-router';
