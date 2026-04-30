@@ -21,9 +21,13 @@
       ref="chatSurface"
       id="adminforth-agent-chat-surface"
       class="fixed bg-lightNavbar dark:bg-darkNavbar top-0 right-0 border-x border-b border-gray-200 dark:border-gray-700 
-            flex flex z-40 h-screen"
+            flex flex z-40"
       :class="[agentStore.isChatOpen ? 'translate-x-0' : 'translate-x-full', !agentStore.isTeleportedToBody ? 'shadow-2xl' : '']"
-      :style="{ width: agentStore.chatWidth + 'rem' }"
+      :style="{
+        width: agentStore.chatWidth + 'rem',
+        top: viewportOffsetTop + 'px',
+        height: dvh + 'px',
+      }"
     > 
       <div 
         v-if="!(coreStore.isMobile || agentStore.isFullScreen)"
@@ -31,10 +35,7 @@
         @mousedown="startResize"
       ></div>
       <div 
-        class="w-full min-h-0 max-h-full flex flex-col"
-        :style="{
-          height: !agentStore.isIos ? dvh + 'px' : 100 + 'dvh',
-        }"
+        class="w-full h-full min-h-0 max-h-full flex flex-col"
       >
         <div 
           ref="headerRef"
@@ -97,7 +98,7 @@
               class="m-2 w-8 h-8 p-1 cursor-pointer hover:scale-110 rounded transition-colors duration-200
                 text-lightNavbarIcons hover:text-lightNavbarIcons/80 hover:bg-lightNavbarIcons/20 
                 dark:text-darkNavbarIcons hover:text-darkNavbarIcons/80 hover:bg-darkNavbarIcons/20 " 
-              @click="agentStore.setIsChatOpen(false)" 
+              @click="agentStore.setFullScreen(false); agentStore.setIsChatOpen(false)" 
             />
           </div>
 
@@ -222,7 +223,8 @@ const agentTransitions = useAgentTransitions();
 const coreStore = useCoreStore();
 const isModeMenuOpen = ref(false);
 
-const dvh = ref(window.innerHeight)
+const dvh = ref(Math.round(window.visualViewport?.height || window.innerHeight));
+const viewportOffsetTop = ref(Math.round(window.visualViewport?.offsetTop || 0));
 const headerRef = useTemplateRef('headerRef');
 const promptInputRef = useTemplateRef('promptInput');
 const screenHeight = window.innerHeight;
@@ -238,6 +240,9 @@ onMounted(async () => {
   agentStore.setAvailableModes(props.meta.modes, props.meta.defaultModeName);
   agentStore.regisrerTextInput(textInput.value);
   window.addEventListener('resize', updateHeight)
+  window.visualViewport?.addEventListener('resize', updateHeight);
+  window.visualViewport?.addEventListener('scroll', updateHeight);
+  updateHeight();
   textInput.value?.focus();
   const isTeleportedToBodyFromLocalStorage = agentStore.getLocalStorageItem('isTeleportedToBody') === 'true' || agentStore.getLocalStorageItem('isTeleportedToBodyBeforeFullScreen') === 'true';
   if( coreStore.isMobile ) {
@@ -250,6 +255,8 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', updateHeight)
+  window.visualViewport?.removeEventListener('resize', updateHeight);
+  window.visualViewport?.removeEventListener('scroll', updateHeight);
 })
 
 const startResize = (e: MouseEvent) => {
@@ -318,6 +325,7 @@ async function sendMessage() {
 
 function updateHeight() {
   dvh.value = Math.round(window.visualViewport?.height || window.innerHeight);
+  viewportOffsetTop.value = Math.round(window.visualViewport?.offsetTop || 0);
 }
 
 </script>
