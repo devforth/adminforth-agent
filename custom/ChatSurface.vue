@@ -240,7 +240,12 @@ onMounted(async () => {
   window.visualViewport?.addEventListener('scroll', updateHeight);
   updateHeight();
   textInput.value?.focus();
-  const isTeleportedToBodyFromLocalStorage = agentStore.getLocalStorageItem('isTeleportedToBody') === 'true' || agentStore.getLocalStorageItem('isTeleportedToBodyBeforeFullScreen') === 'true';
+  const savedIsTeleportedToBody = agentStore.getLocalStorageItem('isTeleportedToBody');
+  const savedIsTeleportedToBodyBeforeFullScreen = agentStore.getLocalStorageItem('isTeleportedToBodyBeforeFullScreen');
+  let isTeleportedToBodyFromLocalStorage = true;
+  if (savedIsTeleportedToBody !== null || savedIsTeleportedToBodyBeforeFullScreen !== null) {
+    isTeleportedToBodyFromLocalStorage = savedIsTeleportedToBody === 'true' || savedIsTeleportedToBodyBeforeFullScreen === 'true';
+  }
   if( coreStore.isMobile ) {
     agentStore.setIsTeleportedToBody(false);
   } else {

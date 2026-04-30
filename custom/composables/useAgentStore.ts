@@ -116,13 +116,16 @@ export const useAgentStore = defineStore('agent', () => {
         }
       }
     }
-    setIsTeleportedToBody(getLocalStorageItem('isTeleportedToBody') === 'true' || getLocalStorageItem('isTeleportedToBodyBeforeFullScreen') === 'true');
+    const savedIsTeleportedToBody = getLocalStorageItem('isTeleportedToBody');
+    const savedIsChatOpen = getLocalStorageItem('isChatOpen');
+    const shouldTeleportToBody = savedIsTeleportedToBody === null ? true : savedIsTeleportedToBody === 'true';
+    setIsTeleportedToBody(shouldTeleportToBody);
     lastSessionId.value = getLocalStorageItem('lastSessionId');
     if (lastSessionId.value && lastSessionId.value !== 'pre-session') {
       setActiveSession(lastSessionId.value);
     }
     if (isTeleportedToBody.value) {
-      isChatOpen.value = getLocalStorageItem('isChatOpen') === 'true';
+      isChatOpen.value = savedIsChatOpen === null ? true : savedIsChatOpen === 'true';
     }
     if (coreStore.isMobile) {
       setChatWidth(window.innerWidth);
