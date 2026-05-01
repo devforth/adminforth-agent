@@ -101,6 +101,24 @@ function formatAgentError(error: unknown) {
   return String(error);
 }
 
+function formatAgentResponseError(error: unknown): string {
+  if (isAggregateErrorLike(error)) {
+    const nestedErrors = error.errors.map(formatAgentResponseError);
+
+    if (nestedErrors.length) {
+      return nestedErrors.join("\n");
+    }
+
+    return error.message || "Agent response failed";
+  }
+
+  if (error instanceof Error) {
+    return error.toString();
+  }
+
+  return String(error);
+}
+
 function formatAdminUserPrompt(adminUser: AdminUser, usernameField: string) {
   const dbUser = adminUser.dbUser as Record<string, unknown>;
   const adminUserContext = {
@@ -553,11 +571,12 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         } catch (error) {
           logger.error(`Agent response streaming failed:\n${formatAgentError(error)}`);
           sequenceDebugCollector.flush();
+          fullResponse = formatAgentResponseError(error);
           const textId = startBlock('text');
           send({
             type: 'text-delta',
             id: textId,
-            delta: 'Agent response failed. Check server logs for details.',
+            delta: fullResponse,
           });
         }
         sequenceDebugCollector.flush();
@@ -676,6 +695,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         } catch (error) {
           logger.error(`Agent speech response failed:\n${formatAgentError(error)}`);
           sequenceDebugCollector.flush();
+          fullResponse = formatAgentResponseError(error);
           const turnUpdates: Record<string, unknown> = {
             [this.options.turnResource.responseField]: fullResponse,
           };
@@ -687,7 +707,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           await this.updateTurn(turnId, turnUpdates);
           response.setStatus(500, undefined);
           return {
-            error: "Agent speech response failed. Check server logs for details.",
+            error: fullResponse,
           };
         }
       }
