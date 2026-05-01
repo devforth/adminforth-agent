@@ -27,7 +27,7 @@
     > 
       <div 
         v-if="!(coreStore.isMobile || agentStore.isFullScreen)"
-        class="w-2 cursor-ew-resize absolute left-0 top-0 z-30"
+        class="w-2 cursor-ew-resize absolute left-0 h-full top-0 z-30"
         @mousedown="startResize"
       ></div>
       <div 
