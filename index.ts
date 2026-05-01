@@ -35,16 +35,10 @@ import {
 } from "./agent/systemPrompt.js";
 import { ALWAYS_AVAILABLE_API_TOOL_NAMES } from "./agent/tools/index.js";
 import type { ToolCallEvent } from "./agent/toolCallEvents.js";
+import type { CurrentPageContext } from "./agent/tools/getUserLocation.js";
 
 type CurrentPageRequestBody = {
   currentPage?: CurrentPageContext;
-};
-
-type CurrentPageContext = {
-  path: string;
-  fullPath: string;
-  title: string;
-  url: string;
 };
 
 type SpeechResponseRequestBody = CurrentPageRequestBody & {
@@ -130,18 +124,6 @@ function formatAdminUserPrompt(adminUser: AdminUser, usernameField: string) {
     "Current admin user context:",
     JSON.stringify(adminUserContext, null, 2),
     "Use this admin user email when the user asks to send information to themselves, the current admin, or the logged-in user.",
-  ].join("\n");
-}
-
-function formatCurrentPagePrompt(currentPage: CurrentPageContext | undefined) {
-  if (!currentPage) {
-    return null;
-  }
-
-  return [
-    "Current user page context for the latest message:",
-    JSON.stringify(currentPage, null, 2),
-    "When the user says here, this page, current page, or opened page, treat it as this page.",
   ].join("\n");
 }
 
@@ -339,7 +321,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     }
     assertRequiredApiTool(apiBasedTools, "update_record");
     this.apiBasedTools = apiBasedTools;
-    const currentPagePrompt = formatCurrentPagePrompt(input.currentPage);
     const stream = await callAgent({
       name: `adminforth-agent-${this.pluginInstanceId}`,
       model,
@@ -348,7 +329,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       checkpointer: this.getCheckpointer(),
       messages: [
         new SystemMessage(systemPrompt),
-        ...(currentPagePrompt ? [new SystemMessage(currentPagePrompt)] : []),
         new HumanMessage(input.prompt),
       ],
       adminUser: input.adminUser,
@@ -357,6 +337,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       customComponentsDir: this.adminforth.config.customization.customComponentsDir,
       sessionId: input.sessionId,
       turnId: input.turnId,
+      currentPage: input.currentPage,
       httpExtra: input.httpExtra,
       userTimeZone: input.userTimeZone,
       emitToolCallEvent: (event) => {
