@@ -44,6 +44,9 @@ importers:
       vega-embed:
         specifier: ^7.1.0
         version: 7.1.0(vega-lite@6.4.2(vega@6.2.0))(vega@6.2.0)
+      voice-activity-detection:
+        specifier: ^0.0.5
+        version: 0.0.5
 
 packages:
 
@@ -263,6 +266,9 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
+  analyser-frequency-average@1.0.0:
+    resolution: {integrity: sha512-Y8HRgDfMWpefR286IAT7w9WsZ2r2dLOAkUNz8SQgsTAM0GsM9SAAqr1psqOr1scN76cL0pfuNZoQTnuvdoM0RA==}
+
   ansi-regex@6.2.2:
     resolution: {integrity: sha512-Bq3SmSpyFHaWjPk8If9yc6svM8c56dB5BAtW4Qbw5jHTwwXXcTLoRMkpDJp6VL0XzlWaCHTXrkFURMYmD0sLqg==}
     engines: {node: '>=12'}
@@ -270,6 +276,9 @@ packages:
   ansi-styles@6.2.3:
     resolution: {integrity: sha512-4Dj6M28JB+oAH8kFkTLUo+a2jwOFkuqb3yucU0CANcRRUbxS0cP0nZYCGjcc3BNXwRIsUVmDGgzawme7zvJHvg==}
     engines: {node: '>=12'}
+
+  audio-frequency-to-index@2.0.0:
+    resolution: {integrity: sha512-7zqlDEAsEkPB0ORRhjBlsK7KBZQtdgLLQcmemFD2V2KHPH4flqzDOheWl+U69K0P/LA7J/H5YBNzNWaoS/7WAQ==}
 
   ccount@2.0.1:
     resolution: {integrity: sha512-eyrF0jiFpY+3drT6383f1qhkbGsLSifNAjA61IUjZjmLCWjItY6LB9ft9YhoDgwfmclB2zhu51Lc7+95b8NRAg==}
@@ -285,6 +294,9 @@ packages:
 
   character-reference-invalid@2.0.1:
     resolution: {integrity: sha512-iBZ4F4wRbyORVsu0jPV7gXkOsGYjGHPmAyv+HiHG8gi5PtC9KI2j1+v8/tlibRvjoWX027ypmG/n0HtO5t7unw==}
+
+  clamp@1.0.1:
+    resolution: {integrity: sha512-kgMuFyE78OC6Dyu3Dy7vcx4uy97EIbVxJB/B0eJ3bUNAkwdNcxYzgKltnyADiYwsR7SEqkkUPsEUT//OVS6XMA==}
 
   cliui@9.0.1:
     resolution: {integrity: sha512-k7ndgKhwoQveBL+/1tqGJYNz097I7WOvwbmmU2AR5+magtbjPWQTS1C5vzGkBC8Ym8UWRzfKUzUUqFLypY4Q+w==}
@@ -882,6 +894,9 @@ packages:
   vfile@6.0.3:
     resolution: {integrity: sha512-KzIbH/9tXat2u30jf+smMwFCsno4wHVdNmzFyL+T/L3UGqqk6JKfVqOFOZEpZSHADH1k40ab6NUIXZq422ov3Q==}
 
+  voice-activity-detection@0.0.5:
+    resolution: {integrity: sha512-Ezq+k0cICI67XR/R9KvTRhJ7/u6U0Zk9I+8VNs3hHTAvB6cA3glCa+cHgCRWSW/SV6cRrufSQsV1YxpNtsQb1g==}
+
   vue@3.5.32:
     resolution: {integrity: sha512-vM4z4Q9tTafVfMAK7IVzmxg34rSzTFMyIe0UUEijUCkn9+23lj0WRfA83dg7eQZIUlgOSGrkViIaCfqSAUXsMw==}
     peerDependencies:
@@ -1187,9 +1202,17 @@ snapshots:
       '@opentelemetry/api': 1.9.0
       zod: 4.3.6
 
+  analyser-frequency-average@1.0.0:
+    dependencies:
+      audio-frequency-to-index: 2.0.0
+
   ansi-regex@6.2.2: {}
 
   ansi-styles@6.2.3: {}
+
+  audio-frequency-to-index@2.0.0:
+    dependencies:
+      clamp: 1.0.1
 
   ccount@2.0.1: {}
 
@@ -1200,6 +1223,8 @@ snapshots:
   character-entities@2.0.2: {}
 
   character-reference-invalid@2.0.1: {}
+
+  clamp@1.0.1: {}
 
   cliui@9.0.1:
     dependencies:
@@ -2142,6 +2167,10 @@ snapshots:
     dependencies:
       '@types/unist': 3.0.3
       vfile-message: 4.0.3
+
+  voice-activity-detection@0.0.5:
+    dependencies:
+      analyser-frequency-average: 1.0.0
 
   vue@3.5.32:
     dependencies:

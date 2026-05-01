@@ -169,6 +169,7 @@
                   </button>
                 </div>
               </div>
+              <MicrophoneButton />
               <Button 
                 class="absolute right-4 bottom-2 !p-0 h-9 w-9"                    
                 @click="sendMessage" 
@@ -199,6 +200,7 @@ import { useAgentTransitions } from './composables/useAgentTransitions';
 import { Button } from '@/afcl';
 import { useCoreStore } from '@/stores/core';
 import { remToPx } from './utils';
+import MicrophoneButton from './speech_recognition_frontend/MicrophoneButon.vue';
 
 const props = defineProps<{
   meta: {

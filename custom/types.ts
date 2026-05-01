@@ -25,7 +25,7 @@ export interface IToolGroup {
 }
 
 export interface IMessage {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   metadata?: any,
   parts: IPart[];
 }

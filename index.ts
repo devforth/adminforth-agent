@@ -631,5 +631,39 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         };
       }
     });
+    server.endpoint({
+      method: 'POST',
+      path: `/agent/transcript-audio`,
+      handler: async ({body, adminUser, _raw_express_req }) => {
+        const audio = body.formData as string;
+        console.log('Received audio for transcription');
+        /*============================
+         * 
+         * Temp implementation
+         * 
+         =============================*/
+          await new Promise((resolve, reject) => {
+            setTimeout(() => {
+              resolve(null);
+            }, 1000);
+          });
+          return {
+            ok: true,
+            transcript: 'Transcription example: audio transcription is not implemented yet'
+          }
+         //=================
+        if (!audio) {
+          return {
+            ok: false,
+            error: 'No audio provided'
+          };
+        } else {
+          return {
+            ok: true,
+            transcript: 'Transcription example: audio transcription is not implemented yet'
+          };
+        }
+      }
+    });
   }
 }
