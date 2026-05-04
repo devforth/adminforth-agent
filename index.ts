@@ -27,6 +27,7 @@ import {
   prepareApiBasedTools as buildApiBasedTools,
 } from './apiBasedTools.js';
 import type { ApiBasedTool } from './apiBasedTools.js';
+import { createAgentEventStream } from "./agentResponseEvents.js";
 import {
   appendCustomSystemPrompt,
   buildAgentSystemPrompt,
@@ -40,12 +41,6 @@ import { ok } from "assert";
 
 type CurrentPageRequestBody = {
   currentPage?: CurrentPageContext | string;
-};
-
-type SpeechResponseRequestBody = CurrentPageRequestBody & {
-  sessionId?: string | null;
-  mode?: string | null;
-  timeZone?: string;
 };
 
 type UploadedAudioFile = {
@@ -399,6 +394,80 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     };
   }
 
+  private async runAndPersistAgentResponse(input: {
+    prompt: string;
+    sessionId: string;
+    modeName?: string | null;
+    userTimeZone: string;
+    currentPage?: CurrentPageContext;
+    abortSignal?: AbortSignal;
+    adminUser: AdminUser;
+    httpExtra: HttpExtra;
+    emitReasoningDelta?: (delta: string) => void;
+    emitTextDelta?: (delta: string) => void;
+    emitToolCallEvent?: (event: ToolCallEvent) => void;
+    emitErrorResponse?: (response: string) => void;
+    failureLogMessage: string;
+    abortLogMessage: string;
+  }) {
+    const turnId = await this.createNewTurn(input.sessionId, input.prompt);
+    await this.updateSessionDate(input.sessionId);
+    const sequenceDebugCollector = createSequenceDebugCollector();
+    let fullResponse = "";
+    let aborted = false;
+    let failed = false;
+
+    try {
+      const agentResponse = await this.runAgentTurn({
+        prompt: input.prompt,
+        sessionId: input.sessionId,
+        turnId,
+        modeName: input.modeName,
+        userTimeZone: input.userTimeZone,
+        currentPage: input.currentPage,
+        abortSignal: input.abortSignal,
+        adminUser: input.adminUser,
+        httpExtra: input.httpExtra,
+        sequenceDebugCollector,
+        emitToolCallEvent: input.emitToolCallEvent,
+        emitReasoningDelta: input.emitReasoningDelta,
+        emitTextDelta: (textDelta) => {
+          fullResponse += textDelta;
+          input.emitTextDelta?.(textDelta);
+        },
+      });
+      fullResponse = agentResponse.text;
+    } catch (error) {
+      if (input.abortSignal?.aborted) {
+        aborted = true;
+        logger.info(input.abortLogMessage);
+      } else {
+        failed = true;
+        logger.error(`${input.failureLogMessage}:\n${formatAgentError(error)}`);
+        fullResponse = formatAgentResponseError(error);
+        input.emitErrorResponse?.(fullResponse);
+      }
+    }
+
+    sequenceDebugCollector.flush();
+    const turnUpdates: Record<string, unknown> = {
+      [this.options.turnResource.responseField]: fullResponse,
+    };
+
+    if (this.options.turnResource.debugField) {
+      turnUpdates[this.options.turnResource.debugField] = sequenceDebugCollector.getHistory();
+    }
+
+    await this.updateTurn(turnId, turnUpdates);
+
+    return {
+      text: fullResponse,
+      turnId,
+      aborted,
+      failed,
+    };
+  }
+
   setupEndpoints(server: IHttpServer) {
     server.endpoint({
       method: 'POST',
@@ -431,161 +500,35 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       method: 'POST',
       path: `/agent/response`,
       handler: async ({ body, query, headers, cookies, adminUser, response, requestUrl, _raw_express_res, abortSignal }) => {
-        const res = _raw_express_res;
+        const stream = createAgentEventStream(_raw_express_res, {vercelAiUiMessageStream: true, closeActiveBlockOnToolStart: true});
         const messageId = randomUUID();
-        const prompt = body.message;
-        const userTimeZone = (body.timeZone as string | undefined) ?? 'UTC';
         const currentPage = parseCurrentPageContext((body as CurrentPageRequestBody).currentPage);
-        const sessionId = body.sessionId || adminUser?.pk || adminUser?.username || 'default';
-        const turnId = await this.createNewTurn(sessionId, prompt);
-        await this.updateSessionDate(sessionId);
-        let fullResponse = "";
-        let isStreamClosed = false;
-        const sequenceDebugCollector = createSequenceDebugCollector();
 
-        res.writeHead(200, {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-          'x-vercel-ai-ui-message-stream': 'v1',
+        stream.start(messageId);
+        await this.runAndPersistAgentResponse({
+          prompt: body.message,
+          sessionId: body.sessionId,
+          modeName: body.mode,
+          userTimeZone: body.timeZone ?? 'UTC',
+          currentPage,
+          abortSignal,
+          adminUser,
+          httpExtra: {
+            body,
+            query,
+            headers,
+            cookies,
+            requestUrl,
+            response,
+          },
+          emitToolCallEvent: stream.toolCall,
+          emitReasoningDelta: stream.reasoningDelta,
+          emitTextDelta: stream.textDelta,
+          emitErrorResponse: stream.textDelta,
+          failureLogMessage: "Agent response streaming failed",
+          abortLogMessage: "Agent response streaming aborted by the client",
         });
-
-        const send = (obj: unknown) => {
-          if (isStreamClosed || res.writableEnded || res.destroyed) {
-            return;
-          }
-          res.write(`data: ${JSON.stringify(obj)}\n\n`);
-        };
-
-        const emitToolCallEvent = (event: ToolCallEvent) => {
-          if (event.phase === "start") {
-            endActiveBlock();
-          }
-
-          send({
-            type: "data-tool-call",
-            data: event,
-          });
-        };
-
-        let activeBlock: { type: 'text' | 'reasoning'; id: string } | null = null;
-
-        const endActiveBlock = () => {
-          if (!activeBlock) {
-            return;
-          }
-
-          send({
-            type: `${activeBlock.type}-end`,
-            id: activeBlock.id,
-          });
-
-          activeBlock = null;
-        };
-
-        const startBlock = (type: 'text' | 'reasoning') => {
-          if (activeBlock?.type === type) {
-            return activeBlock.id;
-          }
-
-          endActiveBlock();
-
-          const id = randomUUID();
-          activeBlock = { type, id };
-
-          send({
-            type: `${type}-start`,
-            id,
-          });
-
-          return id;
-        };
-
-        const endStream = () => {
-          if (isStreamClosed || res.writableEnded || res.destroyed) {
-            return;
-          }
-          endActiveBlock();
-
-          send({
-            type: 'finish',
-          });
-
-          res.write(`data: [DONE]\n\n`);
-          isStreamClosed = true;
-          res.end();
-        }
-
-        try {
-          send({
-            type: 'start',
-            messageId,
-          });
-
-          const agentResponse = await this.runAgentTurn({
-            prompt,
-            sessionId,
-            turnId,
-            modeName: body.mode,
-            userTimeZone,
-            currentPage,
-            abortSignal,
-            adminUser,
-            httpExtra: {
-              body,
-              query,
-              headers,
-              cookies,
-              requestUrl,
-              response,
-            },
-            sequenceDebugCollector,
-            emitToolCallEvent,
-            emitReasoningDelta: (reasoningDelta) => {
-              const reasoningId = startBlock('reasoning');
-              send({
-                type: 'reasoning-delta',
-                id: reasoningId,
-                delta: reasoningDelta,
-              });
-            },
-            emitTextDelta: (textDelta) => {
-              const textId = startBlock('text');
-              fullResponse += textDelta;
-              send({
-                type: 'text-delta',
-                id: textId,
-                delta: textDelta,
-              });
-            },
-          });
-          fullResponse = agentResponse.text;
-        } catch (error) {
-          if (abortSignal.aborted) {
-            logger.info("Agent response streaming aborted by the client");
-          } else {
-            logger.error(`Agent response streaming failed:\n${formatAgentError(error)}`);
-            sequenceDebugCollector.flush();
-            fullResponse = formatAgentResponseError(error);
-            const textId = startBlock('text');
-            send({
-              type: 'text-delta',
-              id: textId,
-              delta: fullResponse,
-            });
-          }
-        }
-        sequenceDebugCollector.flush();
-        const turnUpdates: Record<string, unknown> = {
-          [this.options.turnResource.responseField]: fullResponse,
-        };
-
-        if (this.options.turnResource.debugField) {
-          turnUpdates[this.options.turnResource.debugField] = sequenceDebugCollector.getHistory();
-        }
-
-        await this.updateTurn(turnId, turnUpdates);
-        endStream();
+        stream.end();
         return null;
       }
     });
@@ -597,169 +540,93 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         const audioAdapter = this.options.audioAdapter;
         if (!audioAdapter) {
           response.setStatus(400, undefined);
-          return {
-            error: "Audio adapter is not configured for AdminForth Agent",
-          };
+          return { error: "Audio adapter is not configured for AdminForth Agent" };
         }
-        const speechBody = body as SpeechResponseRequestBody;
-        const audio = (_raw_express_req as { file?: UploadedAudioFile }).file;
-        if (!audio) {
+
+        if (!body.file) {
           response.setStatus(400, undefined);
-          return {
-            error: "Audio file is required",
-          };
+          return { error: "Audio file is required" };
         }
-        const res = _raw_express_res;
-        let isStreamClosed = false;
-
-        res.writeHead(200, {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        });
-
-        const send = (obj: unknown) => {
-          if (isStreamClosed || res.writableEnded || res.destroyed) {
-            return;
-          }
-          res.write(`data: ${JSON.stringify(obj)}\n\n`);
-        };
-
-        const endStream = () => {
-          if (isStreamClosed || res.writableEnded || res.destroyed) {
-            return;
-          }
-          send({
-            type: 'finish',
-          });
-          res.write(`data: [DONE]\n\n`);
-          isStreamClosed = true;
-          res.end();
-        };
+        const stream = createAgentEventStream(_raw_express_res);
         
         let transcription;
 
         try {
           transcription = await audioAdapter.transcribe({
-            buffer: audio.buffer,
-            filename: audio.originalname,
-            mimeType: audio.mimetype,
+            buffer: body.file.buffer,
+            filename: body.file.originalname,
+            mimeType: body.file.mimetype,
             language: "auto",
           });
         } catch (error) {
           logger.error(`Agent speech transcription failed:\n${formatAgentError(error)}`);
-          send({
-            type: 'error',
-            error: "Speech transcription failed. Check server logs for details.",
-          });
-          endStream();
+          stream.error("Speech transcription failed. Check server logs for details.");
+          stream.end();
           return null;
         }
 
         const prompt = transcription.text;
         if (!prompt) {
-          send({
-            type: 'error',
-            error: "Speech transcription is empty",
-          });
-          endStream();
+          stream.error("Speech transcription is empty");
+          stream.end();
           return null;
         }
-        send({
-          type: 'transcript',
-          data: {
-            text: transcription.text,
-            language: transcription.language,
+        stream.transcript(transcription.text, transcription.language);
+
+        const sessionId = body.sessionId as string;
+        const currentPage = parseCurrentPageContext(body.currentPage);
+        const agentResponse = await this.runAndPersistAgentResponse({
+          prompt,
+          sessionId,
+          modeName: body.mode,
+          userTimeZone: body.timeZone ?? 'UTC',
+          currentPage,
+          abortSignal,
+          adminUser,
+          httpExtra: {
+            body,
+            query,
+            headers,
+            cookies,
+            requestUrl,
+            response,
           },
+          emitToolCallEvent: stream.toolCall,
+          failureLogMessage: "Agent speech response failed",
+          abortLogMessage: "Agent speech response aborted by the client",
         });
 
-        const sessionId = speechBody.sessionId as string;
-        const currentPage = parseCurrentPageContext(speechBody.currentPage);
-        const turnId = await this.createNewTurn(sessionId, prompt);
-        await this.updateSessionDate(sessionId);
-        const sequenceDebugCollector = createSequenceDebugCollector();
-        let fullResponse = "";
-        const emitToolCallEvent = (event: ToolCallEvent) => {
-          send({
-            type: "data-tool-call",
-            data: event,
-          });
-        };
+        if (agentResponse.aborted) {
+          stream.end();
+          return null;
+        }
+
+        if (agentResponse.failed) {
+          stream.error(agentResponse.text);
+          stream.end();
+          return null;
+        }
 
         try {
-          const agentResponse = await this.runAgentTurn({
-            prompt,
+          stream.speechResponse(
+            {
+              text: transcription.text,
+              language: transcription.language,
+            },
+            {
+              text: agentResponse.text,
+            },
             sessionId,
-            turnId,
-            modeName: speechBody.mode,
-            userTimeZone: speechBody.timeZone ?? 'UTC',
-            currentPage,
-            abortSignal,
-            adminUser,
-            httpExtra: {
-              body,
-              query,
-              headers,
-              cookies,
-              requestUrl,
-              response,
-            },
-            sequenceDebugCollector,
-            emitToolCallEvent,
-            emitTextDelta: (textDelta) => {
-              fullResponse += textDelta;
-            },
-          });
-          fullResponse = agentResponse.text;
-          sequenceDebugCollector.flush();
-          const turnUpdates: Record<string, unknown> = {
-            [this.options.turnResource.responseField]: fullResponse,
-          };
-
-          if (this.options.turnResource.debugField) {
-            turnUpdates[this.options.turnResource.debugField] = sequenceDebugCollector.getHistory();
-          }
-
-          await this.updateTurn(turnId, turnUpdates);
-
-          send({
-            type: 'response',
-            data: {
-              text: fullResponse,
-              sessionId,
-              turnId,
-            },
-          });
-
-          send({
-            type: 'speech-response',
-            data: {
-              transcript: {
-                text: transcription.text,
-                language: transcription.language,
-              },
-              response: {
-                text: fullResponse,
-              },
-              sessionId,
-              turnId,
-            },
-          });
-
+            agentResponse.turnId,
+          );
           const speech = await audioAdapter.synthesize({
-            text: fullResponse,
+            text: agentResponse.text,
             stream: true,
             streamFormat: "audio",
             format: "mp3",
           });
 
-          send({
-            type: "audio-start",
-            data: {
-              mimeType: speech.mimeType,
-              format: speech.format,
-            },
-          });
+          stream.audioStart(speech.mimeType, speech.format);
 
           const reader = speech.audioStream.getReader();
 
@@ -771,46 +638,23 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
                 break;
               }
 
-              send({
-                type: "audio-delta",
-                data: {
-                  base64: Buffer.from(value).toString("base64"),
-                },
-              });
+              stream.audioDelta(value);
             }
           } finally {
             reader.releaseLock();
           }
 
-          send({
-            type: "audio-done",
-          });
-          endStream();
+          stream.audioDone();
+          stream.end();
           return null;
         } catch (error) {
           if (abortSignal.aborted) {
-            logger.info("Agent speech response aborted by the client");
+            logger.info("Agent speech audio streaming aborted by the client");
           } else {
-            logger.error(`Agent speech response failed:\n${formatAgentError(error)}`);
-            fullResponse = formatAgentResponseError(error);
+            logger.error(`Agent speech audio streaming failed:\n${formatAgentError(error)}`);
+            stream.error(formatAgentResponseError(error));
           }
-          sequenceDebugCollector.flush();
-          const turnUpdates: Record<string, unknown> = {
-            [this.options.turnResource.responseField]: fullResponse,
-          };
-
-          if (this.options.turnResource.debugField) {
-            turnUpdates[this.options.turnResource.debugField] = sequenceDebugCollector.getHistory();
-          }
-
-          await this.updateTurn(turnId, turnUpdates);
-          if (!abortSignal.aborted) {
-            send({
-              type: 'error',
-              error: fullResponse,
-            });
-          }
-          endStream();
+          stream.end();
           return null;
         }
       }
