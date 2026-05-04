@@ -1,8 +1,10 @@
 import type {
   AdminUser,
   AdminForthResource,
+  HttpExtra,
   IAdminForth,
-  IHttpServer
+  IHttpServer,
+  TextToSpeechInput,
 } from "adminforth";
 
 import { AdminForthPlugin, logger, Filters, Sorts } from "adminforth";
@@ -33,16 +35,36 @@ import {
 } from "./agent/systemPrompt.js";
 import { ALWAYS_AVAILABLE_API_TOOL_NAMES } from "./agent/tools/index.js";
 import type { ToolCallEvent } from "./agent/toolCallEvents.js";
+import type { CurrentPageContext } from "./agent/tools/getUserLocation.js";
 
 type CurrentPageRequestBody = {
   currentPage?: CurrentPageContext;
 };
 
-type CurrentPageContext = {
-  path: string;
-  fullPath: string;
-  title: string;
-  url: string;
+type SpeechResponseRequestBody = CurrentPageRequestBody & {
+  audioBase64: string;
+  filename: string;
+  mimeType: string;
+  prompt?: string;
+  sessionId?: string | null;
+  mode?: string | null;
+  timeZone?: string;
+  tts?: Omit<TextToSpeechInput, "text">;
+};
+
+type AgentTurnRunInput = {
+  prompt: string;
+  sessionId: string;
+  turnId: string;
+  modeName?: string | null;
+  userTimeZone: string;
+  currentPage?: CurrentPageContext;
+  adminUser: AdminUser;
+  httpExtra: HttpExtra;
+  sequenceDebugCollector: ReturnType<typeof createSequenceDebugCollector>;
+  emitReasoningDelta?: (delta: string) => void;
+  emitTextDelta?: (delta: string) => void;
+  emitToolCallEvent?: (event: ToolCallEvent) => void;
 };
 
 function isAggregateErrorLike(
@@ -73,6 +95,24 @@ function formatAgentError(error: unknown) {
   return String(error);
 }
 
+function formatAgentResponseError(error: unknown): string {
+  if (isAggregateErrorLike(error)) {
+    const nestedErrors = error.errors.map(formatAgentResponseError);
+
+    if (nestedErrors.length) {
+      return nestedErrors.join("\n");
+    }
+
+    return error.message || "Agent response failed";
+  }
+
+  if (error instanceof Error) {
+    return error.toString();
+  }
+
+  return String(error);
+}
+
 function formatAdminUserPrompt(adminUser: AdminUser, usernameField: string) {
   const dbUser = adminUser.dbUser as Record<string, unknown>;
   const adminUserContext = {
@@ -84,18 +124,6 @@ function formatAdminUserPrompt(adminUser: AdminUser, usernameField: string) {
     "Current admin user context:",
     JSON.stringify(adminUserContext, null, 2),
     "Use this admin user email when the user asks to send information to themselves, the current admin, or the logged-in user.",
-  ].join("\n");
-}
-
-function formatCurrentPagePrompt(currentPage: CurrentPageContext | undefined) {
-  if (!currentPage) {
-    return null;
-  }
-
-  return [
-    "Current user page context for the latest message:",
-    JSON.stringify(currentPage, null, 2),
-    "When the user says here, this page, current page, or opened page, treat it as this page.",
   ].join("\n");
 }
 
@@ -245,6 +273,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         modes: this.options.modes.map((mode) => ({ name: mode.name })),
         defaultModeName: this.options.modes[0].name,
         stickByDefault: this.options.stickByDefault ?? false,
+        hasAudioAdapter: Boolean(this.options.audioAdapter),
       }
     });
     if (!this.pluginOptions.sessionResource) {
@@ -253,6 +282,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
   }
   
   validateConfigAfterDiscover(adminforth: IAdminForth, resourceConfig: AdminForthResource) {
+    this.options.audioAdapter?.validate();
     this.agentSystemPromptPromise = buildAgentSystemPrompt(
       adminforth,
       this.getInternalAgentResourceIds(),
@@ -262,6 +292,101 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
 
   instanceUniqueRepresentation(pluginOptions: any) : string {
     return `single`;
+  }
+
+  private async runAgentTurn(input: AgentTurnRunInput) {
+    let fullResponse = "";
+    const maxTokens = this.options.maxTokens ?? 10000;
+    const selectedMode =
+      this.options.modes.find((mode) => mode.name === input.modeName) ??
+      this.options.modes[0];
+    const { model, summaryModel, modelMiddleware } =
+      await this.getModeModels(selectedMode, maxTokens);
+    const userLanguage = await detectUserLanguage(selectedMode.completionAdapter, input.prompt)
+      .catch((error) => {
+        logger.warn(`Failed to detect user language: ${error instanceof Error ? error.message : String(error)}`);
+        return null;
+      });
+    const systemPrompt = [
+      await this.agentSystemPromptPromise,
+      formatAdminUserPrompt(input.adminUser, this.adminforth.config.auth.usernameField),
+      formatLanguagePrompt(userLanguage),
+    ].join("\n\n");
+    const apiBasedTools = buildApiBasedTools(
+      this.adminforth,
+      this.getInternalAgentResourceIds(),
+    );
+    for (const toolName of ALWAYS_AVAILABLE_API_TOOL_NAMES) {
+      assertRequiredApiTool(apiBasedTools, toolName);
+    }
+    assertRequiredApiTool(apiBasedTools, "update_record");
+    this.apiBasedTools = apiBasedTools;
+    const stream = await callAgent({
+      name: `adminforth-agent-${this.pluginInstanceId}`,
+      model,
+      summaryModel,
+      modelMiddleware,
+      checkpointer: this.getCheckpointer(),
+      messages: [
+        new SystemMessage(systemPrompt),
+        new HumanMessage(input.prompt),
+      ],
+      adminUser: input.adminUser,
+      adminforth: this.adminforth,
+      apiBasedTools,
+      customComponentsDir: this.adminforth.config.customization.customComponentsDir,
+      sessionId: input.sessionId,
+      turnId: input.turnId,
+      currentPage: input.currentPage,
+      httpExtra: input.httpExtra,
+      userTimeZone: input.userTimeZone,
+      emitToolCallEvent: (event) => {
+        input.sequenceDebugCollector.handleToolCallEvent(event);
+        input.emitToolCallEvent?.(event);
+      },
+      sequenceDebugSink: input.sequenceDebugCollector,
+    });
+
+    for await (const rawChunk of stream as AsyncIterable<[any, any]>) {
+      const [token, metadata] = rawChunk;
+
+      const nodeName =
+        typeof metadata?.langgraph_node === "string"
+          ? metadata.langgraph_node
+          : "";
+
+      if (nodeName && !["model", "model_request"].includes(nodeName)) {
+        continue;
+      }
+
+      const blocks = Array.isArray(token?.contentBlocks)
+        ? token.contentBlocks
+        : Array.isArray(token?.content)
+          ? token.content
+          : [];
+      const reasoningDelta = blocks
+        .filter((b: any) => b?.type === "reasoning")
+        .map((b: any) => String(b.reasoning ?? ""))
+        .join("");
+
+      const textDelta = blocks
+        .filter((b: any) => b?.type === "text")
+        .map((b: any) => String(b.text ?? ""))
+        .join("");
+
+      if (reasoningDelta) {
+        input.emitReasoningDelta?.(reasoningDelta);
+      }
+
+      if (textDelta) {
+        fullResponse += textDelta;
+        input.emitTextDelta?.(textDelta);
+      }
+    }
+
+    return {
+      text: fullResponse,
+    };
   }
 
   setupEndpoints(server: IHttpServer) {
@@ -295,7 +420,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     server.endpoint({
       method: 'POST',
       path: `/agent/response`,
-      handler: async ({ body, query, headers, cookies, adminUser, response, requestUrl, _raw_express_res }) => {
+      handler: async ({ body, query, headers, cookies, adminUser, response, requestUrl, _raw_express_res, abortSignal }) => {
         const res = _raw_express_res;
         const messageId = randomUUID();
         const prompt = body.message;
@@ -326,8 +451,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           if (event.phase === "start") {
             endActiveBlock();
           }
-
-          sequenceDebugCollector.handleToolCallEvent(event);
 
           send({
             type: "data-tool-call",
@@ -389,47 +512,14 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             messageId,
           });
 
-          const maxTokens = this.options.maxTokens ?? 10000;
-          const selectedMode = this.options.modes.find((mode) => mode.name === body.mode) ?? this.options.modes[0];
-          const { model, summaryModel, modelMiddleware } =
-            await this.getModeModels(selectedMode, maxTokens);
-          const userLanguage = await detectUserLanguage(selectedMode.completionAdapter, prompt)
-            .catch((error) => {
-              logger.warn(`Failed to detect user language: ${error instanceof Error ? error.message : String(error)}`);
-              return null;
-            });
-          const systemPrompt = [
-            await this.agentSystemPromptPromise,
-            formatAdminUserPrompt(adminUser, this.adminforth.config.auth.usernameField),
-            formatLanguagePrompt(userLanguage),
-          ].join("\n\n");
-          const apiBasedTools = buildApiBasedTools(
-            this.adminforth,
-            this.getInternalAgentResourceIds(),
-          );
-          for (const toolName of ALWAYS_AVAILABLE_API_TOOL_NAMES) {
-            assertRequiredApiTool(apiBasedTools, toolName);
-          }
-          assertRequiredApiTool(apiBasedTools, "update_record");
-          this.apiBasedTools = apiBasedTools;
-          const currentPagePrompt = formatCurrentPagePrompt(currentPage);
-          const stream = await callAgent({
-            name: `adminforth-agent-${this.pluginInstanceId}`,
-            model,
-            summaryModel,
-            modelMiddleware,
-            checkpointer: this.getCheckpointer(),
-            messages: [
-              new SystemMessage(systemPrompt),
-              ...(currentPagePrompt ? [new SystemMessage(currentPagePrompt)] : []),
-              new HumanMessage(prompt),
-            ],
-            adminUser,
-            adminforth: this.adminforth,
-            apiBasedTools,
-            customComponentsDir: this.adminforth.config.customization.customComponentsDir,
+          const agentResponse = await this.runAgentTurn({
+            prompt,
             sessionId,
             turnId,
+            modeName: body.mode,
+            userTimeZone,
+            currentPage,
+            adminUser,
             httpExtra: {
               body,
               query,
@@ -438,48 +528,17 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
               requestUrl,
               response,
             },
-            userTimeZone,
+            sequenceDebugCollector,
             emitToolCallEvent,
-            sequenceDebugSink: sequenceDebugCollector,
-          });
-
-          for await (const rawChunk of stream as AsyncIterable<[any, any]>) {
-            const [token, metadata] = rawChunk;
-
-            const nodeName =
-              typeof metadata?.langgraph_node === "string"
-                ? metadata.langgraph_node
-                : "";
-
-            if (nodeName && !["model", "model_request"].includes(nodeName)) {
-              continue;
-            }
-
-            const blocks = Array.isArray(token?.contentBlocks)
-              ? token.contentBlocks
-              : Array.isArray(token?.content)
-                ? token.content
-                : [];
-            const reasoningDelta = blocks
-              .filter((b: any) => b?.type === "reasoning")
-              .map((b: any) => String(b.reasoning ?? ""))
-              .join("");
-
-            const textDelta = blocks
-              .filter((b: any) => b?.type === "text")
-              .map((b: any) => String(b.text ?? ""))
-              .join("");
-
-            if (reasoningDelta) {
+            emitReasoningDelta: (reasoningDelta) => {
               const reasoningId = startBlock('reasoning');
-                send({
-                  type: 'reasoning-delta',
-                  id: reasoningId,
-                  delta: reasoningDelta,
-                });
-            }
-
-            if (textDelta) {
+              send({
+                type: 'reasoning-delta',
+                id: reasoningId,
+                delta: reasoningDelta,
+              });
+            },
+            emitTextDelta: (textDelta) => {
               const textId = startBlock('text');
               fullResponse += textDelta;
               send({
@@ -487,16 +546,18 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
                 id: textId,
                 delta: textDelta,
               });
-            }
-          }
+            },
+          });
+          fullResponse = agentResponse.text;
         } catch (error) {
           logger.error(`Agent response streaming failed:\n${formatAgentError(error)}`);
           sequenceDebugCollector.flush();
+          fullResponse = formatAgentResponseError(error);
           const textId = startBlock('text');
           send({
             type: 'text-delta',
             id: textId,
-            delta: 'Agent response failed. Check server logs for details.',
+            delta: fullResponse,
           });
         }
         sequenceDebugCollector.flush();
@@ -511,6 +572,125 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         await this.updateTurn(turnId, turnUpdates);
         endStream();
         return null;
+      }
+    });
+    server.endpoint({
+      method: 'POST',
+      path: `/agent/speech-response`,
+      handler: async ({ body, query, headers, cookies, adminUser, response, requestUrl }) => {
+        const audioAdapter = this.options.audioAdapter;
+        if (!audioAdapter) {
+          response.setStatus(400, undefined);
+          return {
+            error: "Audio adapter is not configured for AdminForth Agent",
+          };
+        }
+
+        const speechBody = body as SpeechResponseRequestBody;
+        let transcription;
+
+        try {
+          transcription = await audioAdapter.transcribe({
+            buffer: Buffer.from(speechBody.audioBase64, "base64"),
+            filename: speechBody.filename,
+            mimeType: speechBody.mimeType,
+            language: "auto",
+            prompt: speechBody.prompt,
+          });
+        } catch (error) {
+          logger.error(`Agent speech transcription failed:\n${formatAgentError(error)}`);
+          response.setStatus(500, undefined);
+          return {
+            error: "Speech transcription failed. Check server logs for details.",
+          };
+        }
+
+        const prompt = transcription.text;
+        if (!prompt) {
+          response.setStatus(400, undefined);
+          return {
+            error: "Speech transcription is empty",
+          };
+        }
+
+        const sessionId = speechBody.sessionId || adminUser?.pk || adminUser?.username || 'default';
+        const turnId = await this.createNewTurn(sessionId, prompt);
+        await this.updateSessionDate(sessionId);
+        const sequenceDebugCollector = createSequenceDebugCollector();
+        let fullResponse = "";
+
+        try {
+          const agentResponse = await this.runAgentTurn({
+            prompt,
+            sessionId,
+            turnId,
+            modeName: speechBody.mode,
+            userTimeZone: speechBody.timeZone ?? 'UTC',
+            currentPage: speechBody.currentPage,
+            adminUser,
+            httpExtra: {
+              body,
+              query,
+              headers,
+              cookies,
+              requestUrl,
+              response,
+            },
+            sequenceDebugCollector,
+            emitTextDelta: (textDelta) => {
+              fullResponse += textDelta;
+            },
+          });
+          fullResponse = agentResponse.text;
+          const speech = await audioAdapter.synthesize({
+            text: fullResponse,
+            ...speechBody.tts,
+          });
+          sequenceDebugCollector.flush();
+          const turnUpdates: Record<string, unknown> = {
+            [this.options.turnResource.responseField]: fullResponse,
+          };
+
+          if (this.options.turnResource.debugField) {
+            turnUpdates[this.options.turnResource.debugField] = sequenceDebugCollector.getHistory();
+          }
+
+          await this.updateTurn(turnId, turnUpdates);
+
+          return {
+            transcript: {
+              text: transcription.text,
+              language: transcription.language,
+            },
+            response: {
+              text: fullResponse,
+            },
+            audio: {
+              base64: speech.audio.toString("base64"),
+              mimeType: speech.mimeType,
+              format: speech.format,
+            },
+            sessionId,
+            turnId,
+          };
+        } catch (error) {
+          logger.error(`Agent speech response failed:\n${formatAgentError(error)}`);
+          sequenceDebugCollector.flush();
+          fullResponse = formatAgentResponseError(error);
+          const turnUpdates: Record<string, unknown> = {
+            [this.options.turnResource.responseField]: fullResponse,
+          };
+
+          if (this.options.turnResource.debugField) {
+            turnUpdates[this.options.turnResource.debugField] = sequenceDebugCollector.getHistory();
+          }
+
+          await this.updateTurn(turnId, turnUpdates);
+          response.setStatus(500, undefined);
+          return {
+            error: fullResponse,
+          };
+        }
       }
     });
     server.endpoint({
@@ -629,6 +809,18 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         return {
           ok: true
         };
+      }
+    }),
+    server.endpoint({
+      method: 'POST',
+      path: `/agent/add-system-message-to-turns`,
+      handler: async ({body, adminUser, _raw_express_req }) => {
+        const sessionId = body.sessionId;
+        const systemMessage = body.systemMessage;
+        await this.createNewTurn(sessionId, systemMessage);
+        return {
+          ok: true
+        }
       }
     });
   }

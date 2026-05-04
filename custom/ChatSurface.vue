@@ -15,27 +15,26 @@
       />
     </div>
   </div>
-  
+
   <Teleport to="body">
     <div 
       ref="chatSurface"
       id="adminforth-agent-chat-surface"
       class="fixed bg-lightNavbar dark:bg-darkNavbar top-0 right-0 border-x border-b border-gray-200 dark:border-gray-700 
-            flex flex z-40"
+            flex flex z-40 h-screen"
       :class="[agentStore.isChatOpen ? 'translate-x-0' : 'translate-x-full', !agentStore.isTeleportedToBody ? 'shadow-2xl' : '']"
-      :style="{
-        width: agentStore.chatWidth + 'rem',
-        top: viewportOffsetTop + 'px',
-        height: dvh + 'px',
-      }"
+      :style="{ width: agentStore.chatWidth + 'rem' }"
     > 
       <div 
         v-if="!(coreStore.isMobile || agentStore.isFullScreen)"
-        class="w-2 cursor-ew-resize absolute left-0 top-0 h-full z-30"
+        class="w-2 cursor-ew-resize absolute left-0 h-full top-0 z-30"
         @mousedown="startResize"
       ></div>
       <div 
-        class="w-full h-full min-h-0 max-h-full flex flex-col"
+        class="w-full min-h-0 max-h-full flex flex-col h-dvh"
+        :style="{
+          height: !agentStore.isIos ? dvh + 'px' : '100dvh',
+        }"
       >
         <div 
           ref="headerRef"
@@ -88,7 +87,6 @@
           <div class="flex items-center justify-center">
             <Button 
               @click="agentStore.createPreSession(); agentStore.setSessionHistoryOpen(false); agentStore.focusTextInput();" 
-              :disabled="agentStore.isResponseInProgress" 
               class="!py-1 !px-2 rounded-3xl text-gray-800 dark:text-gray-200 max-w-64 mr-2"
             >
               <IconPlusOutline class="w-5 h-5" />
@@ -172,6 +170,7 @@
                 </div>
               </div>
               <Button 
+                v-if="!agentStore.isResponseInProgress"
                 class="absolute right-4 bottom-2 !p-0 h-9 w-9"                    
                 @click="sendMessage" 
                 :disabled="!agentStore.trimmedUserMessage || agentStore.isResponseInProgress"
@@ -179,6 +178,15 @@
                 <IconArrowUpOutline 
                   class="w-8 h-8 p-1
                     text-white" 
+                />
+              </Button>
+              <Button
+                v-else
+                class="absolute right-4 bottom-2 !p-0 h-9 w-9"    
+                @click="stopCurrentRequest"                
+              >
+                <div
+                  class="w-3 h-3 bg-white rounded-sm"
                 />
               </Button>
             </div>
@@ -223,8 +231,7 @@ const agentTransitions = useAgentTransitions();
 const coreStore = useCoreStore();
 const isModeMenuOpen = ref(false);
 
-const dvh = ref(Math.round(window.visualViewport?.height || window.innerHeight));
-const viewportOffsetTop = ref(Math.round(window.visualViewport?.offsetTop || 0));
+const dvh = ref(window.innerHeight)
 
 let startX = 0
 let startWidth = 0
@@ -234,13 +241,16 @@ onClickOutside(modeMenu, () => { isModeMenuOpen.value = false; });
 
 onMounted(async () => {
   agentStore.setAvailableModes(props.meta.modes, props.meta.defaultModeName);
+  agentStore.setCurrentGenerationModeFromLocalStorage();
   agentStore.regisrerTextInput(textInput.value);
   window.addEventListener('resize', updateHeight)
-  window.visualViewport?.addEventListener('resize', updateHeight);
-  window.visualViewport?.addEventListener('scroll', updateHeight);
-  updateHeight();
   textInput.value?.focus();
-  const isTeleportedToBodyFromLocalStorage = agentStore.getLocalStorageItem('isTeleportedToBody') === 'true' || agentStore.getLocalStorageItem('isTeleportedToBodyBeforeFullScreen') === 'true';
+  const savedIsTeleportedToBody = agentStore.getLocalStorageItem('isTeleportedToBody');
+  const savedIsTeleportedToBodyBeforeFullScreen = agentStore.getLocalStorageItem('isTeleportedToBodyBeforeFullScreen');
+  let isTeleportedToBodyFromLocalStorage = true;
+  if (savedIsTeleportedToBody !== null || savedIsTeleportedToBodyBeforeFullScreen !== null) {
+    isTeleportedToBodyFromLocalStorage = savedIsTeleportedToBody === 'true' || savedIsTeleportedToBodyBeforeFullScreen === 'true';
+  }
   if( coreStore.isMobile ) {
     agentStore.setIsTeleportedToBody(false);
   } else {
@@ -251,8 +261,6 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', updateHeight)
-  window.visualViewport?.removeEventListener('resize', updateHeight);
-  window.visualViewport?.removeEventListener('scroll', updateHeight);
 })
 
 const startResize = (e: MouseEvent) => {
@@ -319,9 +327,12 @@ async function sendMessage() {
   conversationArea.value?.handleSendMessage();
 }
 
+function stopCurrentRequest() {
+  agentStore.abortCurrentChatRequestAndAddSystemMessage();
+}
+
 function updateHeight() {
   dvh.value = Math.round(window.visualViewport?.height || window.innerHeight);
-  viewportOffsetTop.value = Math.round(window.visualViewport?.offsetTop || 0);
 }
 
 </script>

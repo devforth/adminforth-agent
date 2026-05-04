@@ -12,7 +12,7 @@
         class="transition-transform duration-200"
       />
     </div>
-    <transition name="expand" class="max-h-96 overflow-y-auto mb-4 pt-1">
+    <transition name="expand" class="sm:max-h-96 max-h-48 overflow-y-auto mb-4 pt-1">
       <CustomAutoScrollContainer
         ref="scrollContainerRef"
         :enabled="isResponseInProgress"
@@ -68,12 +68,17 @@
   });
   
   const showFakeThinkingMessage = computed(() => {
-    if (props.message.parts.length === 0) return true;
+    if (props.message.parts.length === 0 && props.isLastMessageInChat) return true;
     return false;
   })
 
   onMounted(() => {
     thinkingStartTime.value = Date.now();
+    if (isResponseInProgress.value) {
+      isExpanded.value = true;
+    } else {
+      isExpanded.value = false;
+    }
   })
 
   onUnmounted(() => {
@@ -197,6 +202,10 @@
   .expand-leave-from {
     opacity: 1;
     max-height: 384px;
+
+    @media (max-width: 640px) {
+      max-height: 192px;
+    }
   }
  
 </style>
