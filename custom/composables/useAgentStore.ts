@@ -67,6 +67,36 @@ export const useAgentStore = defineStore('agent', () => {
     return window.localStorage.getItem(`${coreStore.config.brandName || 'adminforth'}-${key}`);
   }
 
+  const isAudioChatMode = ref(false);
+
+  const onBeforeChatCloseCallbacks: Array<() => Promise<void>> = [];
+  function registerOnBeforeChatCloseCallback(hook: () => Promise<void>) {
+    onBeforeChatCloseCallbacks.push(hook);
+  }
+
+  async function executeOnBeforeChatCloseCallbacks() {
+    for(const hook of onBeforeChatCloseCallbacks) {
+      try {
+        await hook();
+      } catch (error) {
+        console.error('Error executing onBeforeChatClose callback:', error);
+      }
+    }
+  }
+
+  function setIsAudioChatMode(isAudioChat: boolean) {
+    isAudioChatMode.value = isAudioChat;
+  }
+
+  watch(isAudioChatMode, (newVal: boolean) => {
+    if (newVal) {
+      addSystemMessage('Started audio chat');
+    } else {
+      addSystemMessage('Finished audio chat');
+    }
+  });
+
+
   const isResponseInProgress = computed( () => {
     return currentChat.value?.status === 'streaming';
   });
@@ -231,7 +261,8 @@ export const useAgentStore = defineStore('agent', () => {
     activeModeName.value = modeName;
   }
 
-  function closeChat() {
+  async function closeChat() {
+    await executeOnBeforeChatCloseCallbacks();
     if(isFullScreen.value) {
       document.body.style.overflow = '';
     }
@@ -318,6 +349,9 @@ export const useAgentStore = defineStore('agent', () => {
     getLocalStorageItem,
     addDebugMessage,
     abortCurrentChatRequestAndAddSystemMessage,
-    addSystemMessage
+    addSystemMessage,
+    isAudioChatMode,
+    setIsAudioChatMode,
+    registerOnBeforeChatCloseCallback
   }
 })
