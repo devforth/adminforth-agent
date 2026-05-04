@@ -11,8 +11,6 @@ import { useWindowSize } from '@vueuse/core';
 import { remToPx, pxToRem } from '../utils';
 import { useI18n } from 'vue-i18n';
 
-const { t } = useI18n();
-
 type AgentMode = {
   name: string;
 };
@@ -32,6 +30,8 @@ const PLACEHOLDER_DELETING_DELAY_MS = 35;
 const PLACEHOLDER_HOLD_DELAY_MS = 3000;
 
 export const useAgentStore = defineStore('agent', () => {
+  const { t } = useI18n();
+
   const DEFAULT_CHAT_WIDTH = 30;
   const MAX_WIDTH = 60;
   const MIN_WIDTH = 25
