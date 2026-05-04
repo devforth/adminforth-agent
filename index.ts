@@ -675,6 +675,12 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         await this.updateSessionDate(sessionId);
         const sequenceDebugCollector = createSequenceDebugCollector();
         let fullResponse = "";
+        const emitToolCallEvent = (event: ToolCallEvent) => {
+          send({
+            type: "data-tool-call",
+            data: event,
+          });
+        };
 
         try {
           const agentResponse = await this.runAgentTurn({
@@ -695,6 +701,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
               response,
             },
             sequenceDebugCollector,
+            emitToolCallEvent,
             emitTextDelta: (textDelta) => {
               fullResponse += textDelta;
             },
