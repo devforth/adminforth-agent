@@ -11,6 +11,7 @@ import {
   DEFAULT_CHAT_WIDTH,
   MAX_WIDTH,
   MIN_WIDTH,
+  RESERVED_SYSTEM_MESSAGE_CONTENT,
 } from './agentStore/constants';
 import { createAgentChatManager } from './agentStore/useAgentChat';
 import { createAgentPlaceholderController } from './agentStore/useAgentPlaceholder';
@@ -90,9 +91,9 @@ export const useAgentStore = defineStore('agent', () => {
 
   watch(isAudioChatMode, (newVal: boolean) => {
     if (newVal) {
-      addSystemMessage('Started audio chat');
+      addSystemMessage(RESERVED_SYSTEM_MESSAGE_CONTENT.START_AUDIO_CHAT);
     } else {
-      addSystemMessage('Finished audio chat');
+      addSystemMessage(RESERVED_SYSTEM_MESSAGE_CONTENT.END_AUDIO_CHAT);
     }
   });
 
@@ -306,7 +307,7 @@ export const useAgentStore = defineStore('agent', () => {
 
   function abortCurrentChatRequestAndAddSystemMessage() {
     abortCurrentChatRequest();
-    addSystemMessage('[Response generation aborted]');
+    addSystemMessage(RESERVED_SYSTEM_MESSAGE_CONTENT.AGENT_RESPONSE_ABORTED);
   }
 
   return {
@@ -348,6 +349,7 @@ export const useAgentStore = defineStore('agent', () => {
     DEFAULT_CHAT_WIDTH,
     MAX_WIDTH,
     MIN_WIDTH,
+    RESERVED_SYSTEM_MESSAGE_CONTENT,
     getLocalStorageItem,
     addDebugMessage,
     abortCurrentChatRequestAndAddSystemMessage,
