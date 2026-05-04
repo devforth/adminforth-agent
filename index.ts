@@ -42,12 +42,6 @@ type CurrentPageRequestBody = {
   currentPage?: CurrentPageContext | string;
 };
 
-type SpeechResponseRequestBody = CurrentPageRequestBody & {
-  sessionId?: string | null;
-  mode?: string | null;
-  timeZone?: string;
-};
-
 type UploadedAudioFile = {
   buffer: Buffer;
   originalname: string;
@@ -505,22 +499,16 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       method: 'POST',
       path: `/agent/response`,
       handler: async ({ body, query, headers, cookies, adminUser, response, requestUrl, _raw_express_res, abortSignal }) => {
-        const stream = createAgentEventStream(_raw_express_res, {
-          vercelAiUiMessageStream: true,
-          closeActiveBlockOnToolStart: true,
-        });
+        const stream = createAgentEventStream(_raw_express_res, {vercelAiUiMessageStream: true, closeActiveBlockOnToolStart: true});
         const messageId = randomUUID();
-        const prompt = body.message;
-        const userTimeZone = (body.timeZone as string | undefined) ?? 'UTC';
         const currentPage = parseCurrentPageContext((body as CurrentPageRequestBody).currentPage);
-        const sessionId = body.sessionId || adminUser?.pk || adminUser?.username || 'default';
 
         stream.start(messageId);
         await this.runAndPersistAgentResponse({
-          prompt,
-          sessionId,
+          prompt: body.message,
+          sessionId: body.sessionId,
           modeName: body.mode,
-          userTimeZone,
+          userTimeZone: body.timeZone ?? 'UTC',
           currentPage,
           abortSignal,
           adminUser,
@@ -551,17 +539,12 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         const audioAdapter = this.options.audioAdapter;
         if (!audioAdapter) {
           response.setStatus(400, undefined);
-          return {
-            error: "Audio adapter is not configured for AdminForth Agent",
-          };
+          return { error: "Audio adapter is not configured for AdminForth Agent" };
         }
-        const speechBody = body as SpeechResponseRequestBody;
-        const audio = (_raw_express_req as { file?: UploadedAudioFile }).file;
-        if (!audio) {
+
+        if (!body.file) {
           response.setStatus(400, undefined);
-          return {
-            error: "Audio file is required",
-          };
+          return { error: "Audio file is required" };
         }
         const stream = createAgentEventStream(_raw_express_res);
         
@@ -569,9 +552,9 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
 
         try {
           transcription = await audioAdapter.transcribe({
-            buffer: audio.buffer,
-            filename: audio.originalname,
-            mimeType: audio.mimetype,
+            buffer: body.file.buffer,
+            filename: body.file.originalname,
+            mimeType: body.file.mimetype,
             language: "auto",
           });
         } catch (error) {
@@ -589,13 +572,13 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         }
         stream.transcript(transcription.text, transcription.language);
 
-        const sessionId = speechBody.sessionId as string;
-        const currentPage = parseCurrentPageContext(speechBody.currentPage);
+        const sessionId = body.sessionId as string;
+        const currentPage = parseCurrentPageContext(body.currentPage);
         const agentResponse = await this.runAndPersistAgentResponse({
           prompt,
           sessionId,
-          modeName: speechBody.mode,
-          userTimeZone: speechBody.timeZone ?? 'UTC',
+          modeName: body.mode,
+          userTimeZone: body.timeZone ?? 'UTC',
           currentPage,
           abortSignal,
           adminUser,
@@ -624,7 +607,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         }
 
         try {
-          stream.response(agentResponse.text, sessionId, agentResponse.turnId);
           stream.speechResponse(
             {
               text: transcription.text,
