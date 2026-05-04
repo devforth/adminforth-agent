@@ -1,37 +1,22 @@
 import { defineStore } from 'pinia';
-import { IAgentSession, ISessionsListItem, IMessage, IPart } from '../types';
-import { ref, nextTick, computed, watch, onMounted, shallowRef } from 'vue';
-import { callAdminForthApi } from '@/utils';
+import { IAgentSession, ISessionsListItem } from '../types';
+import { ref, nextTick, computed, watch, onMounted } from 'vue';
 import { useAdminforth } from '@/adminforth';
-import { Chat } from '../chat';
-import { DefaultChatTransport } from 'ai';
 import { useCoreStore } from '@/stores/core';
 import { useAgentTransitions } from './useAgentTransitions';
 import { useWindowSize } from '@vueuse/core';
 import { remToPx, pxToRem } from '../utils';
-
-type AgentMode = {
-  name: string;
-};
-
-function getCurrentPageContext() {
-  return {
-    path: window.location.pathname,
-    fullPath: `${window.location.pathname}${window.location.search}${window.location.hash}`,
-    title: document.title,
-    url: window.location.href,
-  };
-}
-
-const DEFAULT_TEXTAREA_PLACEHOLDER = 'Type a message...';
-const PLACEHOLDER_TYPING_DELAY_MS = 60;
-const PLACEHOLDER_DELETING_DELAY_MS = 35;
-const PLACEHOLDER_HOLD_DELAY_MS = 3000;
+import {
+  type AgentMode,
+  DEFAULT_CHAT_WIDTH,
+  MAX_WIDTH,
+  MIN_WIDTH,
+} from './agentStore/constants';
+import { createAgentChatManager } from './agentStore/useAgentChat';
+import { createAgentPlaceholderController } from './agentStore/useAgentPlaceholder';
+import { createAgentSessionManager } from './agentStore/useAgentSessions';
 
 export const useAgentStore = defineStore('agent', () => {
-  const DEFAULT_CHAT_WIDTH = 30;
-  const MAX_WIDTH = 60;
-  const MIN_WIDTH = 25
   const agentTransitions = useAgentTransitions();
 
   const activeSessionId = ref<string | null>(null);
@@ -43,8 +28,6 @@ export const useAgentStore = defineStore('agent', () => {
   const isSessionHistoryOpen = ref(false);
   const textInput = ref<HTMLTextAreaElement | null>(null);
   const userMessageInput = ref();
-  const userMessagePlaceholder = ref(DEFAULT_TEXTAREA_PLACEHOLDER);
-  const placeholderMessages = ref<string[]>([]);
   const trimmedUserMessage = computed(() => userMessageInput.value ? userMessageInput.value.trim() : '');
   const lastMessage = ref('');
   const isTeleportedToBody = ref(false);
@@ -58,42 +41,24 @@ export const useAgentStore = defineStore('agent', () => {
   const chatWidth = ref(DEFAULT_CHAT_WIDTH);
   const availableModes = ref<AgentMode[]>([]);
   const activeModeName = ref<string | null>(null);
-  const hasTypedMessageInPageSession = ref(false);
   const { width: windowWidth } = useWindowSize();
 
-  const chats = new Map<string, Chat<any>>();
-  const currentChat = shallowRef<Chat<any>>();
-
-  const isAudioChatMode = ref(false);
-
-  const onBeforeChatCloseCallbacks: Array<() => Promise<void>> = [];
-  function registerOnBeforeChatCloseCallback(hook: () => Promise<void>) {
-    onBeforeChatCloseCallbacks.push(hook);
-  }
-
-  async function executeOnBeforeChatCloseCallbacks() {
-    for(const hook of onBeforeChatCloseCallbacks) {
-      try {
-        await hook();
-      } catch (error) {
-        console.error('Error executing onBeforeChatClose callback:', error);
-      }
-    }
-  }
-
-  function setIsAudioChatMode(isAudioChat: boolean) {
-    isAudioChatMode.value = isAudioChat;
-  }
-
-  watch(isAudioChatMode, (newVal: boolean) => {
-    if (newVal) {
-      addSystemMessage('Started audio chat');
-    } else {
-      addSystemMessage('Finished audio chat');
-    }
- });
-
-  let placeholderAnimationTimer: ReturnType<typeof setTimeout> | null = null;
+  const {
+    currentChat,
+    setCurrentChat,
+    abortCurrentChatRequest,
+  } = createAgentChatManager({
+    lastMessage,
+    activeModeName,
+  });
+  const {
+    userMessagePlaceholder,
+    hasTypedMessageInPageSession,
+    fetchPlaceholderMessages,
+    stopPlaceholderAnimation,
+  } = createAgentPlaceholderController({
+    userMessageInput,
+  });
 
   function setLocalStorageItem(key: string, value: string) {
     window.localStorage.setItem(`${coreStore.config.brandName || 'adminforth'}-${key}`, value);
@@ -101,7 +66,35 @@ export const useAgentStore = defineStore('agent', () => {
   function getLocalStorageItem(key: string) {
     return window.localStorage.getItem(`${coreStore.config.brandName || 'adminforth'}-${key}`);
   }
-  watch(windowWidth, (newWidth: number) => {
+
+  const isResponseInProgress = computed( () => {
+    return currentChat.value?.status === 'streaming';
+  });
+  const blockCloseOfChat = ref(false);
+  const {
+    sendMessage,
+    createPreSession,
+    setActiveSession,
+    fetchSessionsList,
+    deleteSession,
+    addDebugMessage,
+    addSystemMessage,
+  } = createAgentSessionManager({
+    activeSessionId,
+    currentSession,
+    sessionList,
+    sessions,
+    currentChat,
+    trimmedUserMessage,
+    isResponseInProgress,
+    userMessageInput,
+    lastMessage,
+    blockCloseOfChat,
+    adminforth,
+    setCurrentChat,
+  });
+
+  watch(() => windowWidth.value, (newWidth) => {
     if (isFullScreen.value) {
       setChatWidth(newWidth, false);
     }
@@ -123,16 +116,6 @@ export const useAgentStore = defineStore('agent', () => {
       setLocalStorageItem('lastSessionId', newVal);
     }
   })
-  watch(userMessageInput, (newVal: unknown) => {
-    if (hasTypedMessageInPageSession.value) {
-      return;
-    }
-
-    if (typeof newVal === 'string' && newVal.trim() !== '') {
-      hasTypedMessageInPageSession.value = true;
-      stopPlaceholderAnimation();
-    }
-  })
   onMounted(() => {
     const chatWidthBeforeFullScreen = parseInt(getLocalStorageItem('chatWidthBeforeFullScreen') || '0', 10);
     if (chatWidthBeforeFullScreen && (chatWidthBeforeFullScreen > MAX_WIDTH || chatWidthBeforeFullScreen < MIN_WIDTH)) {
@@ -151,10 +134,11 @@ export const useAgentStore = defineStore('agent', () => {
     }
     if (!coreStore.isMobile) {
       const savedIsTeleportedToBody = getLocalStorageItem('isTeleportedToBody');
+      const savedIsTeleportedToBodyBeforeFullScreen = getLocalStorageItem('isTeleportedToBodyBeforeFullScreen');
+      const isTeleportedToBodyFromLocalStorage = savedIsTeleportedToBody === 'true' || savedIsTeleportedToBodyBeforeFullScreen === 'true';
       const savedIsChatOpen = getLocalStorageItem('isChatOpen');
-      const shouldTeleportToBody = savedIsTeleportedToBody === null ? true : savedIsTeleportedToBody === 'true';
 
-      setIsTeleportedToBody(shouldTeleportToBody);
+      setIsTeleportedToBody(isTeleportedToBodyFromLocalStorage);
       if (isTeleportedToBody.value) {
         isChatOpen.value = savedIsChatOpen === null ? true : savedIsChatOpen === 'true';
       }
@@ -165,10 +149,6 @@ export const useAgentStore = defineStore('agent', () => {
     }
     if (coreStore.isMobile) {
       setChatWidth(window.innerWidth);
-    }
-    const ativeModeNameFromLocalStorage = getLocalStorageItem('activeModeName');
-    if (ativeModeNameFromLocalStorage) {
-      setActiveMode(ativeModeNameFromLocalStorage);
     }
     appRoot.value = document.getElementById('app');
     header.value = document.getElementById('af-header-nav');
@@ -236,6 +216,13 @@ export const useAgentStore = defineStore('agent', () => {
       ?? null;
   }
 
+  function setCurrentGenerationModeFromLocalStorage() {
+    const activeModeNameFromLocalStorage = getLocalStorageItem('activeModeName');
+    if (activeModeNameFromLocalStorage) {
+      setActiveMode(activeModeNameFromLocalStorage);
+    }
+  }
+
   function setActiveMode(modeName: string) {
     if (!availableModes.value.some((mode: AgentMode) => mode.name === modeName)) {
       return;
@@ -244,140 +231,7 @@ export const useAgentStore = defineStore('agent', () => {
     activeModeName.value = modeName;
   }
 
-  function setCurrentChat(sessionId: string) {
-    if (chats.has(sessionId)) {
-      currentChat.value = chats.get(sessionId) || null;
-    } else {
-      const newChat = new Chat({
-        transport: new DefaultChatTransport({
-          api: `${import.meta.env.VITE_ADMINFORTH_PUBLIC_PATH || ''}/adminapi/v1/agent/response`,
-          credentials: 'include',
-          prepareSendMessagesRequest({ messages }: any) {
-            const message = lastMessage.value;
-            const body = {
-              message,
-              sessionId,
-              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-              mode: activeModeName.value,
-              currentPage: getCurrentPageContext(),
-            };
-
-            return {
-              headers: {
-                Accept: 'text/event-stream',
-                'x-vercel-ai-ui-message-stream': 'v1',
-              },
-              body
-            };
-          }
-        }),
-        onError(error: unknown) {
-          console.error("Chat error:", error);
-        },
-      });
-      chats.set(sessionId, newChat);
-      currentChat.value = newChat;
-    }
-
-  }
-
-  function clearPlaceholderAnimationTimer() {
-    if (placeholderAnimationTimer !== null) {
-      clearTimeout(placeholderAnimationTimer);
-      placeholderAnimationTimer = null;
-    }
-  }
-
-  function resetPlaceholder() {
-    clearPlaceholderAnimationTimer();
-    userMessagePlaceholder.value = DEFAULT_TEXTAREA_PLACEHOLDER;
-  }
-
-  function stopPlaceholderAnimation() {
-    resetPlaceholder();
-  }
-
-  function startPlaceholderAnimation(messages: string[]) {
-    clearPlaceholderAnimationTimer();
-
-    if (!messages.length) {
-      userMessagePlaceholder.value = DEFAULT_TEXTAREA_PLACEHOLDER;
-      return;
-    }
-
-    let messageIndex = 0;
-    let visibleLength = 0;
-    let isDeleting = false;
-
-    const animate = () => {
-      const currentMessage = messages[messageIndex];
-
-      if (!currentMessage) {
-        resetPlaceholder();
-        return;
-      }
-
-      if (!isDeleting) {
-        visibleLength += 1;
-        userMessagePlaceholder.value = currentMessage.slice(0, visibleLength);
-
-        if (visibleLength >= currentMessage.length) {
-          isDeleting = true;
-          placeholderAnimationTimer = setTimeout(animate, PLACEHOLDER_HOLD_DELAY_MS);
-          return;
-        }
-
-        placeholderAnimationTimer = setTimeout(animate, PLACEHOLDER_TYPING_DELAY_MS);
-        return;
-      }
-
-      visibleLength -= 1;
-      userMessagePlaceholder.value = currentMessage.slice(0, Math.max(visibleLength, 0));
-
-      if (visibleLength <= 0) {
-        isDeleting = false;
-        messageIndex = (messageIndex + 1) % messages.length;
-        placeholderAnimationTimer = setTimeout(animate, PLACEHOLDER_TYPING_DELAY_MS);
-        return;
-      }
-
-      placeholderAnimationTimer = setTimeout(animate, PLACEHOLDER_DELETING_DELAY_MS);
-    };
-
-    animate();
-  }
-
-  const isResponseInProgress = computed( () => {
-    return currentChat.value?.status === 'streaming';
-  });
-  const blockCloseOfChat = ref(false);
-
-  function sortSessionsListByTimestamp(sessionsList: ISessionsListItem[]) {
-    return [...sessionsList].sort((a: ISessionsListItem, b: ISessionsListItem) => b.timestamp.localeCompare(a.timestamp));
-  }
-
-  async function sendMessage() {
-    const message = trimmedUserMessage.value;
-    if (!message || isResponseInProgress.value) {
-      return;
-    }
-    if (!currentSession.value || currentSession.value.sessionId === 'pre-session') {
-      await createNewSession(message);
-    }
-    currentSession.value!.timestamp = new Date().toISOString();
-    sessionList.value = sortSessionsListByTimestamp(sessionList.value.map((s: ISessionsListItem) => s.sessionId === currentSession.value?.sessionId ? {
-      ...s,
-      timestamp: currentSession.value?.timestamp || s.timestamp,
-    } : s));
-    lastMessage.value = message;
-    currentChat.value?.sendMessage({
-      text: message,
-    });
-    userMessageInput.value = '';
-  }
-
-  async function closeChat() {
-    await executeOnBeforeChatCloseCallbacks();
+  function closeChat() {
     if(isFullScreen.value) {
       document.body.style.overflow = '';
     }
@@ -417,240 +271,9 @@ export const useAgentStore = defineStore('agent', () => {
     textInput.value = el;
   }
 
-  async function fetchPlaceholderMessages() {
-    if (hasTypedMessageInPageSession.value) {
-      stopPlaceholderAnimation();
-      return;
-    }
-
-    try {
-      const res = await callAdminForthApi({
-        method: 'POST',
-        path: '/agent/get-placeholder-messages',
-      });
-
-      if (res.error) {
-        console.error('Error fetching placeholder messages:', res.error);
-        placeholderMessages.value = [];
-        resetPlaceholder();
-        return;
-      }
-
-      placeholderMessages.value = Array.isArray(res.messages)
-        ? res.messages.filter((message: unknown): message is string => typeof message === 'string' && message.length > 0)
-        : [];
-
-      if (!placeholderMessages.value.length) {
-        resetPlaceholder();
-        return;
-      }
-
-      startPlaceholderAnimation(placeholderMessages.value);
-    } catch (error) {
-      console.error('Error fetching placeholder messages', error);
-      placeholderMessages.value = [];
-      resetPlaceholder();
-    }
-  }
-
-
-  //create a pre-session, until user will type something, so we can save session
-  async function createPreSession() {
-    saveCurrentSessionInCache();
-    if (!sessionList.value.some((s: ISessionsListItem) => s.sessionId === 'pre-session')) {
-        sessionList.value.unshift({
-        sessionId: 'pre-session',
-        title: 'New Session',
-        timestamp: new Date().toISOString(),
-      });
-    }
-
-    activeSessionId.value = 'pre-session';
-    currentSession.value = {
-      sessionId: 'pre-session',
-      title: 'New Session',
-      timestamp: new Date().toISOString(),
-      messages: [],
-    };
-    sessions.value['pre-session'] = currentSession.value;
-    setCurrentChat('pre-session');
-  }
-
-  async function deletePreSession() {
-    sessionList.value = sessionList.value.filter((s: ISessionsListItem) => s.sessionId !== 'pre-session');
-    if (activeSessionId.value === 'pre-session') {
-      activeSessionId.value = null;
-      currentSession.value = null;
-    }
-  }
-
-  async function createNewSession(triggerMessage?: string) {
-    try {
-      const res = await callAdminForthApi({
-        method: 'POST',
-        path: '/agent/create-session',
-        body: { 
-          triggerMessage
-        },
-      });
-      if (res.error) {
-        console.error('Error creating new session:', res.error);
-        return;
-      }
-      deletePreSession();
-      sessions.value[res.sessionId] = res;
-      sessionList.value.unshift({
-        sessionId: res.sessionId,
-        title: res.title,
-        timestamp: new Date().toISOString(),
-      });
-      setActiveSession(res.sessionId);
-    } catch (error) {
-      console.error('Error creating new session', error);
-    }
-  }
-
-  async function deleteSession(sessionId: string) {
-    if (sessionId === 'pre-session') {
-      deletePreSession();
-      return;
-    }
-    blockCloseOfChat.value = true;
-    const isConfirmed = await adminforth.confirm({message: 'Are you sure, that you want to delete this session?', yes: 'Yes', no: 'No'})
-    blockCloseOfChat.value = false;
-    if (!isConfirmed) {
-      return;
-    }
-    try {
-      const res = await callAdminForthApi({
-        method: 'POST',
-        path: '/agent/delete-session',
-        body: { sessionId },
-      });
-      if (res.error) {
-        console.error('Error deleting session:', res.error);
-        return;
-      }
-      delete sessions.value[sessionId];
-      sessionList.value = sessionList.value.filter((s: ISessionsListItem) => s.sessionId !== sessionId);
-      if (activeSessionId.value === sessionId) {
-        activeSessionId.value = null;
-        currentSession.value = null;
-      }
-    } catch (error) {
-      console.error('Error deleting session', error);
-    }
-    if(sessionId === activeSessionId.value) {
-      activeSessionId.value = sessionList.value.length > 0 ? sessionList.value[0].sessionId : null;
-      if (activeSessionId.value) {
-        currentSession.value = sessions.value[activeSessionId.value] || null;
-      } else {
-        currentSession.value = null;
-      }
-    }
-  }
-
-  async function fetchSession(sessionId: string) {
-    try {
-      const res = await callAdminForthApi({
-        method: 'POST',
-        path: '/agent/get-session-info',
-        body: { sessionId },
-      });
-      if (res.error) {
-        console.error('Error fetching session:', res.error);
-        return;
-      }
-      sessions.value[sessionId] = res.session;
-      setCurrentChat(sessionId);
-    } catch (error) {
-      console.error('Error fetching session', error);
-    }
-  }
-
-  function saveCurrentSessionInCache() {
-    if (currentSession.value) {
-      currentSession.value.messages = currentChat.value?.messages.map((m: any) => ({
-        role: m.role,
-        text: m.parts.map((p: IPart) => p.type === 'text' ? p.text : '').join(''),
-      })) || [];
-      sessions.value[currentSession.value.sessionId] = currentSession.value;
-    }
-  }
-
-  async function setActiveSession(sessionId: string) {
-    activeSessionId.value = sessionId;
-    saveCurrentSessionInCache();
-    if (!sessions.value[sessionId]) {
-      await fetchSession(sessionId);    
-    }
-    currentSession.value = sessions.value[sessionId];
-    setCurrentChat(sessionId);
-    if (currentChat.value.messages.length === 0) {
-      currentChat.value.messages = currentSession.value?.messages.map((m: any) => ({
-        role: m.role,
-        parts:[{
-          type: 'text',
-          text: m.text,
-          state: 'done',
-        }]
-      }));
-    }
-  }
-
-  async function fetchSessionsList() {
-    try {
-      const res = await callAdminForthApi({
-        method: 'POST',
-        path: '/agent/get-sessions',
-        body: {
-          limit: 100,
-        },
-      });
-      if (res.error) {
-        console.error('Error fetching sessions list:', res.error);
-        return;
-      }
-      sessionList.value = res.sessions;
-    } catch (error) {
-      console.error('Error fetching sessions list', error);
-    }
-  }
-
-  function addDebugMessage(message: string) {
-    const debugMessage = {
-      role: 'assistant',
-      parts: [{
-        type: 'text',
-        text: message,
-        state: 'done',
-      }]
-    };
-    currentChat.value?.messages.push(debugMessage);
-  }
-
-  function addSystemMessage(message: string) {
-    const systemMessage = {
-      role: 'system',
-      parts: [{
-        type: 'text',
-        text: message,
-        state: 'done',
-      }]
-    };
-    currentChat.value?.messages.push(systemMessage);
-    try {
-      const res = callAdminForthApi({
-        method: 'POST',
-        path: '/agent/add-system-message-to-turns',
-        body: {
-          sessionId: activeSessionId.value,
-          systemMessage: message,
-        },
-      });
-    } catch (error) {
-      console.error('Error adding system message', error);
-    }
+  function abortCurrentChatRequestAndAddSystemMessage() {
+    abortCurrentChatRequest();
+    addSystemMessage('[Response generation aborted]');
   }
 
   return {
@@ -687,13 +310,14 @@ export const useAgentStore = defineStore('agent', () => {
     availableModes,
     activeModeName,
     setAvailableModes,
+    setCurrentGenerationModeFromLocalStorage,
     setActiveMode,
     DEFAULT_CHAT_WIDTH,
     MAX_WIDTH,
     MIN_WIDTH,
     getLocalStorageItem,
-    setIsAudioChatMode,
-    isAudioChatMode,
-    registerOnBeforeChatCloseCallback
+    addDebugMessage,
+    abortCurrentChatRequestAndAddSystemMessage,
+    addSystemMessage
   }
 })
