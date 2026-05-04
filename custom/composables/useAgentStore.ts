@@ -148,10 +148,6 @@ export const useAgentStore = defineStore('agent', () => {
     if (coreStore.isMobile) {
       setChatWidth(window.innerWidth);
     }
-    const ativeModeNameFromLocalStorage = getLocalStorageItem('activeModeName');
-    if (ativeModeNameFromLocalStorage) {
-      setActiveMode(ativeModeNameFromLocalStorage);
-    }
     appRoot.value = document.getElementById('app');
     header.value = document.getElementById('af-header-nav');
     if (appRoot.value && header.value) {
@@ -216,6 +212,13 @@ export const useAgentStore = defineStore('agent', () => {
       ?? defaultModeName
       ?? modes[0]?.name
       ?? null;
+  }
+
+  function setCurrentGenerationModeFromLocalStorage() {
+    const activeModeNameFromLocalStorage = getLocalStorageItem('activeModeName');
+    if (activeModeNameFromLocalStorage) {
+      setActiveMode(activeModeNameFromLocalStorage);
+    }
   }
 
   function setActiveMode(modeName: string) {
@@ -300,12 +303,13 @@ export const useAgentStore = defineStore('agent', () => {
     availableModes,
     activeModeName,
     setAvailableModes,
+    setCurrentGenerationModeFromLocalStorage,
     setActiveMode,
     DEFAULT_CHAT_WIDTH,
     MAX_WIDTH,
     MIN_WIDTH,
     getLocalStorageItem,
     addDebugMessage,
-    abortCurrentChatRequest
+    abortCurrentChatRequest,
   }
 })

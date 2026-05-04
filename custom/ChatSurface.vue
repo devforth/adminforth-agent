@@ -241,6 +241,7 @@ onClickOutside(modeMenu, () => { isModeMenuOpen.value = false; });
 
 onMounted(async () => {
   agentStore.setAvailableModes(props.meta.modes, props.meta.defaultModeName);
+  agentStore.setCurrentGenerationModeFromLocalStorage();
   agentStore.regisrerTextInput(textInput.value);
   window.addEventListener('resize', updateHeight)
   textInput.value?.focus();
