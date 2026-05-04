@@ -7,7 +7,7 @@
     @click="toggleChatMode"
   >
     <div class="w-5 h-5 flex items-center justify-center">
-      <div v-if="!showCalibrationAnimation" class="flex justify-evenly items-center gap-[0.1rem]">
+      <div v-if="!showButtonSpinner" class="flex justify-evenly items-center gap-[0.1rem]">
         <AudioLines :showAnimation="showAnimation" :isRecording="isAudioChatMode" />
       </div>
       <Spinner v-else class="w-4 h-4 text-lightButtonsText dark:text-darkButtonsText fill-lightButtonsBackground dark:fill-darkPrimary" />
@@ -24,10 +24,12 @@ import { requestMicAndStartVAD, stopUserMedia, getRecorder, CALIBRATION_DURATION
 import { Spinner } from '@/afcl'
 import { useAdminforth } from '@/adminforth';
 import { useAgentStore } from '../composables/useAgentStore';
+import { useAgentAudio } from '../composables/useAgentAudio';
 import AudioLines from './AudioLines.vue';
 
 const adminforth = useAdminforth();
 const agentStore = useAgentStore();
+const { sendAudioToServerAndHandleResponse, isStreamingResponse } = useAgentAudio();
 
 agentStore.registerOnBeforeChatCloseCallback(async () => {
   if(agentStore.isAudioChatMode) {
@@ -37,12 +39,12 @@ agentStore.registerOnBeforeChatCloseCallback(async () => {
 });
 
 const showAnimation = ref(false);
-const showCalibrationAnimation = ref(false);
+const showButtonSpinner = ref(false);
 const hideAnimationDebounced = debounce(() => {
   showAnimation.value = false;
 }, 100);
 const sendUserRecordDebounced = debounce(() => {
-  getRecording();
+  sendRecordForTranscription();
 }, 1000);
 
 const isAudioChatMode = computed(() => agentStore.isAudioChatMode);
@@ -57,10 +59,10 @@ function toggleChatMode() {
 }
 
 async function onStartRecording() {
-  showCalibrationAnimation.value = true;
+  showButtonSpinner.value = true;
   await requestMicAndStartVAD(saidSomething, stopRecording, onAnySound);
   setTimeout(() => {
-    showCalibrationAnimation.value = false;
+    showButtonSpinner.value = false;
     //Play a sound to indicate that recording has started
   }, CALIBRATION_DURATION);
 }
@@ -97,41 +99,16 @@ onBeforeUnmount(() => {
   sendUserRecordDebounced.cancel();
 });
 
-async function getRecording() {
+async function sendRecordForTranscription() {
   showAnimation.value = false;
   const recordBlob = await getRecorder();
   if (recordBlob) {
-    const fileURL = URL.createObjectURL(recordBlob);
-    const audio = new Audio(fileURL);
-    audio.play();
-
-    sendAudioToServer(recordBlob);
+    sendAudioToServerAndHandleResponse(recordBlob, onStartRecording, onStopRecording);
   } else { 
     console.error('No audio recorded');
   }
 }
 
 
-async function sendAudioToServer(blob: Blob) {
-  showCalibrationAnimation.value = true;
-  const formData = new FormData();
-  formData.append('file', blob, 'user_prompt.webm');
-  const fullPath = `${import.meta.env.VITE_ADMINFORTH_PUBLIC_PATH || ''}/adminapi/v1/agent/transcript-audio`;
-  try {
-    const res = await fetch(fullPath, {
-      method: 'POST',
-      body: formData,
-    });
-    if (res.ok) {
-      console.log('Audio transcribed successfully:', res);
-    } else {
-      console.error('Failed to transcribe audio:', res.error);
-      adminforth.alert({message: 'Failed to transcribe audio', variant: 'danger'});
-    }
-  } catch (error) {
-    console.error('Error sending audio to server:', error);
-  }
-  showCalibrationAnimation.value = false;
-}
 
 </script>

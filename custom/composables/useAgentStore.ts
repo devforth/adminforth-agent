@@ -109,6 +109,8 @@ export const useAgentStore = defineStore('agent', () => {
     deleteSession,
     addDebugMessage,
     addSystemMessage,
+    addAgentMessage,
+    addUserMessage,
   } = createAgentSessionManager({
     activeSessionId,
     currentSession,
@@ -352,6 +354,8 @@ export const useAgentStore = defineStore('agent', () => {
     addSystemMessage,
     isAudioChatMode,
     setIsAudioChatMode,
-    registerOnBeforeChatCloseCallback
+    registerOnBeforeChatCloseCallback,
+    addAgentMessage,
+    addUserMessage,
   }
 })

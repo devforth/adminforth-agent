@@ -5,6 +5,7 @@ let vadInstance: any = null;
 let audioContext: AudioContext | null = null;
 let mediaRecorder: MediaRecorder | null = null;
 let recordedChunks: BlobPart[] = [];
+let wasVoiceStarted = false;
 
 export const CALIBRATION_DURATION = 1000; // in ms
 
@@ -45,7 +46,7 @@ function handleMicConnectError() {
 }
 
 export async function stopUserMedia() {
-
+  wasVoiceStarted = false;
   if (vadInstance && vadInstance.destroy) {
     vadInstance.destroy();
     vadInstance = null;
@@ -127,6 +128,7 @@ function startUserMedia(
     maxNoiseLevel: 0.7,         // from 0 to 1
     avgNoiseMultiplier: 1.2,
     onVoiceStart() {
+      wasVoiceStarted = true;
       if (!mediaRecorder || mediaRecorder.state === 'inactive') {
         startRecording(currentStream as MediaStream);
       }
@@ -134,6 +136,9 @@ function startUserMedia(
       onVoiceStartCallback();
     },
     onVoiceStop() {
+      if (!wasVoiceStarted) {
+        return;
+      }
       console.log('👿👿👿voice stop👿👿👿');
       onVoiceStopCallback();
     }, //Doesn't work properly, so we will handle it with onUpdate callback

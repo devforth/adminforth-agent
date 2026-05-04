@@ -42,3 +42,57 @@ export interface ISessionsListItem {
   title: string;
   timestamp: string;
 }
+
+export type SpeechStreamEvent =
+  | {
+      type: 'transcript';
+      data: {
+        text: string;
+        language?: string;
+      };
+    }
+  | {
+      type: 'speech-response';
+      data: {
+        transcript: {
+          text: string;
+          language?: string;
+        };
+        response: {
+          text: string;
+        };
+        sessionId: string;
+        turnId: string;
+      };
+    }
+  | {
+      type: 'response';
+      data: {
+        text: string;
+        sessionId: string;
+        turnId: string;
+      };
+    }
+  | {
+      type: 'audio-start';
+      data: {
+        mimeType: string;
+        format: string;
+      };
+    }
+  | {
+      type: 'audio-delta';
+      data: {
+        base64: string;
+      };
+    }
+  | {
+      type: 'audio-done';
+    }
+  | {
+      type: 'finish';
+    }
+  | {
+      type: 'error';
+      error: string;
+    };

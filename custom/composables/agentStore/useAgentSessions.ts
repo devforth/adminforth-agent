@@ -258,6 +258,30 @@ export function createAgentSessionManager({
     }
   }
 
+  function addAgentMessage(message: string) {
+    const agentMessage = {
+      role: 'assistant',
+      parts: [{
+        type: 'text',
+        text: message,
+        state: 'done',
+      }]
+    };
+    currentChat.value?.messages.push(agentMessage);
+  }
+
+  function addUserMessage(message: string) {
+    const userMessage = {
+      role: 'user',
+      parts: [{
+        type: 'text',
+        text: message,
+        state: 'done',
+      }]
+    };
+    currentChat.value?.messages.push(userMessage);
+  }
+
   return {
     sendMessage,
     createPreSession,
@@ -266,5 +290,7 @@ export function createAgentSessionManager({
     deleteSession,
     addDebugMessage,
     addSystemMessage,
+    addAgentMessage,
+    addUserMessage,
   };
 }
