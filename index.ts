@@ -420,7 +420,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     server.endpoint({
       method: 'POST',
       path: `/agent/response`,
-      handler: async ({ body, query, headers, cookies, adminUser, response, requestUrl, _raw_express_res }) => {
+      handler: async ({ body, query, headers, cookies, adminUser, response, requestUrl, _raw_express_res, abortSignal }) => {
         const res = _raw_express_res;
         const messageId = randomUUID();
         const prompt = body.message;

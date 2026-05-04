@@ -252,6 +252,10 @@ export const useAgentStore = defineStore('agent', () => {
 
   }
 
+  function abortCurrentChatRequest() {
+    currentChat.value?.stop();
+  }
+
   function clearPlaceholderAnimationTimer() {
     if (placeholderAnimationTimer !== null) {
       clearTimeout(placeholderAnimationTimer);
@@ -638,6 +642,7 @@ export const useAgentStore = defineStore('agent', () => {
     MAX_WIDTH,
     MIN_WIDTH,
     getLocalStorageItem,
-    addDebugMessage
+    addDebugMessage,
+    abortCurrentChatRequest
   }
 })
