@@ -29,6 +29,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
         },
       });
       if (res.ok) {
+        console.log('Started handling speech response stream');
         await readSpeechResponseStream(res);
       } else {
         console.error('Failed to transcribe audio:', res.statusText);
@@ -37,6 +38,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     } catch (error) {
       console.error('Error sending audio to server:', error);
     } finally {
+      console.log('Finished handling speech response stream');
       isStreamingResponse.value = false;
       startRecordingCallback();
     }
@@ -85,7 +87,6 @@ export const useAgentAudio = defineStore('agentAudio', () => {
         playBase64AudioChunks(audioChunks, audioMimeType);
       }
     } finally {
-      isStreamingResponse.value = false;
       reader.releaseLock();
     }
   }
@@ -108,7 +109,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     const event = JSON.parse(data) as SpeechStreamEvent;
 
     if (event.type === 'error') {
-      adminforth.alert({ message: event.error, variant: 'danger' });
+      console.log({ message: event.error, variant: 'danger' });
       return;
     }
 

@@ -18,7 +18,7 @@
 
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import debounce from 'lodash/debounce';
 import { requestMicAndStartVAD, stopUserMedia, getRecorder, CALIBRATION_DURATION } from './voiceActivityDetection';
 import { Spinner } from '@/afcl'
@@ -48,6 +48,14 @@ const sendUserRecordDebounced = debounce(() => {
 }, 1000);
 
 const isAudioChatMode = computed(() => agentStore.isAudioChatMode);
+
+watch(isStreamingResponse, (newVal) => {
+  if(!newVal) {
+    showButtonSpinner.value = false;
+  } else {
+    showButtonSpinner.value = true;
+  }
+})
 
 function toggleChatMode() {
   agentStore.setIsAudioChatMode(!isAudioChatMode.value);

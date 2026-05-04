@@ -35,6 +35,7 @@ import {
 import { ALWAYS_AVAILABLE_API_TOOL_NAMES } from "./agent/tools/index.js";
 import type { ToolCallEvent } from "./agent/toolCallEvents.js";
 import type { CurrentPageContext } from "./agent/tools/getUserLocation.js";
+import { ok } from "assert";
 
 
 type CurrentPageRequestBody = {
@@ -937,19 +938,20 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       path: `/agent/add-system-message-to-turns`,
       handler: async ({body, adminUser, _raw_express_req }) => {
         const sessionId = body.sessionId;
-        const systemMessage = body.systemMessage;
-        await this.createNewTurn(sessionId, systemMessage);
-        return {
-          ok: true
+        if (!sessionId) {
+          return {
+            ok: false,
+            error: 'sessionId is required'
+          };
         }
-      }
-    });
-    server.endpoint({
-      method: 'POST',
-      path: `/agent/add-system-message-to-turns`,
-      handler: async ({body, adminUser, _raw_express_req }) => {
-        const sessionId = body.sessionId;
+        // Need to create a new session, if there is no sessionId
         const systemMessage = body.systemMessage;
+        if (!systemMessage) {
+          return {
+            ok: false,
+            error: 'systemMessage is required'
+          };
+        }
         await this.createNewTurn(sessionId, systemMessage);
         return {
           ok: true
