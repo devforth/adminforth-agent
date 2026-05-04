@@ -16,7 +16,6 @@ import { createAgentChatManager } from './agentStore/useAgentChat';
 import { createAgentPlaceholderController } from './agentStore/useAgentPlaceholder';
 import { createAgentSessionManager } from './agentStore/useAgentSessions';
 
-
 export const useAgentStore = defineStore('agent', () => {
   const agentTransitions = useAgentTransitions();
 
