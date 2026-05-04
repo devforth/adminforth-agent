@@ -328,7 +328,7 @@ async function sendMessage() {
 }
 
 function stopCurrentRequest() {
-  agentStore.abortCurrentChatRequest();
+  agentStore.abortCurrentChatRequestAndAddSystemMessage();
 }
 
 function updateHeight() {

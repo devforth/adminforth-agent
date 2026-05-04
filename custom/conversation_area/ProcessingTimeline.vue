@@ -68,7 +68,7 @@
   });
   
   const showFakeThinkingMessage = computed(() => {
-    if (props.message.parts.length === 0) return true;
+    if (props.message.parts.length === 0 && props.isLastMessageInChat) return true;
     return false;
   })
 

@@ -234,6 +234,30 @@ export function createAgentSessionManager({
     currentChat.value?.messages.push(debugMessage);
   }
 
+  function addSystemMessage(message: string) {
+    const systemMessage = {
+      role: 'system',
+      parts: [{
+        type: 'text',
+        text: message,
+        state: 'done',
+      }]
+    };
+    currentChat.value?.messages.push(systemMessage);
+    try {
+      const res = callAdminForthApi({
+        method: 'POST',
+        path: '/agent/add-system-message-to-turns',
+        body: {
+          sessionId: activeSessionId.value,
+          systemMessage: message,
+        },
+      });
+    } catch (error) {
+      console.error('Error adding system message', error);
+    }
+  }
+
   return {
     sendMessage,
     createPreSession,
@@ -241,5 +265,6 @@ export function createAgentSessionManager({
     fetchSessionsList,
     deleteSession,
     addDebugMessage,
+    addSystemMessage,
   };
 }

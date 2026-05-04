@@ -78,6 +78,7 @@ export const useAgentStore = defineStore('agent', () => {
     fetchSessionsList,
     deleteSession,
     addDebugMessage,
+    addSystemMessage,
   } = createAgentSessionManager({
     activeSessionId,
     currentSession,
@@ -270,6 +271,11 @@ export const useAgentStore = defineStore('agent', () => {
     textInput.value = el;
   }
 
+  function abortCurrentChatRequestAndAddSystemMessage() {
+    abortCurrentChatRequest();
+    addSystemMessage('[Response generation aborted]');
+  }
+
   return {
     //_________-Sessions management-_____________
     activeSessionId,
@@ -311,6 +317,7 @@ export const useAgentStore = defineStore('agent', () => {
     MIN_WIDTH,
     getLocalStorageItem,
     addDebugMessage,
-    abortCurrentChatRequest,
+    abortCurrentChatRequestAndAddSystemMessage,
+    addSystemMessage
   }
 })
