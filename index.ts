@@ -43,14 +43,17 @@ type CurrentPageRequestBody = {
 };
 
 type SpeechResponseRequestBody = CurrentPageRequestBody & {
-  audioBase64: string;
-  filename: string;
-  mimeType: string;
   prompt?: string;
   sessionId?: string | null;
   mode?: string | null;
   timeZone?: string;
   tts?: Omit<TextToSpeechInput, "text">;
+};
+
+type UploadedAudioFile = {
+  buffer: Buffer;
+  originalname: string;
+  mimetype: string;
 };
 
 type AgentTurnRunInput = {
@@ -60,6 +63,7 @@ type AgentTurnRunInput = {
   modeName?: string | null;
   userTimeZone: string;
   currentPage?: CurrentPageContext;
+  abortSignal?: AbortSignal;
   adminUser: AdminUser;
   httpExtra: HttpExtra;
   sequenceDebugCollector: ReturnType<typeof createSequenceDebugCollector>;
@@ -341,6 +345,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       currentPage: input.currentPage,
       httpExtra: input.httpExtra,
       userTimeZone: input.userTimeZone,
+      abortSignal: input.abortSignal,
       emitToolCallEvent: (event) => {
         input.sequenceDebugCollector.handleToolCallEvent(event);
         input.emitToolCallEvent?.(event);
@@ -579,7 +584,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       method: 'POST',
       path: `/agent/speech-response`,
       target: 'upload',
-      handler: async ({ body, query, headers, cookies, adminUser, response, requestUrl, _raw_express_req }) => {
+      handler: async ({ body, query, headers, cookies, adminUser, response, requestUrl, _raw_express_req, _raw_express_res }) => {
         const audioAdapter = this.options.audioAdapter;
         if (!audioAdapter) {
           response.setStatus(400, undefined);
@@ -588,33 +593,77 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           };
         }
         const speechBody = body as SpeechResponseRequestBody;
-        const audio = (_raw_express_req as any).file;
+        const audio = (_raw_express_req as { file?: UploadedAudioFile }).file;
+        if (!audio) {
+          response.setStatus(400, undefined);
+          return {
+            error: "Audio file is required",
+          };
+        }
+        const res = _raw_express_res;
+        let isStreamClosed = false;
+
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        });
+
+        const send = (obj: unknown) => {
+          if (isStreamClosed || res.writableEnded || res.destroyed) {
+            return;
+          }
+          res.write(`data: ${JSON.stringify(obj)}\n\n`);
+        };
+
+        const endStream = () => {
+          if (isStreamClosed || res.writableEnded || res.destroyed) {
+            return;
+          }
+          send({
+            type: 'finish',
+          });
+          res.write(`data: [DONE]\n\n`);
+          isStreamClosed = true;
+          res.end();
+        };
         
         let transcription;
 
         try {
           transcription = await audioAdapter.transcribe({
-            buffer: Buffer.from(speechBody.audioBase64, "base64"),
-            filename: speechBody.filename,
-            mimeType: speechBody.mimeType,
+            buffer: audio.buffer,
+            filename: audio.originalname,
+            mimeType: audio.mimetype,
             language: "auto",
             prompt: speechBody.prompt,
           });
         } catch (error) {
           logger.error(`Agent speech transcription failed:\n${formatAgentError(error)}`);
-          response.setStatus(500, undefined);
-          return {
+          send({
+            type: 'error',
             error: "Speech transcription failed. Check server logs for details.",
-          };
+          });
+          endStream();
+          return null;
         }
 
         const prompt = transcription.text;
         if (!prompt) {
-          response.setStatus(400, undefined);
-          return {
+          send({
+            type: 'error',
             error: "Speech transcription is empty",
-          };
+          });
+          endStream();
+          return null;
         }
+        send({
+          type: 'transcript',
+          data: {
+            text: transcription.text,
+            language: transcription.language,
+          },
+        });
 
         const sessionId = speechBody.sessionId || adminUser?.pk || adminUser?.username || 'default';
         const turnId = await this.createNewTurn(sessionId, prompt);
@@ -645,10 +694,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             },
           });
           fullResponse = agentResponse.text;
-          const speech = await audioAdapter.synthesize({
-            text: fullResponse,
-            ...speechBody.tts,
-          });
           sequenceDebugCollector.flush();
           const turnUpdates: Record<string, unknown> = {
             [this.options.turnResource.responseField]: fullResponse,
@@ -660,22 +705,72 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
 
           await this.updateTurn(turnId, turnUpdates);
 
-          return {
-            transcript: {
-              text: transcription.text,
-              language: transcription.language,
-            },
-            response: {
+          send({
+            type: 'response',
+            data: {
               text: fullResponse,
+              sessionId,
+              turnId,
             },
-            audio: {
-              base64: speech.audio.toString("base64"),
+          });
+
+          send({
+            type: 'speech-response',
+            data: {
+              transcript: {
+                text: transcription.text,
+                language: transcription.language,
+              },
+              response: {
+                text: fullResponse,
+              },
+              sessionId,
+              turnId,
+            },
+          });
+
+          const speech = await audioAdapter.synthesize({
+            text: fullResponse,
+            ...(speechBody.tts ?? {}),
+            stream: true,
+            streamFormat: "audio",
+            format: speechBody.tts?.format ?? "mp3",
+          });
+
+          send({
+            type: "audio-start",
+            data: {
               mimeType: speech.mimeType,
               format: speech.format,
             },
-            sessionId,
-            turnId,
-          };
+          });
+
+          const reader = speech.audioStream.getReader();
+
+          try {
+            while (true) {
+              const { value, done } = await reader.read();
+
+              if (done) {
+                break;
+              }
+
+              send({
+                type: "audio-delta",
+                data: {
+                  base64: Buffer.from(value).toString("base64"),
+                },
+              });
+            }
+          } finally {
+            reader.releaseLock();
+          }
+
+          send({
+            type: "audio-done",
+          });
+          endStream();
+          return null;
         } catch (error) {
           logger.error(`Agent speech response failed:\n${formatAgentError(error)}`);
           sequenceDebugCollector.flush();
@@ -689,10 +784,12 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           }
 
           await this.updateTurn(turnId, turnUpdates);
-          response.setStatus(500, undefined);
-          return {
+          send({
+            type: 'error',
             error: fullResponse,
-          };
+          });
+          endStream();
+          return null;
         }
       }
     });
