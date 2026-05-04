@@ -34,6 +34,7 @@ import {
 import { ALWAYS_AVAILABLE_API_TOOL_NAMES } from "./agent/tools/index.js";
 import type { ToolCallEvent } from "./agent/toolCallEvents.js";
 
+
 type CurrentPageRequestBody = {
   currentPage?: CurrentPageContext;
 };
@@ -633,25 +634,22 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     });
     server.endpoint({
       method: 'POST',
-      path: `/agent/transcript-audio`,
+      path: `/agent/add-system-message-to-turns`,
       handler: async ({body, adminUser, _raw_express_req }) => {
-        const audio = body.formData as string;
-        console.log('Received audio for transcription');
-        /*============================
-         * 
-         * Temp implementation
-         * 
-         =============================*/
-          await new Promise((resolve, reject) => {
-            setTimeout(() => {
-              resolve(null);
-            }, 1000);
-          });
-          return {
-            ok: true,
-            transcript: 'Transcription example: audio transcription is not implemented yet'
-          }
-         //=================
+        const sessionId = body.sessionId;
+        const systemMessage = body.systemMessage;
+        await this.createNewTurn(sessionId, systemMessage);
+        return {
+          ok: true
+        }
+      }
+    }),
+    server.endpoint({
+      method: 'POST',
+      path: `/agent/transcript-audio`,
+      target: 'upload',
+      handler: async ({body, adminUser, _raw_express_req }) => {
+        const audio = (_raw_express_req as any).file;
         if (!audio) {
           return {
             ok: false,

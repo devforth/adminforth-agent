@@ -3,50 +3,12 @@
     class="absolute bottom-2 h-9 bg-lightPrimary dark:bg-darkPrimary 
       hover:opacity-90 rounded-full flex items-center justify-center right-16
       transition-all duration-300 ease-in-out overflow-hidden"
-    :class="isRecording ? 'w-16': 'w-9'" 
-    @click="toggleRecording"
+    :class="isAudioChatMode ? 'w-20 px-2': 'w-9'" 
+    @click="toggleChatMode"
   >
     <div class="w-5 h-5 flex items-center justify-center">
       <div v-if="!showCalibrationAnimation" class="flex justify-evenly items-center gap-[0.1rem]">
-        <div 
-          class=" bg-white w-[0.2rem] rounded-sm transition-all duration-300 ease-in-out"
-          :class="{
-            'recordingAnimation1' : showAnimation,
-            'h-2': !isRecording,
-            'h-1': isRecording,
-          }"  
-        />
-        <div 
-          class=" bg-white w-[0.2rem] rounded-sm transition-all duration-300 ease-in-out"
-          :class="{
-            'recordingAnimation2' : showAnimation,
-            'h-4': !isRecording,
-            'h-1': isRecording,
-          }"  
-        />
-        <div 
-          class=" bg-white w-[0.2rem] rounded-sm transition-all duration-300 ease-in-out"
-          :class="{
-            'recordingAnimation3' : showAnimation,
-            'h-3': !isRecording,
-            'h-1': isRecording,
-          }"  
-        />
-        <div 
-          class=" bg-white w-[0.2rem] rounded-sm transition-all duration-300 ease-in-out"
-          :class="{
-            'recordingAnimation4' : showAnimation,
-            'h-2': !isRecording,
-            'h-1': isRecording,
-          }"  
-        />
-        <div 
-          v-if="isRecording"
-          class=" bg-white w-[0.2rem] rounded-sm h-1 transition-all duration-300 ease-in-out"
-          :class="{
-            'recordingAnimation5' : showAnimation,
-          }"  
-        />
+        <AudioLines :showAnimation="showAnimation" :isRecording="isAudioChatMode" />
       </div>
       <Spinner v-else class="w-4 h-4 text-lightButtonsText dark:text-darkButtonsText fill-lightButtonsBackground dark:fill-darkPrimary" />
     </div>
@@ -56,58 +18,88 @@
 
 
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 import debounce from 'lodash/debounce';
-import { requestMicAndStartVAD, stopUserMedia, CALIBRATION_DURATION } from './voiceActivityDetection';
+import { requestMicAndStartVAD, stopUserMedia, getRecorder, CALIBRATION_DURATION } from './voiceActivityDetection';
 import { Spinner } from '@/afcl'
-import { callApi } from '@/utils';
 import { useAdminforth } from '@/adminforth';
- 
-const adminforth = useAdminforth();
+import { useAgentStore } from '../composables/useAgentStore';
+import AudioLines from './AudioLines.vue';
 
-const isRecording = ref(false);
+const adminforth = useAdminforth();
+const agentStore = useAgentStore();
+
+agentStore.registerOnBeforeChatCloseCallback(async () => {
+  if(agentStore.isAudioChatMode) {
+    onStopRecording();
+    agentStore.setIsAudioChatMode(false);
+  }
+});
+
 const showAnimation = ref(false);
 const showCalibrationAnimation = ref(false);
 const hideAnimationDebounced = debounce(() => {
   showAnimation.value = false;
 }, 100);
-const stopUserMediaDebounced = debounce(() => {
-  finishRecording();
-}, 2000);
+const sendUserRecordDebounced = debounce(() => {
+  getRecording();
+}, 1000);
 
-function toggleRecording() {
-  isRecording.value = !isRecording.value;
-  if (isRecording.value) {
+const isAudioChatMode = computed(() => agentStore.isAudioChatMode);
+
+function toggleChatMode() {
+  agentStore.setIsAudioChatMode(!isAudioChatMode.value);
+  if (isAudioChatMode.value) {
     onStartRecording();
   } else {
-    finishRecording();
+    onStopRecording();
   }
-}
-
-
-function saidSomething(amplutude: number) {
-  console.log('User said something with amplitude: ', amplutude.toFixed(2));
-  showAnimation.value = true;
-  hideAnimationDebounced();
-  stopUserMediaDebounced();
 }
 
 async function onStartRecording() {
   showCalibrationAnimation.value = true;
-  await requestMicAndStartVAD(saidSomething);
+  await requestMicAndStartVAD(saidSomething, stopRecording, onAnySound);
   setTimeout(() => {
     showCalibrationAnimation.value = false;
+    //Play a sound to indicate that recording has started
   }, CALIBRATION_DURATION);
+}
+
+function onStopRecording() {
+  stopUserMedia();
+  showAnimation.value = false;
+  // Play a sound to indicate that recording has stopped
+}
+
+
+function saidSomething() {
+  showAnimation.value = true;
+  hideAnimationDebounced();
+  sendUserRecordDebounced();
+}
+
+function stopRecording() {
+  hideAnimationDebounced.cancel();
+  sendUserRecordDebounced.cancel();
+}
+
+function onAnySound(amplitude: number) {
+  if(amplitude < 0.01) {
+    showAnimation.value = false;
+    return;
+  }
+  showAnimation.value = true;
+  hideAnimationDebounced.cancel();
 }
 
 onBeforeUnmount(() => {
   hideAnimationDebounced.cancel();
+  sendUserRecordDebounced.cancel();
 });
 
-async function finishRecording() {
-  isRecording.value = false;
+async function getRecording() {
   showAnimation.value = false;
-  const recordBlob = await stopUserMedia();
+  const recordBlob = await getRecorder();
   if (recordBlob) {
     const fileURL = URL.createObjectURL(recordBlob);
     const audio = new Audio(fileURL);
@@ -121,13 +113,12 @@ async function finishRecording() {
 
 
 async function sendAudioToServer(blob: Blob) {
+  showCalibrationAnimation.value = true;
   const formData = new FormData();
   formData.append('file', blob, 'user_prompt.webm');
-  console.log('Sending audio blob to server:', formData);
   const fullPath = `${import.meta.env.VITE_ADMINFORTH_PUBLIC_PATH || ''}/adminapi/v1/agent/transcript-audio`;
   try {
-    const res = await callApi({
-      path: '/adminapi/v1/agent/transcript-audio',
+    const res = await fetch(fullPath, {
       method: 'POST',
       body: formData,
     });
@@ -140,49 +131,7 @@ async function sendAudioToServer(blob: Blob) {
   } catch (error) {
     console.error('Error sending audio to server:', error);
   }
+  showCalibrationAnimation.value = false;
 }
 
 </script>
-
-<style scoped lang="scss">
-  .recordingAnimation1 {
-    animation: recordingAnimation 1s infinite;
-    height: 0.3rem;
-  }
-
-  .recordingAnimation2 {
-    animation: recordingAnimation 1s infinite;
-    animation-delay: 0.2s;
-    height: 0.5rem;
-  }
-
-  .recordingAnimation3 {
-    animation: recordingAnimation 1s infinite;
-    animation-delay: 0.4s;
-    height: 0.4rem;
-  }
-  
-  .recordingAnimation4 {
-    animation: recordingAnimation 1s infinite;
-    animation-delay: 0.6s;
-    height: 0.5rem;
-  }
-
-  .recordingAnimation5 {
-    animation: recordingAnimation 1s infinite;
-    animation-delay: 0.8s;
-    height: 0.3rem;
-  }
-
-  @keyframes recordingAnimation {
-    0% {
-      transform: scaleY(1);
-    }
-    50% {
-      transform: scaleY(2);
-    }
-    100% {
-      transform: scaleY(1);
-    }
-  }
-</style>

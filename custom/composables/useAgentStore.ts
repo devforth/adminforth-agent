@@ -64,6 +64,35 @@ export const useAgentStore = defineStore('agent', () => {
   const chats = new Map<string, Chat<any>>();
   const currentChat = shallowRef<Chat<any>>();
 
+  const isAudioChatMode = ref(false);
+
+  const onBeforeChatCloseCallbacks: Array<() => Promise<void>> = [];
+  function registerOnBeforeChatCloseCallback(hook: () => Promise<void>) {
+    onBeforeChatCloseCallbacks.push(hook);
+  }
+
+  async function executeOnBeforeChatCloseCallbacks() {
+    for(const hook of onBeforeChatCloseCallbacks) {
+      try {
+        await hook();
+      } catch (error) {
+        console.error('Error executing onBeforeChatClose callback:', error);
+      }
+    }
+  }
+
+  function setIsAudioChatMode(isAudioChat: boolean) {
+    isAudioChatMode.value = isAudioChat;
+  }
+
+  watch(isAudioChatMode, (newVal: boolean) => {
+    if (newVal) {
+      addSystemMessage('Started audio chat');
+    } else {
+      addSystemMessage('Finished audio chat');
+    }
+ });
+
   let placeholderAnimationTimer: ReturnType<typeof setTimeout> | null = null;
 
   function setLocalStorageItem(key: string, value: string) {
@@ -347,7 +376,8 @@ export const useAgentStore = defineStore('agent', () => {
     userMessageInput.value = '';
   }
 
-  function closeChat() {
+  async function closeChat() {
+    await executeOnBeforeChatCloseCallbacks();
     if(isFullScreen.value) {
       document.body.style.overflow = '';
     }
@@ -599,6 +629,30 @@ export const useAgentStore = defineStore('agent', () => {
     currentChat.value?.messages.push(debugMessage);
   }
 
+  function addSystemMessage(message: string) {
+    const systemMessage = {
+      role: 'system',
+      parts: [{
+        type: 'text',
+        text: message,
+        state: 'done',
+      }]
+    };
+    currentChat.value?.messages.push(systemMessage);
+    try {
+      const res = callAdminForthApi({
+        method: 'POST',
+        path: '/agent/add-system-message-to-turns',
+        body: {
+          sessionId: activeSessionId.value,
+          systemMessage: message,
+        },
+      });
+    } catch (error) {
+      console.error('Error adding system message', error);
+    }
+  }
+
   return {
     //_________-Sessions management-_____________
     activeSessionId,
@@ -638,6 +692,8 @@ export const useAgentStore = defineStore('agent', () => {
     MAX_WIDTH,
     MIN_WIDTH,
     getLocalStorageItem,
-    addDebugMessage
+    setIsAudioChatMode,
+    isAudioChatMode,
+    registerOnBeforeChatCloseCallback
   }
 })
