@@ -13,7 +13,8 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     stopRecordingCallback();
     const formData = new FormData();
     formData.append('file', blob, 'user_prompt.webm');
-    const fullPath = `${import.meta.env.VITE_ADMINFORTH_PUBLIC_PATH || ''}/adminapi/v1/agent/speech-response?sessionId=${agentStore.activeSessionId}`;
+    formData.append('sessionId', agentStore.activeSessionId);
+    const fullPath = `${import.meta.env.VITE_ADMINFORTH_PUBLIC_PATH || ''}/adminapi/v1/agent/speech-response`;
     try {
       isStreamingResponse.value = true;
       const res = await fetch(fullPath, {
