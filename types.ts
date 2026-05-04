@@ -2,6 +2,7 @@ import {
   type PluginsCommonOptions,
   type AdminUser,
   type HttpExtra,
+  type AudioAdapter,
 } from "adminforth";
 import type { AgentModeCompletionAdapter } from "./agent/simpleAgent.js";
 
@@ -60,6 +61,11 @@ export interface PluginOptions extends PluginsCommonOptions {
     name: string;
     completionAdapter: AgentModeCompletionAdapter;
   }[];
+
+  /**
+   * Optional audio adapter for speech-to-text and text-to-speech flows.
+   */
+  audioAdapter?: AudioAdapter;
 
   /**
    * Max tokens for the generation.

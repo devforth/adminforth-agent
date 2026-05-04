@@ -19,12 +19,14 @@ import {
 } from "./middleware/sequenceDebug.js";
 import type { ApiBasedTool } from "../apiBasedTools.js";
 import type { ToolCallEventSink } from "./toolCallEvents.js";
+import type { CurrentPageContext } from "./tools/getUserLocation.js";
 
 export const contextSchema = z.object({
   adminUser: z.custom<AdminUser>(),
   userTimeZone: z.string(),
   sessionId: z.string(),
   turnId: z.string(),
+  currentPage: z.custom<CurrentPageContext>().optional(),
   httpExtra: z.custom<Partial<HttpExtra>>().optional(),
   emitToolCallEvent: z.custom<ToolCallEventSink>(),
 });
@@ -231,6 +233,7 @@ export async function callAgent(params: {
   customComponentsDir: string;
   sessionId: string;
   turnId: string;
+  currentPage?: CurrentPageContext;
   httpExtra?: Partial<HttpExtra>;
   userTimeZone: string;
   emitToolCallEvent: ToolCallEventSink;
@@ -249,6 +252,7 @@ export async function callAgent(params: {
     customComponentsDir,
     sessionId,
     turnId,
+    currentPage,
     httpExtra,
     userTimeZone,
     emitToolCallEvent,
@@ -293,6 +297,7 @@ export async function callAgent(params: {
       userTimeZone,
       sessionId,
       turnId,
+      currentPage,
       httpExtra,
       emitToolCallEvent,
     },
