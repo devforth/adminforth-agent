@@ -578,7 +578,8 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     server.endpoint({
       method: 'POST',
       path: `/agent/speech-response`,
-      handler: async ({ body, query, headers, cookies, adminUser, response, requestUrl }) => {
+      target: 'upload',
+      handler: async ({ body, query, headers, cookies, adminUser, response, requestUrl, _raw_express_req }) => {
         const audioAdapter = this.options.audioAdapter;
         if (!audioAdapter) {
           response.setStatus(400, undefined);
@@ -586,8 +587,9 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             error: "Audio adapter is not configured for AdminForth Agent",
           };
         }
-
         const speechBody = body as SpeechResponseRequestBody;
+        const audio = (_raw_express_req as any).file;
+        
         let transcription;
 
         try {
