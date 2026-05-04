@@ -26,6 +26,7 @@ export const contextSchema = z.object({
   userTimeZone: z.string(),
   sessionId: z.string(),
   turnId: z.string(),
+  abortSignal: z.custom<AbortSignal>().optional(),
   currentPage: z.custom<CurrentPageContext>().optional(),
   httpExtra: z.custom<Partial<HttpExtra>>().optional(),
   emitToolCallEvent: z.custom<ToolCallEventSink>(),
@@ -236,6 +237,7 @@ export async function callAgent(params: {
   currentPage?: CurrentPageContext;
   httpExtra?: Partial<HttpExtra>;
   userTimeZone: string;
+  abortSignal?: AbortSignal;
   emitToolCallEvent: ToolCallEventSink;
   sequenceDebugSink: SequenceDebugModelCallSink;
 }) {
@@ -255,6 +257,7 @@ export async function callAgent(params: {
     currentPage,
     httpExtra,
     userTimeZone,
+    abortSignal,
     emitToolCallEvent,
     sequenceDebugSink,
   } = params;
@@ -289,6 +292,7 @@ export async function callAgent(params: {
     streamMode: "messages",
     recursionLimit: 100,
     callbacks: [createAgentLlmMetricsLogger()],
+    signal: abortSignal,
     configurable: {
       thread_id: sessionId,
     },
@@ -297,6 +301,7 @@ export async function callAgent(params: {
       userTimeZone,
       sessionId,
       turnId,
+      abortSignal,
       currentPage,
       httpExtra,
       emitToolCallEvent,
