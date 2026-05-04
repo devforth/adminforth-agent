@@ -9,6 +9,9 @@ import { useCoreStore } from '@/stores/core';
 import { useAgentTransitions } from './useAgentTransitions';
 import { useWindowSize } from '@vueuse/core';
 import { remToPx, pxToRem } from '../utils';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 type AgentMode = {
   name: string;
@@ -476,7 +479,7 @@ export const useAgentStore = defineStore('agent', () => {
       return;
     }
     blockCloseOfChat.value = true;
-    const isConfirmed = await adminforth.confirm({message: 'Are you sure, that you want to delete this session?', yes: 'Yes', no: 'No'})
+    const isConfirmed = await adminforth.confirm({title: t('Are you sure, that you want to delete this session?'), message: t('This process is irreversible.'), yes: 'Yes', no: 'No'})
     blockCloseOfChat.value = false;
     if (!isConfirmed) {
       return;
