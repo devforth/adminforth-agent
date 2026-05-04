@@ -3,6 +3,7 @@ import { useAgentStore } from "./useAgentStore";
 import { defineStore } from 'pinia';
 import type { SpeechStreamEvent } from '../types';
 import { ref } from 'vue';
+import { getCurrentPageContext } from './agentStore/pageContext';
 
 export const useAgentAudio = defineStore('agentAudio', () => {
   const agentStore = useAgentStore();
@@ -14,6 +15,9 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     const formData = new FormData();
     formData.append('file', blob, 'user_prompt.webm');
     formData.append('sessionId', agentStore.activeSessionId);
+    formData.append('mode', agentStore.activeModeName ?? '');
+    formData.append('timeZone', Intl.DateTimeFormat().resolvedOptions().timeZone);
+    formData.append('currentPage', JSON.stringify(getCurrentPageContext()));
     const fullPath = `${import.meta.env.VITE_ADMINFORTH_PUBLIC_PATH || ''}/adminapi/v1/agent/speech-response`;
     try {
       isStreamingResponse.value = true;

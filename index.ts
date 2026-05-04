@@ -4,7 +4,6 @@ import type {
   HttpExtra,
   IAdminForth,
   IHttpServer,
-  TextToSpeechInput,
 } from "adminforth";
 
 import { AdminForthPlugin, logger, Filters, Sorts } from "adminforth";
@@ -39,15 +38,13 @@ import type { CurrentPageContext } from "./agent/tools/getUserLocation.js";
 
 
 type CurrentPageRequestBody = {
-  currentPage?: CurrentPageContext;
+  currentPage?: CurrentPageContext | string;
 };
 
 type SpeechResponseRequestBody = CurrentPageRequestBody & {
-  prompt?: string;
   sessionId?: string | null;
   mode?: string | null;
   timeZone?: string;
-  tts?: Omit<TextToSpeechInput, "text">;
 };
 
 type UploadedAudioFile = {
@@ -130,6 +127,12 @@ function formatAdminUserPrompt(adminUser: AdminUser, usernameField: string) {
     JSON.stringify(adminUserContext, null, 2),
     "Use this admin user email when the user asks to send information to themselves, the current admin, or the logged-in user.",
   ].join("\n");
+}
+
+function parseCurrentPageContext(currentPage: CurrentPageRequestBody["currentPage"]) {
+  return typeof currentPage === "string"
+    ? JSON.parse(currentPage) as CurrentPageContext
+    : currentPage;
 }
 
 function assertRequiredApiTool(
@@ -431,7 +434,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         const messageId = randomUUID();
         const prompt = body.message;
         const userTimeZone = (body.timeZone as string | undefined) ?? 'UTC';
-        const currentPage = (body as CurrentPageRequestBody).currentPage;
+        const currentPage = parseCurrentPageContext((body as CurrentPageRequestBody).currentPage);
         const sessionId = body.sessionId || adminUser?.pk || adminUser?.username || 'default';
         const turnId = await this.createNewTurn(sessionId, prompt);
         await this.updateSessionDate(sessionId);
@@ -641,7 +644,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             filename: audio.originalname,
             mimeType: audio.mimetype,
             language: "auto",
-            prompt: speechBody.prompt,
           });
         } catch (error) {
           logger.error(`Agent speech transcription failed:\n${formatAgentError(error)}`);
@@ -670,7 +672,8 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           },
         });
 
-        const sessionId = speechBody.sessionId || adminUser?.pk || adminUser?.username || 'default';
+        const sessionId = speechBody.sessionId as string;
+        const currentPage = parseCurrentPageContext(speechBody.currentPage);
         const turnId = await this.createNewTurn(sessionId, prompt);
         await this.updateSessionDate(sessionId);
         const sequenceDebugCollector = createSequenceDebugCollector();
@@ -689,7 +692,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             turnId,
             modeName: speechBody.mode,
             userTimeZone: speechBody.timeZone ?? 'UTC',
-            currentPage: speechBody.currentPage,
+            currentPage,
             abortSignal,
             adminUser,
             httpExtra: {
@@ -744,10 +747,9 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
 
           const speech = await audioAdapter.synthesize({
             text: fullResponse,
-            ...(speechBody.tts ?? {}),
             stream: true,
             streamFormat: "audio",
-            format: speechBody.tts?.format ?? "mp3",
+            format: "mp3",
           });
 
           send({
