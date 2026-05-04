@@ -42,7 +42,6 @@ export function createAgentSessionManager({
   }
 
   const { t } = useI18n();
-
   function saveCurrentSessionInCache() {
     if (currentSession.value) {
       currentSession.value.messages = currentChat.value?.messages.map((m: any) => ({
@@ -167,7 +166,6 @@ export function createAgentSessionManager({
   }
 
   async function deleteSession(sessionId: string) {
-
     if (sessionId === 'pre-session') {
       deletePreSession();
       return;
