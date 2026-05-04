@@ -133,10 +133,11 @@ export const useAgentStore = defineStore('agent', () => {
     }
     if (!coreStore.isMobile) {
       const savedIsTeleportedToBody = getLocalStorageItem('isTeleportedToBody');
+      const savedIsTeleportedToBodyBeforeFullScreen = getLocalStorageItem('isTeleportedToBodyBeforeFullScreen');
+      const isTeleportedToBodyFromLocalStorage = savedIsTeleportedToBody === 'true' || savedIsTeleportedToBodyBeforeFullScreen === 'true';
       const savedIsChatOpen = getLocalStorageItem('isChatOpen');
-      const shouldTeleportToBody = savedIsTeleportedToBody === null ? true : savedIsTeleportedToBody === 'true';
 
-      setIsTeleportedToBody(shouldTeleportToBody);
+      setIsTeleportedToBody(isTeleportedToBodyFromLocalStorage);
       if (isTeleportedToBody.value) {
         isChatOpen.value = savedIsChatOpen === null ? true : savedIsChatOpen === 'true';
       }
