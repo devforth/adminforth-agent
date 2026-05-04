@@ -421,7 +421,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     server.endpoint({
       method: 'POST',
       path: `/agent/response`,
-      handler: async ({ body, query, headers, cookies, adminUser, response, requestUrl, _raw_express_res }) => {
+      handler: async ({ body, query, headers, cookies, adminUser, response, requestUrl, _raw_express_res, abortSignal }) => {
         const res = _raw_express_res;
         const messageId = randomUUID();
         const prompt = body.message;
@@ -812,6 +812,18 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         return {
           ok: true
         };
+      }
+    }),
+    server.endpoint({
+      method: 'POST',
+      path: `/agent/add-system-message-to-turns`,
+      handler: async ({body, adminUser, _raw_express_req }) => {
+        const sessionId = body.sessionId;
+        const systemMessage = body.systemMessage;
+        await this.createNewTurn(sessionId, systemMessage);
+        return {
+          ok: true
+        }
       }
     });
     server.endpoint({
