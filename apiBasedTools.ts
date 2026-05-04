@@ -20,12 +20,13 @@ type CookieItem = {
   value: string;
 };
 
-type ToolOverrideCallParams = Pick<ApiBasedToolCallParams, 'httpExtra' | 'inputs' | 'userTimeZone'>;
+type ToolOverrideCallParams = Pick<ApiBasedToolCallParams, 'abortSignal' | 'httpExtra' | 'inputs' | 'userTimeZone'>;
 
 type ToolOverrideContext = {
   adminforth: IAdminForth;
   output?: unknown;
   adminUser?: AdminUser;
+  abortSignal?: AbortSignal;
   httpExtra?: Partial<HttpExtra>;
   inputs?: Record<string, unknown>;
   resourceLabel?: string;
@@ -171,6 +172,7 @@ const TOOL_OVERRIDES: Record<string, ToolOverride> = {
 export type ApiBasedToolCallParams = {
   adminUser?: AdminUser;
   adminuser?: AdminUser;
+  abortSignal?: AbortSignal;
   inputs?: Record<string, unknown>;
   httpExtra?: Partial<HttpExtra>;
   userTimeZone?: string;
@@ -367,6 +369,7 @@ function formatDateTimeColumns(
 async function applyToolOverride(params: {
   adminforth: IAdminForth;
   adminUser?: AdminUser;
+  abortSignal?: AbortSignal;
   httpExtra?: Partial<HttpExtra>;
   inputs?: Record<string, unknown>;
   invokeTool: (toolName: string, params?: ToolOverrideCallParams) => Promise<unknown>;
@@ -377,6 +380,7 @@ async function applyToolOverride(params: {
   const {
     adminforth,
     adminUser,
+    abortSignal,
     httpExtra,
     inputs,
     invokeTool,
@@ -403,6 +407,7 @@ async function applyToolOverride(params: {
     adminforth,
     output: sanitizedOutput,
     adminUser,
+    abortSignal,
     httpExtra,
     inputs,
     userTimeZone,
@@ -410,7 +415,9 @@ async function applyToolOverride(params: {
       const nestedInputs = nestedParams.inputs ?? inputs;
       const nestedHttpExtra = nestedParams.httpExtra ?? httpExtra;
       const nestedUserTimeZone = nestedParams.userTimeZone ?? userTimeZone;
+      const nestedAbortSignal = nestedParams.abortSignal ?? abortSignal;
       const nestedOutput = await invokeTool(nestedToolName, {
+        abortSignal: nestedAbortSignal,
         inputs: nestedInputs,
         httpExtra: nestedHttpExtra,
         userTimeZone: nestedUserTimeZone,
@@ -419,6 +426,7 @@ async function applyToolOverride(params: {
       return applyToolOverride({
         adminforth,
         adminUser,
+        abortSignal: nestedAbortSignal,
         httpExtra: nestedHttpExtra,
         inputs: nestedInputs,
         invokeTool,
@@ -700,13 +708,14 @@ async function parseOpenApiToolResponse(response: Response) {
 
 async function callOpenApiSchema(params: {
   adminforth: IAdminForth;
+  abortSignal?: AbortSignal;
   httpExtra?: Partial<HttpExtra>;
   inputs?: Record<string, unknown>;
   schema: IRegisteredApiSchema;
   toolName: string;
   userTimeZone?: string;
 }) {
-  const { adminforth, httpExtra, inputs, schema, toolName, userTimeZone } = params;
+  const { adminforth, abortSignal, httpExtra, inputs, schema, toolName, userTimeZone } = params;
   const method = schema.method.toUpperCase();
   const body = normalizeDateTimeInputsToUtc(
     (inputs ?? httpExtra?.body ?? {}) as Record<string, unknown>,
@@ -724,6 +733,7 @@ async function callOpenApiSchema(params: {
     method,
     headers: createToolRequestHeaders(httpExtra, userTimeZone),
     body: hasRequestBody ? JSON.stringify(body) : undefined,
+    signal: abortSignal,
   });
   logger.info(`Received response with status ${response.status} from OpenAPI tool "${toolName}"`);
 
@@ -761,7 +771,7 @@ export function prepareApiBasedTools(
       input_schema: schema.request_schema,
       input_schma: schema.request_schema,
       output_schema: schema.response_schema,
-      call: async ({ adminUser, adminuser, inputs, httpExtra, userTimeZone } = {}) => {
+      call: async ({ adminUser, adminuser, abortSignal, inputs, httpExtra, userTimeZone } = {}) => {
         if (isHiddenResourceCall(hiddenResourceIdSet, inputs)) {
           return YAML.stringify({
             error: 'RESOURCE_NOT_AVAILABLE',
@@ -781,6 +791,7 @@ export function prepareApiBasedTools(
 
           return callOpenApiSchema({
             adminforth,
+            abortSignal: nextParams.abortSignal,
             schema: nextSchema,
             toolName: nextToolName,
             inputs: nextParams.inputs,
@@ -790,6 +801,7 @@ export function prepareApiBasedTools(
         };
 
         const output = await invokeTool(toolName, {
+          abortSignal,
           inputs,
           httpExtra,
           userTimeZone,
@@ -798,6 +810,7 @@ export function prepareApiBasedTools(
         const processedOutput = await applyToolOverride({
           adminforth,
           adminUser: adminUser ?? adminuser,
+          abortSignal,
           httpExtra,
           inputs,
           invokeTool,

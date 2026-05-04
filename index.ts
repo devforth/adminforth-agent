@@ -525,6 +525,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             modeName: body.mode,
             userTimeZone,
             currentPage,
+            abortSignal,
             adminUser,
             httpExtra: {
               body,
@@ -556,15 +557,19 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           });
           fullResponse = agentResponse.text;
         } catch (error) {
-          logger.error(`Agent response streaming failed:\n${formatAgentError(error)}`);
-          sequenceDebugCollector.flush();
-          fullResponse = formatAgentResponseError(error);
-          const textId = startBlock('text');
-          send({
-            type: 'text-delta',
-            id: textId,
-            delta: fullResponse,
-          });
+          if (abortSignal.aborted) {
+            logger.info("Agent response streaming aborted by the client");
+          } else {
+            logger.error(`Agent response streaming failed:\n${formatAgentError(error)}`);
+            sequenceDebugCollector.flush();
+            fullResponse = formatAgentResponseError(error);
+            const textId = startBlock('text');
+            send({
+              type: 'text-delta',
+              id: textId,
+              delta: fullResponse,
+            });
+          }
         }
         sequenceDebugCollector.flush();
         const turnUpdates: Record<string, unknown> = {
@@ -584,7 +589,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       method: 'POST',
       path: `/agent/speech-response`,
       target: 'upload',
-      handler: async ({ body, query, headers, cookies, adminUser, response, requestUrl, _raw_express_req, _raw_express_res }) => {
+      handler: async ({ body, query, headers, cookies, adminUser, response, requestUrl, _raw_express_req, _raw_express_res, abortSignal }) => {
         const audioAdapter = this.options.audioAdapter;
         if (!audioAdapter) {
           response.setStatus(400, undefined);
@@ -679,6 +684,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             modeName: speechBody.mode,
             userTimeZone: speechBody.timeZone ?? 'UTC',
             currentPage: speechBody.currentPage,
+            abortSignal,
             adminUser,
             httpExtra: {
               body,
@@ -772,9 +778,13 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           endStream();
           return null;
         } catch (error) {
-          logger.error(`Agent speech response failed:\n${formatAgentError(error)}`);
+          if (abortSignal.aborted) {
+            logger.info("Agent speech response aborted by the client");
+          } else {
+            logger.error(`Agent speech response failed:\n${formatAgentError(error)}`);
+            fullResponse = formatAgentResponseError(error);
+          }
           sequenceDebugCollector.flush();
-          fullResponse = formatAgentResponseError(error);
           const turnUpdates: Record<string, unknown> = {
             [this.options.turnResource.responseField]: fullResponse,
           };
@@ -784,10 +794,12 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           }
 
           await this.updateTurn(turnId, turnUpdates);
-          send({
-            type: 'error',
-            error: fullResponse,
-          });
+          if (!abortSignal.aborted) {
+            send({
+              type: 'error',
+              error: fullResponse,
+            });
+          }
           endStream();
           return null;
         }
