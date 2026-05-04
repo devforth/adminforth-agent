@@ -23,13 +23,17 @@ import debounce from 'lodash/debounce';
 import { requestMicAndStartVAD, stopUserMedia, getRecorder, CALIBRATION_DURATION } from './voiceActivityDetection';
 import { Spinner } from '@/afcl'
 import { useAdminforth } from '@/adminforth';
+import { storeToRefs } from 'pinia';
 import { useAgentStore } from '../composables/useAgentStore';
 import { useAgentAudio } from '../composables/useAgentAudio';
 import AudioLines from './AudioLines.vue';
 
 const adminforth = useAdminforth();
 const agentStore = useAgentStore();
-const { sendAudioToServerAndHandleResponse, isStreamingResponse } = useAgentAudio();
+const agentAudio = useAgentAudio();
+const { sendAudioToServerAndHandleResponse } = agentAudio;
+const { stopGenerationAndAudio } = agentAudio;
+const { isStreamingResponse } = storeToRefs(agentAudio);
 
 agentStore.registerOnBeforeChatCloseCallback(async () => {
   if(agentStore.isAudioChatMode) {
@@ -62,6 +66,7 @@ function toggleChatMode() {
   if (isAudioChatMode.value) {
     onStartRecording();
   } else {
+    resetAll();
     onStopRecording();
   }
 }
@@ -79,6 +84,14 @@ function onStopRecording() {
   stopUserMedia();
   showAnimation.value = false;
   // Play a sound to indicate that recording has stopped
+}
+
+function resetAll() {
+  stopGenerationAndAudio();
+  showAnimation.value = false;
+  showButtonSpinner.value = false;
+  hideAnimationDebounced.cancel();
+  sendUserRecordDebounced.cancel();
 }
 
 
@@ -103,6 +116,9 @@ function onAnySound(amplitude: number) {
 }
 
 onBeforeUnmount(() => {
+  stopUserMedia();
+  agentStore.setIsAudioChatMode(false);
+  onStopRecording();
   hideAnimationDebounced.cancel();
   sendUserRecordDebounced.cancel();
 });

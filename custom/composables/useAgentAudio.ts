@@ -9,8 +9,20 @@ export const useAgentAudio = defineStore('agentAudio', () => {
   const agentStore = useAgentStore();
 
   const isStreamingResponse = ref(false);
+  
+  let currentAbortController: AbortController | null = null;
+
+  function stopGenerationAndAudio() {
+    if (isStreamingResponse.value) {
+      isStreamingResponse.value = false;
+      setIsPlaying(false);
+    }
+    currentAbortController?.abort();
+    currentAbortController = null;
+  }
 
   async function sendAudioToServerAndHandleResponse(blob: Blob, startRecordingCallback: () => void, stopRecordingCallback: () => void) {
+    currentAbortController = new AbortController();
     stopRecordingCallback();
     const formData = new FormData();
     formData.append('file', blob, 'user_prompt.webm');
@@ -27,19 +39,22 @@ export const useAgentAudio = defineStore('agentAudio', () => {
         headers: {
           Accept: 'text/event-stream',
         },
+        signal: currentAbortController!.signal,
       });
       if (res.ok) {
-        console.log('Started handling speech response stream');
         await readSpeechResponseStream(res);
       } else {
         console.error('Failed to transcribe audio:', res.statusText);
         adminforth.alert({message: 'Failed to transcribe audio', variant: 'danger'});
       }
     } catch (error) {
-      console.error('Error sending audio to server:', error);
-    } finally {
-      console.log('Finished handling speech response stream');
-      isStreamingResponse.value = false;
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        //
+      } else {
+        console.error('Error sending audio to server:', error);
+      }
+    }
+    if (!currentAbortController?.signal.aborted) {
       startRecordingCallback();
     }
   }
@@ -87,6 +102,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
         playBase64AudioChunks(audioChunks, audioMimeType);
       }
     } finally {
+      isStreamingResponse.value = false;
       reader.releaseLock();
     }
   }
@@ -96,6 +112,9 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     audioChunks: string[],
     setAudioMimeType: (mimeType: string) => void,
   ) {
+    if (currentAbortController?.signal.aborted) {
+      return;
+    }
     const data = eventBlock
       .split('\n')
       .filter((line) => line.startsWith('data:'))
@@ -109,18 +128,16 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     const event = JSON.parse(data) as SpeechStreamEvent;
 
     if (event.type === 'error') {
-      console.log({ message: event.error, variant: 'danger' });
+
       return;
     }
 
     if (event.type === 'transcript') {
-      console.log('Speech transcript:', event.data);
       agentStore.addUserMessage(event.data.text);
       return;
     }
 
     if (event.type === 'speech-response') {
-      console.log('Speech response:', event.data);
       agentStore.addAgentMessage(event.data.response.text);
       return;
     }
@@ -135,14 +152,29 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     }
   }
 
+  let isPlaying = false;
+  let currentAudio: HTMLAudioElement | null = null;
+
+  function setIsPlaying(value: boolean) {
+    isPlaying = value;
+    if (!isPlaying ) {
+      currentAudio?.pause();
+      currentAudio!.currentTime = 0;
+    } else {
+      currentAudio?.play();
+    }
+  }
+
+
   function playBase64AudioChunks(chunks: string[], mimeType: string) {
     const audioBlob = new Blob(chunks.map(base64ToUint8Array), { type: mimeType });
     const fileURL = URL.createObjectURL(audioBlob);
-    const audio = new Audio(fileURL);
-    audio.play().catch((error) => {
-      console.error('Failed to play speech response audio:', error);
-    });
-    audio.addEventListener('ended', () => URL.revokeObjectURL(fileURL), { once: true });
+    currentAudio = new Audio(fileURL);
+    setIsPlaying(true);
+    currentAudio.addEventListener('ended', () => {
+      URL.revokeObjectURL(fileURL);
+      currentAudio = null;
+    }, { once: true });
   }
 
   function base64ToUint8Array(base64: string) {
@@ -159,6 +191,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
   return {
     sendAudioToServerAndHandleResponse,
     isStreamingResponse,
+    stopGenerationAndAudio
   };
 
 });

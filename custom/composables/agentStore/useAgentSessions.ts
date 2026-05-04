@@ -235,8 +235,6 @@ export function createAgentSessionManager({
   }
 
   function addSystemMessage(message: string) {
-    console.log('Adding system message to chat:', message);
-    console.log('activeSessionId:', activeSessionId.value);
     const systemMessage = {
       role: 'system',
       parts: [{
