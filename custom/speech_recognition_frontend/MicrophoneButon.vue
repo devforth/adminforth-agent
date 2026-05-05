@@ -3,7 +3,7 @@
     class="absolute bottom-2 h-9 bg-lightPrimary dark:bg-darkPrimary 
       hover:opacity-90 rounded-full flex items-center justify-center right-16
       transition-all duration-300 ease-in-out overflow-hidden"
-    :class="isAudioChatMode ? 'w-20 px-2': 'w-9'" 
+    :class="isAudioChatMode ? 'w-32 px-2': 'w-9'" 
     @click="toggleChatMode"
   >
     <div class="w-5 h-5 flex items-center justify-center">
