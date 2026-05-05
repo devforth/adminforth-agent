@@ -1,10 +1,4 @@
-import type {
-  AdminUser,
-  AdminForthResource,
-  HttpExtra,
-  IAdminForth,
-  IHttpServer,
-} from "adminforth";
+import type { AdminUser, AdminForthResource, HttpExtra, IAdminForth, IHttpServer } from "adminforth";
 
 import { AdminForthPlugin, logger, Filters, Sorts } from "adminforth";
 
@@ -12,30 +6,24 @@ import type { PluginOptions } from './types.js';
 import { randomUUID } from 'crypto';
 import { HumanMessage, SystemMessage } from "langchain";
 import { MemorySaver, type BaseCheckpointSaver } from "@langchain/langgraph";
-import {
-  createAgentChatModel,
-  callAgent,
-  type AgentChatModel,
-} from "./agent/simpleAgent.js";
+import { createAgentChatModel, callAgent, type AgentChatModel } from "./agent/simpleAgent.js";
 import { AdminForthCheckpointSaver } from "./agent/checkpointer.js";
 import { createSequenceDebugCollector } from "./agent/middleware/sequenceDebug.js";
-import {
-  detectUserLanguage,
-} from "./agent/languageDetect.js";
-import {
-  prepareApiBasedTools as buildApiBasedTools,
-} from './apiBasedTools.js';
+import { detectUserLanguage } from "./agent/languageDetect.js";
+import { prepareApiBasedTools as buildApiBasedTools } from './apiBasedTools.js';
 import type { ApiBasedTool } from './apiBasedTools.js';
 import { createAgentEventStream } from "./agentResponseEvents.js";
-import {
-  appendCustomSystemPrompt,
-  buildAgentSystemPrompt,
-  buildAgentTurnSystemPrompt,
-  DEFAULT_AGENT_SYSTEM_PROMPT,
-} from "./agent/systemPrompt.js";
+import { appendCustomSystemPrompt, buildAgentSystemPrompt, buildAgentTurnSystemPrompt, DEFAULT_AGENT_SYSTEM_PROMPT} from "./agent/systemPrompt.js";
 import type { ToolCallEvent } from "./agent/toolCallEvents.js";
 import type { CurrentPageContext } from "./agent/tools/getUserLocation.js";
-import { ok } from "assert";
+
+type MulterFile = {
+  buffer: Buffer;
+  originalname: string;
+  mimetype: string;
+};
+
+type ExpressMulterRequest = { file?: MulterFile };
 
 type AgentTurnRunInput = {
   prompt: string;
@@ -447,7 +435,9 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           return { error: "Audio adapter is not configured for AdminForth Agent" };
         }
 
-        if (!_raw_express_req.file) {
+        const req = _raw_express_req as ExpressMulterRequest;
+
+        if (!req.file) {
           response.setStatus(400, undefined);
           return { error: "Audio file is required" };
         }
@@ -457,9 +447,9 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
 
         try {
           transcription = await audioAdapter.transcribe({
-            buffer: _raw_express_req.file.buffer,
-            filename: _raw_express_req.file.originalname,
-            mimeType: _raw_express_req.file.mimetype,
+            buffer: req.file.buffer,
+            filename: req.file.originalname,
+            mimeType: req.file.mimetype,
             language: "auto",
           });
         } catch (error) {
