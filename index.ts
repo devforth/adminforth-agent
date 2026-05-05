@@ -543,7 +543,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           return { error: "Audio adapter is not configured for AdminForth Agent" };
         }
 
-        if (!body.file) {
+        if (!_raw_express_req.file) {
           response.setStatus(400, undefined);
           return { error: "Audio file is required" };
         }
@@ -553,9 +553,9 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
 
         try {
           transcription = await audioAdapter.transcribe({
-            buffer: body.file.buffer,
-            filename: body.file.originalname,
-            mimeType: body.file.mimetype,
+            buffer: _raw_express_req.file.buffer,
+            filename: _raw_express_req.file.originalname,
+            mimeType: _raw_express_req.file.mimetype,
             language: "auto",
           });
         } catch (error) {
@@ -801,25 +801,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           ok: true
         }
       }
-    }),
-    server.endpoint({
-      method: 'POST',
-      path: `/agent/transcript-audio`,
-      target: 'upload',
-      handler: async ({body, adminUser, _raw_express_req }) => {
-        const audio = (_raw_express_req as any).file;
-        if (!audio) {
-          return {
-            ok: false,
-            error: 'No audio provided'
-          };
-        } else {
-          return {
-            ok: true,
-            transcript: 'Transcription example: audio transcription is not implemented yet'
-          };
-        }
-      }
-    });
+    })
   }
 }

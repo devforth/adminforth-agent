@@ -127,7 +127,11 @@ async function sendRecordForTranscription() {
   showAnimation.value = false;
   const recordBlob = await getRecorder();
   if (recordBlob) {
-    sendAudioToServerAndHandleResponse(recordBlob, onStartRecording, onStopRecording);
+    onStopRecording();
+    await sendAudioToServerAndHandleResponse(recordBlob);
+    if (agentStore.isAudioChatMode) {
+      onStartRecording();
+    }
   } else { 
     console.error('No audio recorded');
   }

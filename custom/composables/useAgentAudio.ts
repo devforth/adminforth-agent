@@ -18,12 +18,10 @@ export const useAgentAudio = defineStore('agentAudio', () => {
       setIsPlaying(false);
     }
     currentAbortController?.abort();
-    currentAbortController = null;
   }
 
-  async function sendAudioToServerAndHandleResponse(blob: Blob, startRecordingCallback: () => void, stopRecordingCallback: () => void) {
+  async function sendAudioToServerAndHandleResponse(blob: Blob) {
     currentAbortController = new AbortController();
-    stopRecordingCallback();
     const formData = new FormData();
     formData.append('file', blob, 'user_prompt.webm');
     formData.append('sessionId', agentStore.activeSessionId);
@@ -53,9 +51,8 @@ export const useAgentAudio = defineStore('agentAudio', () => {
       } else {
         console.error('Error sending audio to server:', error);
       }
-    }
-    if (!currentAbortController?.signal.aborted) {
-      startRecordingCallback();
+    } finally {
+      isStreamingResponse.value = false;
     }
   }
 
@@ -102,7 +99,6 @@ export const useAgentAudio = defineStore('agentAudio', () => {
         playBase64AudioChunks(audioChunks, audioMimeType);
       }
     } finally {
-      isStreamingResponse.value = false;
       reader.releaseLock();
     }
   }
@@ -157,7 +153,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
 
   function setIsPlaying(value: boolean) {
     isPlaying = value;
-    if (!isPlaying ) {
+    if (!isPlaying && currentAudio) {
       currentAudio?.pause();
       currentAudio!.currentTime = 0;
     } else {
