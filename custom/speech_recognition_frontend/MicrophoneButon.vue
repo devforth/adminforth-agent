@@ -3,12 +3,16 @@
     class="absolute bottom-2 h-9 bg-lightPrimary dark:bg-darkPrimary 
       hover:opacity-90 rounded-full flex items-center justify-center
       transition-all duration-300 ease-in-out overflow-hidden"
-    :class="[isAudioChatMode ? 'w-32 px-2': 'w-9', !agentStore.isAudioChatMode ? 'right-16': 'right-4']" 
+    :class="[isAudioChatMode ? 'w-32 px-2': 'w-9', !agentStore.isAudioChatMode ? 'right-16': 'right-1/2 translate-x-1/2']" 
     @click="toggleChatMode"
   >
     <div class="w-5 h-5 flex items-center justify-center">
       <div v-if="!showButtonSpinner" class="flex justify-evenly items-center gap-[0.1rem]">
         <AudioLines :showAnimation="showAnimation" :isRecording="isAudioChatMode" />
+      </div>
+      <div v-else-if="showStopGenerationMessage" class="flex items-center justify-center gap-2 text-white text-sm">
+        <span class="w-3 h-3 bg-white rounded-sm" />
+        {{ $t('Stop') }}
       </div>
       <Spinner v-else class="w-4 h-4 text-lightButtonsText dark:text-darkButtonsText fill-lightButtonsBackground dark:fill-darkPrimary" />
     </div>
@@ -44,6 +48,7 @@ agentStore.registerOnBeforeChatCloseCallback(async () => {
 
 const showAnimation = ref(false);
 const showButtonSpinner = ref(false);
+const showStopGenerationMessage = ref(false);
 const hideAnimationDebounced = debounce(() => {
   showAnimation.value = false;
 }, 100);
@@ -55,9 +60,11 @@ const isAudioChatMode = computed(() => agentStore.isAudioChatMode);
 
 watch(isStreamingResponse, (newVal) => {
   if(!newVal) {
+    showStopGenerationMessage.value = false;
     showButtonSpinner.value = false;
   } else {
     showButtonSpinner.value = true;
+    showStopGenerationMessage.value = true;
   }
 })
 
@@ -92,6 +99,7 @@ function resetAll() {
   stopGenerationAndAudio();
   showAnimation.value = false;
   showButtonSpinner.value = false;
+  showStopGenerationMessage.value = false;
   hideAnimationDebounced.cancel();
   sendUserRecordDebounced.cancel();
 }
