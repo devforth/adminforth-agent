@@ -188,10 +188,30 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     return bytes;
   }
 
+  function playBeep(freq = 800, duration = 0.05) {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.frequency.value = freq;
+    osc.type = 'sine';
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start();
+
+    gain.gain.setValueAtTime(1, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+
+    osc.stop(ctx.currentTime + duration);
+  }
+
   return {
     sendAudioToServerAndHandleResponse,
     isStreamingResponse,
-    stopGenerationAndAudio
+    stopGenerationAndAudio,
+    playBeep
   };
 
 });

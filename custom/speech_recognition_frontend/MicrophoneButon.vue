@@ -76,11 +76,13 @@ async function onStartRecording() {
   await requestMicAndStartVAD(saidSomething, stopRecording, onAnySound);
   setTimeout(() => {
     showButtonSpinner.value = false;
+    agentAudio.playBeep(1000);
     //Play a sound to indicate that recording has started
   }, CALIBRATION_DURATION);
 }
 
 function onStopRecording() {
+  agentAudio.playBeep(600);
   stopUserMedia();
   showAnimation.value = false;
   // Play a sound to indicate that recording has stopped
@@ -130,7 +132,7 @@ async function sendRecordForTranscription() {
     onStopRecording();
     await sendAudioToServerAndHandleResponse(recordBlob);
     if (agentStore.isAudioChatMode) {
-      onStartRecording();
+      await requestMicAndStartVAD(saidSomething, stopRecording, onAnySound);
     }
   } else { 
     console.error('No audio recorded');
