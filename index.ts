@@ -6,12 +6,12 @@ import type { PluginOptions } from './types.js';
 import { randomUUID } from 'crypto';
 import { HumanMessage, SystemMessage } from "langchain";
 import { MemorySaver, type BaseCheckpointSaver } from "@langchain/langgraph";
-import { createAgentChatModel, callAgent, type AgentChatModel } from "./agent/simpleAgent.js";
+import { z } from "zod";
+import { createAgentChatModel, callAgent } from "./agent/simpleAgent.js";
 import { AdminForthCheckpointSaver } from "./agent/checkpointer.js";
 import { createSequenceDebugCollector } from "./agent/middleware/sequenceDebug.js";
 import { detectUserLanguage } from "./agent/languageDetect.js";
 import { prepareApiBasedTools as buildApiBasedTools } from './apiBasedTools.js';
-import type { ApiBasedTool } from './apiBasedTools.js';
 import { createAgentEventStream } from "./agentResponseEvents.js";
 import { appendCustomSystemPrompt, buildAgentSystemPrompt, buildAgentTurnSystemPrompt, DEFAULT_AGENT_SYSTEM_PROMPT} from "./agent/systemPrompt.js";
 import type { ToolCallEvent } from "./agent/toolCallEvents.js";
@@ -34,27 +34,64 @@ type AgentTurnRunInput = {
   currentPage?: CurrentPageContext;
   abortSignal?: AbortSignal;
   adminUser: AdminUser;
-  httpExtra: HttpExtra;
+  httpExtra: Pick<HttpExtra, "headers" | "cookies">;
   sequenceDebugCollector: ReturnType<typeof createSequenceDebugCollector>;
   emitReasoningDelta?: (delta: string) => void;
   emitTextDelta?: (delta: string) => void;
   emitToolCallEvent?: (event: ToolCallEvent) => void;
 };
 
+type RunAndPersistAgentResponseInput =
+  Omit<AgentTurnRunInput, "turnId" | "sequenceDebugCollector"> & {
+    emitErrorResponse?: (response: string) => void;
+    failureLogMessage: string;
+    abortLogMessage: string;
+  };
+
+const agentResponseBodySchema = z.object({
+  message: z.string(),
+  sessionId: z.string(),
+  mode: z.string().nullish(),
+  timeZone: z.string().optional(),
+  currentPage: z.custom<CurrentPageContext>().optional(),
+}).strict();
+
+const agentSpeechResponseBodySchema = agentResponseBodySchema.omit({message: true})
+
+const addSystemMessageBodySchema = z.object({
+  sessionId: z.string(),
+  systemMessage: z.string(),
+}).strict();
+
+const getSessionsBodySchema = z.object({
+  limit: z.number().optional(),
+}).strict();
+
+const sessionIdBodySchema = z.object({
+  sessionId: z.string(),
+}).strict();
+
+const createSessionBodySchema = z.object({
+  triggerMessage: z.string().optional(),
+}).strict();
+
+
 export default class AdminForthAgentPlugin extends AdminForthPlugin {
   options: PluginOptions;
-  apiBasedTools: Record<string, ApiBasedTool> = {};
   agentSystemPromptPromise: Promise<string>;
   private checkpointer: BaseCheckpointSaver | null = null;
-  private readonly modelsByModeName = new Map<
-    string,
-    Promise<{
-      model: AgentChatModel;
-      summaryModel: AgentChatModel;
-      modelMiddleware: Awaited<ReturnType<typeof createAgentChatModel>>["middleware"];
-    }>
-  >();
-
+  private parseBody<T>(
+    schema: z.ZodType<T>,
+    body: unknown,
+    response: { setStatus: (code: number, message?: string) => void },
+  ): T | null {
+    const parsed = schema.safeParse(body ?? {});
+    if (!parsed.success) {
+      response.setStatus(422, parsed.error.message);
+      return null;
+    }
+    return parsed.data;
+  }
   private async createNewTurn(sessionId: string, prompt: string, response?: string) {
     const turnId = randomUUID();
     const turnRecord = {
@@ -65,18 +102,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     };
     const newTurn = await this.adminforth.resource(this.options.turnResource.resourceId).create(turnRecord);
     return newTurn.createdRecord[this.options.turnResource.idField];
-  }
-
-  private async updateTurn(turnId: string, updates: Record<string, unknown>) {
-    await this.adminforth.resource(this.options.turnResource.resourceId).update(turnId, updates);
-    return {ok: true};
-  }
-
-  private async updateSessionDate(sessionId: string) {
-    await this.adminforth.resource(this.options.sessionResource.resourceId).update(sessionId, {
-      [this.options.sessionResource.createdAtField]: new Date().toISOString(),
-    });
-    return {ok: true};
   }
 
   private async getSessionTurns(sessionId: string) {
@@ -92,47 +117,8 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     }));
   }
 
-  private async getModeModels(
-    mode: PluginOptions["modes"][number],
-    maxTokens: number,
-  ) {
-    const cachedModels = this.modelsByModeName.get(mode.name);
-
-    if (cachedModels) {
-      return await cachedModels;
-    }
-
-    const modelsPromise = Promise.all([
-      createAgentChatModel({
-        adapter: mode.completionAdapter,
-        maxTokens,
-        purpose: "primary",
-      }),
-      createAgentChatModel({
-        adapter: mode.completionAdapter,
-        maxTokens,
-        purpose: "summary",
-      }),
-    ]).then(([primaryModel, summaryModel]) => ({
-      model: primaryModel.model,
-      summaryModel: summaryModel.model,
-      modelMiddleware: primaryModel.middleware,
-    }));
-
-    this.modelsByModeName.set(mode.name, modelsPromise);
-
-    try {
-      return await modelsPromise;
-    } catch (error) {
-      this.modelsByModeName.delete(mode.name);
-      throw error;
-    }
-  }
-
   private getCheckpointer() {
-    if (this.checkpointer) {
-      return this.checkpointer;
-    }
+    if (this.checkpointer) return this.checkpointer;
 
     this.checkpointer = this.options.checkpointResource
       ? new AdminForthCheckpointSaver(this.adminforth, this.options)
@@ -176,7 +162,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         hasAudioAdapter: Boolean(this.options.audioAdapter),
       }
     });
-    if (!this.pluginOptions.sessionResource) {
+    if (!this.options.sessionResource) {
       throw new Error("sessionResource is required for AdminForthAgentPlugin");
     }
   }
@@ -196,12 +182,24 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
 
   private async runAgentTurn(input: AgentTurnRunInput) {
     let fullResponse = "";
-    const maxTokens = this.options.maxTokens ?? 10000;
-    const selectedMode =
-      this.options.modes.find((mode) => mode.name === input.modeName) ??
-      this.options.modes[0];
-    const { model, summaryModel, modelMiddleware } =
-      await this.getModeModels(selectedMode, maxTokens);
+    const maxTokens = this.options.maxTokens ?? 1000;
+    const selectedMode = this.options.modes.find((mode) => mode.name === input.modeName) ?? this.options.modes[0];
+    const [primaryModelSpec, summaryModelSpec] = await Promise.all([
+      createAgentChatModel({
+        adapter: selectedMode.completionAdapter,
+        maxTokens,
+        purpose: "primary",
+      }),
+      createAgentChatModel({
+        adapter: selectedMode.completionAdapter,
+        maxTokens,
+        purpose: "summary",
+      }),
+    ]);
+    const model = primaryModelSpec.model;
+    const summaryModel = summaryModelSpec.model;
+    const modelMiddleware = primaryModelSpec.middleware;
+
     const userLanguage = await detectUserLanguage(selectedMode.completionAdapter, input.prompt)
       .catch((error) => {
         logger.warn(`Failed to detect user language: ${error.message}`);
@@ -217,7 +215,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       this.adminforth,
       this.getInternalAgentResourceIds(),
     );
-    this.apiBasedTools = apiBasedTools;
+
     const stream = await callAgent({
       name: `adminforth-agent-${this.pluginInstanceId}`,
       model,
@@ -287,24 +285,11 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     };
   }
 
-  private async runAndPersistAgentResponse(input: {
-    prompt: string;
-    sessionId: string;
-    modeName?: string | null;
-    userTimeZone: string;
-    currentPage?: CurrentPageContext;
-    abortSignal?: AbortSignal;
-    adminUser: AdminUser;
-    httpExtra: HttpExtra;
-    emitReasoningDelta?: (delta: string) => void;
-    emitTextDelta?: (delta: string) => void;
-    emitToolCallEvent?: (event: ToolCallEvent) => void;
-    emitErrorResponse?: (response: string) => void;
-    failureLogMessage: string;
-    abortLogMessage: string;
-  }) {
+  private async runAndPersistAgentResponse(input: RunAndPersistAgentResponseInput) {
     const turnId = await this.createNewTurn(input.sessionId, input.prompt);
-    await this.updateSessionDate(input.sessionId);
+    await this.adminforth.resource(this.options.sessionResource.resourceId).update(input.sessionId, {
+      [this.options.sessionResource.createdAtField]: new Date().toISOString(),
+    });
     const sequenceDebugCollector = createSequenceDebugCollector();
     let fullResponse = "";
     let aborted = false;
@@ -324,10 +309,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         sequenceDebugCollector,
         emitToolCallEvent: input.emitToolCallEvent,
         emitReasoningDelta: input.emitReasoningDelta,
-        emitTextDelta: (textDelta) => {
-          fullResponse += textDelta;
-          input.emitTextDelta?.(textDelta);
-        },
+        emitTextDelta: input.emitTextDelta,
       });
       fullResponse = agentResponse.text;
     } catch (error) {
@@ -351,7 +333,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       turnUpdates[this.options.turnResource.debugField] = sequenceDebugCollector.getHistory();
     }
 
-    await this.updateTurn(turnId, turnUpdates);
+    await this.adminforth.resource(this.options.turnResource.resourceId).update(turnId, turnUpdates);
 
     return {
       text: fullResponse,
@@ -365,7 +347,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     server.endpoint({
       method: 'POST',
       path: `/agent/get-placeholder-messages`,
-      handler: async ({ body, query, headers, cookies, adminUser, response, requestUrl }) => {
+      handler: async ({ headers, adminUser }) => {
         if (!this.options.placeholderMessages) {
           return {
             messages: [],
@@ -374,14 +356,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
 
         const messages = await this.options.placeholderMessages({
           adminUser,
-          httpExtra: {
-            body,
-            query,
-            headers,
-            cookies,
-            requestUrl,
-            response,
-          },
+          headers,
         });
 
         return {
@@ -392,26 +367,24 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     server.endpoint({
       method: 'POST',
       path: `/agent/response`,
-      handler: async ({ body, query, headers, cookies, adminUser, response, requestUrl, _raw_express_res, abortSignal }) => {
+      handler: async ({ body, headers, cookies, adminUser, response, _raw_express_res, abortSignal }) => {
+        const data = this.parseBody(agentResponseBodySchema, body, response);
+        if (!data) return;
         const stream = createAgentEventStream(_raw_express_res, {vercelAiUiMessageStream: true, closeActiveBlockOnToolStart: true});
         const messageId = randomUUID();
 
         stream.start(messageId);
         await this.runAndPersistAgentResponse({
-          prompt: body.message,
-          sessionId: body.sessionId,
-          modeName: body.mode,
-          userTimeZone: body.timeZone ?? 'UTC',
-          currentPage: body.currentPage,
+          prompt: data.message,
+          sessionId: data.sessionId,
+          modeName: data.mode,
+          userTimeZone: data.timeZone ?? 'UTC',
+          currentPage: data.currentPage,
           abortSignal,
           adminUser,
           httpExtra: {
-            body,
-            query,
             headers,
             cookies,
-            requestUrl,
-            response,
           },
           emitToolCallEvent: stream.toolCall,
           emitReasoningDelta: stream.reasoningDelta,
@@ -428,15 +401,15 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       method: 'POST',
       path: `/agent/speech-response`,
       target: 'upload',
-      handler: async ({ body, query, headers, cookies, adminUser, response, requestUrl, _raw_express_req, _raw_express_res, abortSignal }) => {
+      handler: async ({ body, headers, cookies, adminUser, response, _raw_express_req, _raw_express_res, abortSignal }) => {
+        const req = _raw_express_req as ExpressMulterRequest;
         const audioAdapter = this.options.audioAdapter;
         if (!audioAdapter) {
           response.setStatus(400, undefined);
           return { error: "Audio adapter is not configured for AdminForth Agent" };
         }
-
-        const req = _raw_express_req as ExpressMulterRequest;
-
+        const data = this.parseBody(agentSpeechResponseBodySchema, body, response);
+        if (!data) return;
         if (!req.file) {
           response.setStatus(400, undefined);
           return { error: "Audio file is required" };
@@ -467,23 +440,19 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         }
         stream.transcript(transcription.text, transcription.language);
 
-        const sessionId = body.sessionId as string;
-        const currentPage = body.currentPage;
+        const sessionId = data.sessionId as string;
+        const currentPage = data.currentPage;
         const agentResponse = await this.runAndPersistAgentResponse({
           prompt,
           sessionId,
-          modeName: body.mode,
-          userTimeZone: body.timeZone ?? 'UTC',
+          modeName: data.mode,
+          userTimeZone: data.timeZone ?? 'UTC',
           currentPage,
           abortSignal,
           adminUser,
           httpExtra: {
-            body,
-            query,
             headers,
             cookies,
-            requestUrl,
-            response,
           },
           emitToolCallEvent: stream.toolCall,
           failureLogMessage: "Agent speech response failed",
@@ -556,86 +525,92 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     server.endpoint({
       method: 'POST',
       path: `/agent/get-sessions`,
-      handler: async ({body, adminUser }) => {
+      handler: async ({body, adminUser, response }) => {
+        const data = this.parseBody(getSessionsBodySchema, body, response);
+        if (!data) return;
         const userId = adminUser.pk;
-        const limit = typeof body.limit === 'number' ? body.limit : 20;
-        const sessions = await this.adminforth.resource(this.pluginOptions.sessionResource.resourceId).list(
-          [Filters.EQ(this.pluginOptions.sessionResource.askerIdField, userId)], limit, undefined, [Sorts.DESC(this.pluginOptions.sessionResource.createdAtField)]
+        const limit = data.limit ?? 20;
+        const sessions = await this.adminforth.resource(this.options.sessionResource.resourceId).list(
+          [Filters.EQ(this.options.sessionResource.askerIdField, userId)], limit, undefined, [Sorts.DESC(this.options.sessionResource.createdAtField)]
         );
-        const sessionsToReturn = [];
-        for (const session of sessions) {
-         sessionsToReturn.push({
-          sessionId: session[this.pluginOptions.sessionResource.idField],
-          title: session[this.pluginOptions.sessionResource.titleField],
-          timestamp: session[this.pluginOptions.sessionResource.createdAtField],
-         })
-        }
         return {
-          sessions: sessionsToReturn
+          sessions: sessions.map((session) => ({
+            sessionId: session[this.options.sessionResource.idField],
+            title: session[this.options.sessionResource.titleField],
+            timestamp: session[this.options.sessionResource.createdAtField],
+          })),
         };
       }
     });
     server.endpoint({
       method: 'POST',
       path: `/agent/get-session-info`,
-      handler: async ({body, adminUser }) => {
+      handler: async ({body, adminUser, response }) => {
+        const parsedBody = sessionIdBodySchema.safeParse(body);
+        if (!parsedBody.success) {
+          response.setStatus(422, parsedBody.error.message);
+          return;
+        }
         const userId = adminUser.pk;
-        const sessionId = body.sessionId;
-        const session = await this.adminforth.resource(this.pluginOptions.sessionResource.resourceId).get(
-          [Filters.EQ(this.pluginOptions.sessionResource.idField, sessionId)]
+        const sessionId = parsedBody.data.sessionId;
+        const session = await this.adminforth.resource(this.options.sessionResource.resourceId).get(
+          [Filters.EQ(this.options.sessionResource.idField, sessionId)]
         );
         if (!session) {
           return {
             error: 'Session not found'
           };
         }
-        if (session[this.pluginOptions.sessionResource.askerIdField] !== userId) {
+        if (session[this.options.sessionResource.askerIdField] !== userId) {
           return {
             error: 'Unauthorized'
           };
         }
         const turns = await this.getSessionTurns(sessionId);
-        const messagesToReturn = [];
-        for (const turn of turns) {
-          messagesToReturn.push({
-            text: turn.prompt,
-            role: 'user',
-          });
-          if (turn.response !== "not_finished") {
-            messagesToReturn.push({
-              text: turn.response,
-              role: 'assistant',
-            });
-          }
-        }
-        const sessionToReturn = {
-          sessionId: session[this.pluginOptions.sessionResource.idField],
-          title: session[this.pluginOptions.sessionResource.titleField],
-          timestamp: session[this.pluginOptions.sessionResource.createdAtField],
-          messages: messagesToReturn
-        }
         return {
-          session: sessionToReturn
-        }
+          session: {
+            sessionId,
+            title: session[this.options.sessionResource.titleField],
+            timestamp: session[this.options.sessionResource.createdAtField],
+            messages: turns.flatMap(turn => {
+              const messages = [];
+              if (turn.prompt) {
+                messages.push({
+                  text: turn.prompt,
+                  role: 'user',
+                });
+              }
+              if (turn.response && turn.response !== "not_finished") {
+                messages.push({
+                  text: turn.response,
+                  role: 'assistant',
+                });
+              }
+              return messages;
+            }),
+          },
+        };
       }
     });
     server.endpoint({
       method: 'POST',
       path: `/agent/create-session`,
-      handler: async ({body, adminUser }) => {
-        const triggerMessage = body.triggerMessage;
+      handler: async ({body, adminUser, response }) => {
+        const data = this.parseBody(createSessionBodySchema, body, response);
+        if (!data) return;
+        const triggerMessage = data.triggerMessage;
         const userId = adminUser.pk;
-        const title = triggerMessage ? (triggerMessage.length > 40 ? triggerMessage.slice(0, 40) : triggerMessage) : 'New Session';
+        const title = triggerMessage?.slice(0, 40) || "New Session";
         const newSession = {
-          [this.pluginOptions.sessionResource.idField]: randomUUID(),
-          [this.pluginOptions.sessionResource.titleField]: title,
-          [this.pluginOptions.sessionResource.askerIdField]: userId,
+          [this.options.sessionResource.idField]: randomUUID(),
+          [this.options.sessionResource.titleField]: title,
+          [this.options.sessionResource.askerIdField]: userId,
         };
-        await this.adminforth.resource(this.pluginOptions.sessionResource.resourceId).create(newSession);
+        await this.adminforth.resource(this.options.sessionResource.resourceId).create(newSession);
         return {
-          sessionId: newSession[this.pluginOptions.sessionResource.idField],
-          title: newSession[this.pluginOptions.sessionResource.titleField],
-          timestamp: newSession[this.pluginOptions.sessionResource.createdAtField],
+          sessionId: newSession[this.options.sessionResource.idField],
+          title: newSession[this.options.sessionResource.titleField],
+          timestamp: newSession[this.options.sessionResource.createdAtField],
           messages: []
         };
       }
@@ -643,28 +618,30 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     server.endpoint({
       method: 'POST',
       path: `/agent/delete-session`,
-      handler: async ({body, adminUser }) => {
-        const sessionId = body.sessionId;
+      handler: async ({body, adminUser, response }) => {
+        const data = this.parseBody(sessionIdBodySchema, body, response);
+        if (!data) return;
+        const sessionId = data.sessionId;
         const userId = adminUser.pk;
-        const session = await this.adminforth.resource(this.pluginOptions.sessionResource.resourceId).get(
-          [Filters.EQ(this.pluginOptions.sessionResource.idField, sessionId)]
+        const session = await this.adminforth.resource(this.options.sessionResource.resourceId).get(
+          [Filters.EQ(this.options.sessionResource.idField, sessionId)]
         );
         if (!session) {
           return {
             error: 'Session not found'
           };
         }
-        if (session[this.pluginOptions.sessionResource.askerIdField] !== userId) {
+        if (session[this.options.sessionResource.askerIdField] !== userId) {
           return {
             error: 'Unauthorized'
           };
         }
-        await this.adminforth.resource(this.pluginOptions.sessionResource.resourceId).delete(sessionId);
-        const turns = await this.adminforth.resource(this.pluginOptions.turnResource.resourceId).list(
-          [Filters.EQ(this.pluginOptions.turnResource.sessionIdField, sessionId)]
+        await this.adminforth.resource(this.options.sessionResource.resourceId).delete(sessionId);
+        const turns = await this.adminforth.resource(this.options.turnResource.resourceId).list(
+          [Filters.EQ(this.options.turnResource.sessionIdField, sessionId)]
         );
         for (const turn of turns) {
-          await this.adminforth.resource(this.pluginOptions.turnResource.resourceId).delete(turn[this.pluginOptions.turnResource.idField]);
+          await this.adminforth.resource(this.options.turnResource.resourceId).delete(turn[this.options.turnResource.idField]);
         }
         return {
           ok: true
@@ -674,23 +651,10 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     server.endpoint({
       method: 'POST',
       path: `/agent/add-system-message-to-turns`,
-      handler: async ({body, adminUser, _raw_express_req }) => {
-        const sessionId = body.sessionId;
-        if (!sessionId) {
-          return {
-            ok: false,
-            error: 'sessionId is required'
-          };
-        }
-        // Need to create a new session, if there is no sessionId
-        const systemMessage = body.systemMessage;
-        if (!systemMessage) {
-          return {
-            ok: false,
-            error: 'systemMessage is required'
-          };
-        }
-        await this.createNewTurn(sessionId, systemMessage);
+      handler: async ({body, response }) => {
+        const data = this.parseBody(addSystemMessageBodySchema, body, response);
+        if (!data) return;
+        await this.createNewTurn(data.sessionId, data.systemMessage);
         return {
           ok: true
         }
