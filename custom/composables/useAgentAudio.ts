@@ -146,6 +146,10 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     if (event.type === 'audio-delta') {
       audioChunks.push(event.data.base64);
     }
+
+    if (event.type === 'data-tool-call') {
+      agentStore.addDataToolCallMessage(event.data.toolName, event.data.toolInput);
+    }
   }
 
   let isPlaying = false;

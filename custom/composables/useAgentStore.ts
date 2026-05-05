@@ -12,6 +12,7 @@ import {
   MAX_WIDTH,
   MIN_WIDTH,
   RESERVED_SYSTEM_MESSAGE_CONTENT,
+  PRE_SESSION_ID
 } from './agentStore/constants';
 import { createAgentChatManager } from './agentStore/useAgentChat';
 import { createAgentPlaceholderController } from './agentStore/useAgentPlaceholder';
@@ -177,7 +178,7 @@ export const useAgentStore = defineStore('agent', () => {
       }
     }
     lastSessionId.value = getLocalStorageItem('lastSessionId');
-    if (lastSessionId.value && lastSessionId.value !== 'pre-session') {
+    if (lastSessionId.value && lastSessionId.value !== PRE_SESSION_ID) {
       setActiveSession(lastSessionId.value);
     }
     if (coreStore.isMobile) {
