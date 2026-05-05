@@ -118,8 +118,12 @@
               transition: `transform ${agentTransitions.TRANSITION_DURATION}ms ease-in-out`
             }"            
           >
-            <div class="w-full border rounded-lg pb-8 dark:bg-gray-700">
+            <div 
+              class="w-full border rounded-lg pb-8 dark:bg-gray-700"
+              :class="agentStore.isAudioChatMode ? 'border-none mt-8' : 'border'"  
+            >
               <textarea
+                v-if="!agentStore.isAudioChatMode"
                 v-model="agentStore.userMessageInput"
                 ref="textInput"
                 @input="autoResize"
@@ -325,6 +329,7 @@ function selectMode(modeName: string) {
 }
 
 async function sendMessage() {
+  if (agentStore.isAudioChatMode) return;
   isModeMenuOpen.value = false;
   await agentStore.sendMessage();
   autoResize();
