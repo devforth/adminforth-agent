@@ -745,9 +745,7 @@ export function prepareApiBasedTools(
   hiddenResourceIds: Iterable<string> = [],
 ): Record<string, ApiBasedTool> {
   const apiBasedTools: Record<string, ApiBasedTool> = {};
-  const openApiSchemas = adminforth.openApi.registeredSchemas.filter(
-    (schema) => schema.request_schema || schema.response_schema,
-  );
+  const openApiSchemas = adminforth.openApi.registeredSchemas;
   const openApiSchemasByToolName = new Map<string, IRegisteredApiSchema>();
   const hiddenResourceIdSet = new Set(hiddenResourceIds);
 

@@ -1,10 +1,4 @@
-import type {
-  AdminUser,
-  AdminForthResource,
-  HttpExtra,
-  IAdminForth,
-  IHttpServer,
-} from "adminforth";
+import type { AdminUser, AdminForthResource, HttpExtra, IAdminForth, IHttpServer } from "adminforth";
 
 import { AdminForthPlugin, logger, Filters, Sorts } from "adminforth";
 
@@ -12,42 +6,24 @@ import type { PluginOptions } from './types.js';
 import { randomUUID } from 'crypto';
 import { HumanMessage, SystemMessage } from "langchain";
 import { MemorySaver, type BaseCheckpointSaver } from "@langchain/langgraph";
-import {
-  createAgentChatModel,
-  callAgent,
-  type AgentChatModel,
-} from "./agent/simpleAgent.js";
+import { createAgentChatModel, callAgent, type AgentChatModel } from "./agent/simpleAgent.js";
 import { AdminForthCheckpointSaver } from "./agent/checkpointer.js";
 import { createSequenceDebugCollector } from "./agent/middleware/sequenceDebug.js";
-import {
-  detectUserLanguage,
-  formatLanguagePrompt,
-} from "./agent/languageDetect.js";
-import {
-  prepareApiBasedTools as buildApiBasedTools,
-} from './apiBasedTools.js';
+import { detectUserLanguage } from "./agent/languageDetect.js";
+import { prepareApiBasedTools as buildApiBasedTools } from './apiBasedTools.js';
 import type { ApiBasedTool } from './apiBasedTools.js';
 import { createAgentEventStream } from "./agentResponseEvents.js";
-import {
-  appendCustomSystemPrompt,
-  buildAgentSystemPrompt,
-  DEFAULT_AGENT_SYSTEM_PROMPT,
-} from "./agent/systemPrompt.js";
-import { ALWAYS_AVAILABLE_API_TOOL_NAMES } from "./agent/tools/index.js";
+import { appendCustomSystemPrompt, buildAgentSystemPrompt, buildAgentTurnSystemPrompt, DEFAULT_AGENT_SYSTEM_PROMPT} from "./agent/systemPrompt.js";
 import type { ToolCallEvent } from "./agent/toolCallEvents.js";
 import type { CurrentPageContext } from "./agent/tools/getUserLocation.js";
-import { ok } from "assert";
 
-
-type CurrentPageRequestBody = {
-  currentPage?: CurrentPageContext | string;
-};
-
-type UploadedAudioFile = {
+type MulterFile = {
   buffer: Buffer;
   originalname: string;
   mimetype: string;
 };
+
+type ExpressMulterRequest = { file?: MulterFile };
 
 type AgentTurnRunInput = {
   prompt: string;
@@ -64,86 +40,6 @@ type AgentTurnRunInput = {
   emitTextDelta?: (delta: string) => void;
   emitToolCallEvent?: (event: ToolCallEvent) => void;
 };
-
-function isAggregateErrorLike(
-  error: unknown,
-): error is { errors: unknown[]; message?: string; stack?: string } {
-  return typeof error === "object" && error !== null && Array.isArray((error as { errors?: unknown[] }).errors);
-}
-
-function formatAgentError(error: unknown) {
-  if (isAggregateErrorLike(error)) {
-    const nestedErrors = error.errors
-      .map((nestedError, index) => {
-        if (nestedError instanceof Error) {
-          return `${index + 1}. ${nestedError.stack ?? nestedError.message}`;
-        }
-
-        return `${index + 1}. ${String(nestedError)}`;
-      })
-      .join("\n");
-
-    return `${error.stack ?? error.message}\nNested errors:\n${nestedErrors}`;
-  }
-
-  if (error instanceof Error) {
-    return error.stack ?? error.message;
-  }
-
-  return String(error);
-}
-
-function formatAgentResponseError(error: unknown): string {
-  if (isAggregateErrorLike(error)) {
-    const nestedErrors = error.errors.map(formatAgentResponseError);
-
-    if (nestedErrors.length) {
-      return nestedErrors.join("\n");
-    }
-
-    return error.message || "Agent response failed";
-  }
-
-  if (error instanceof Error) {
-    return error.toString();
-  }
-
-  return String(error);
-}
-
-function formatAdminUserPrompt(adminUser: AdminUser, usernameField: string) {
-  const dbUser = adminUser.dbUser as Record<string, unknown>;
-  const adminUserContext = {
-    id: adminUser.pk,
-    email: dbUser[usernameField],
-  };
-
-  return [
-    "Current admin user context:",
-    JSON.stringify(adminUserContext, null, 2),
-    "Use this admin user email when the user asks to send information to themselves, the current admin, or the logged-in user.",
-  ].join("\n");
-}
-
-function parseCurrentPageContext(currentPage: CurrentPageRequestBody["currentPage"]) {
-  return typeof currentPage === "string"
-    ? JSON.parse(currentPage) as CurrentPageContext
-    : currentPage;
-}
-
-function assertRequiredApiTool(
-  apiBasedTools: Record<string, ApiBasedTool>,
-  toolName: string,
-) {
-  if (toolName in apiBasedTools) {
-    return;
-  }
-
-  const availableToolNames = Object.keys(apiBasedTools).sort().join(", ");
-  throw new Error(
-    `Required API tool "${toolName}" is missing from AdminForth Agent tools. Available tools: ${availableToolNames}`,
-  );
-}
 
 export default class AdminForthAgentPlugin extends AdminForthPlugin {
   options: PluginOptions;
@@ -308,22 +204,19 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       await this.getModeModels(selectedMode, maxTokens);
     const userLanguage = await detectUserLanguage(selectedMode.completionAdapter, input.prompt)
       .catch((error) => {
-        logger.warn(`Failed to detect user language: ${error instanceof Error ? error.message : String(error)}`);
+        logger.warn(`Failed to detect user language: ${error.message}`);
         return null;
       });
-    const systemPrompt = [
-      await this.agentSystemPromptPromise,
-      formatAdminUserPrompt(input.adminUser, this.adminforth.config.auth.usernameField),
-      formatLanguagePrompt(userLanguage),
-    ].join("\n\n");
+    const systemPrompt = buildAgentTurnSystemPrompt({
+      agentSystemPrompt: await this.agentSystemPromptPromise,
+      adminUser: input.adminUser,
+      usernameField: this.adminforth.config.auth.usernameField,
+      userLanguage,
+    });
     const apiBasedTools = buildApiBasedTools(
       this.adminforth,
       this.getInternalAgentResourceIds(),
     );
-    for (const toolName of ALWAYS_AVAILABLE_API_TOOL_NAMES) {
-      assertRequiredApiTool(apiBasedTools, toolName);
-    }
-    assertRequiredApiTool(apiBasedTools, "update_record");
     this.apiBasedTools = apiBasedTools;
     const stream = await callAgent({
       name: `adminforth-agent-${this.pluginInstanceId}`,
@@ -443,8 +336,8 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         logger.info(input.abortLogMessage);
       } else {
         failed = true;
-        logger.error(`${input.failureLogMessage}:\n${formatAgentError(error)}`);
-        fullResponse = formatAgentResponseError(error);
+        logger.error(`${input.failureLogMessage}:\n${error.message}`);
+        fullResponse = error.message;
         input.emitErrorResponse?.(fullResponse);
       }
     }
@@ -502,7 +395,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       handler: async ({ body, query, headers, cookies, adminUser, response, requestUrl, _raw_express_res, abortSignal }) => {
         const stream = createAgentEventStream(_raw_express_res, {vercelAiUiMessageStream: true, closeActiveBlockOnToolStart: true});
         const messageId = randomUUID();
-        const currentPage = parseCurrentPageContext((body as CurrentPageRequestBody).currentPage);
 
         stream.start(messageId);
         await this.runAndPersistAgentResponse({
@@ -510,7 +402,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           sessionId: body.sessionId,
           modeName: body.mode,
           userTimeZone: body.timeZone ?? 'UTC',
-          currentPage,
+          currentPage: body.currentPage,
           abortSignal,
           adminUser,
           httpExtra: {
@@ -543,7 +435,9 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           return { error: "Audio adapter is not configured for AdminForth Agent" };
         }
 
-        if (!_raw_express_req.file) {
+        const req = _raw_express_req as ExpressMulterRequest;
+
+        if (!req.file) {
           response.setStatus(400, undefined);
           return { error: "Audio file is required" };
         }
@@ -553,13 +447,13 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
 
         try {
           transcription = await audioAdapter.transcribe({
-            buffer: _raw_express_req.file.buffer,
-            filename: _raw_express_req.file.originalname,
-            mimeType: _raw_express_req.file.mimetype,
+            buffer: req.file.buffer,
+            filename: req.file.originalname,
+            mimeType: req.file.mimetype,
             language: "auto",
           });
         } catch (error) {
-          logger.error(`Agent speech transcription failed:\n${formatAgentError(error)}`);
+          logger.error(`Agent speech transcription failed:\n${error.message}`);
           stream.error("Speech transcription failed. Check server logs for details.");
           stream.end();
           return null;
@@ -574,7 +468,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         stream.transcript(transcription.text, transcription.language);
 
         const sessionId = body.sessionId as string;
-        const currentPage = parseCurrentPageContext(body.currentPage);
+        const currentPage = body.currentPage;
         const agentResponse = await this.runAndPersistAgentResponse({
           prompt,
           sessionId,
@@ -651,8 +545,8 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           if (abortSignal.aborted) {
             logger.info("Agent speech audio streaming aborted by the client");
           } else {
-            logger.error(`Agent speech audio streaming failed:\n${formatAgentError(error)}`);
-            stream.error(formatAgentResponseError(error));
+            logger.error(`Agent speech audio streaming failed:\n${error}`);
+            stream.error(error);
           }
           stream.end();
           return null;
