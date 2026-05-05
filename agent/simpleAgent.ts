@@ -28,7 +28,7 @@ export const contextSchema = z.object({
   turnId: z.string(),
   abortSignal: z.custom<AbortSignal>().optional(),
   currentPage: z.custom<CurrentPageContext>().optional(),
-  httpExtra: z.custom<Partial<HttpExtra>>().optional(),
+  httpExtra: z.custom<Pick<HttpExtra, "headers" | "cookies">>().optional(),
   emitToolCallEvent: z.custom<ToolCallEventSink>(),
 });
 
@@ -235,7 +235,7 @@ export async function callAgent(params: {
   sessionId: string;
   turnId: string;
   currentPage?: CurrentPageContext;
-  httpExtra?: Partial<HttpExtra>;
+  httpExtra?: Pick<HttpExtra, "headers" | "cookies">;
   userTimeZone: string;
   abortSignal?: AbortSignal;
   emitToolCallEvent: ToolCallEventSink;
