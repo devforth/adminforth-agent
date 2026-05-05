@@ -1,6 +1,5 @@
 import { randomUUID } from "crypto";
 import YAML from "yaml";
-import { serializeUnknownError } from "../apiBasedTools.js";
 
 export type ToolCallEvent =
   | {
@@ -61,6 +60,36 @@ function sanitizeToolCallOutputForDebug(output: unknown) {
   );
 }
 
+function serializeErrorForDebug(error: unknown): unknown {
+  if (!(error instanceof Error)) {
+    return error;
+  }
+
+  const errorWithCause = error as Error & { cause?: unknown };
+  const serialized: Record<string, unknown> = {
+    name: error.name,
+    message: error.message,
+  };
+
+  if (error.stack) {
+    serialized.stack = error.stack;
+  }
+
+  if (errorWithCause.cause !== undefined) {
+    serialized.cause = serializeErrorForDebug(errorWithCause.cause);
+  }
+
+  for (const key of Object.getOwnPropertyNames(error)) {
+    if (key in serialized) {
+      continue;
+    }
+
+    serialized[key] = (error as unknown as Record<string, unknown>)[key];
+  }
+
+  return serialized;
+}
+
 export function createToolCallTracker(params: {
   emit: ToolCallEventSink;
   toolCallId?: string;
@@ -99,7 +128,7 @@ export function createToolCallTracker(params: {
         phase: "end",
         durationMs: Date.now() - startedAt,
         output: null,
-        error: YAML.stringify(serializeUnknownError(error)).trimEnd(),
+        error: YAML.stringify(serializeErrorForDebug(error)).trimEnd(),
       });
     },
   };

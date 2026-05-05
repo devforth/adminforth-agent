@@ -1,4 +1,4 @@
-import type { AdminUser, AdminForthResource, HttpExtra, IAdminForth, IHttpServer } from "adminforth";
+import type { AdminUser, AdminForthResource, IAdminForth, IHttpServer } from "adminforth";
 
 import { AdminForthPlugin, logger, Filters, Sorts } from "adminforth";
 
@@ -34,7 +34,6 @@ type AgentTurnRunInput = {
   currentPage?: CurrentPageContext;
   abortSignal?: AbortSignal;
   adminUser: AdminUser;
-  httpExtra: Pick<HttpExtra, "headers" | "cookies">;
   sequenceDebugCollector: ReturnType<typeof createSequenceDebugCollector>;
   emitReasoningDelta?: (delta: string) => void;
   emitTextDelta?: (delta: string) => void;
@@ -233,7 +232,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       sessionId: input.sessionId,
       turnId: input.turnId,
       currentPage: input.currentPage,
-      httpExtra: input.httpExtra,
       userTimeZone: input.userTimeZone,
       abortSignal: input.abortSignal,
       emitToolCallEvent: (event) => {
@@ -305,7 +303,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         currentPage: input.currentPage,
         abortSignal: input.abortSignal,
         adminUser: input.adminUser,
-        httpExtra: input.httpExtra,
         sequenceDebugCollector,
         emitToolCallEvent: input.emitToolCallEvent,
         emitReasoningDelta: input.emitReasoningDelta,
@@ -367,7 +364,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     server.endpoint({
       method: 'POST',
       path: `/agent/response`,
-      handler: async ({ body, headers, cookies, adminUser, response, _raw_express_res, abortSignal }) => {
+      handler: async ({ body, adminUser, response, _raw_express_res, abortSignal }) => {
         const data = this.parseBody(agentResponseBodySchema, body, response);
         if (!data) return;
         const stream = createAgentEventStream(_raw_express_res, {vercelAiUiMessageStream: true, closeActiveBlockOnToolStart: true});
@@ -382,10 +379,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           currentPage: data.currentPage,
           abortSignal,
           adminUser,
-          httpExtra: {
-            headers,
-            cookies,
-          },
           emitToolCallEvent: stream.toolCall,
           emitReasoningDelta: stream.reasoningDelta,
           emitTextDelta: stream.textDelta,
@@ -401,7 +394,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       method: 'POST',
       path: `/agent/speech-response`,
       target: 'upload',
-      handler: async ({ body, headers, cookies, adminUser, response, _raw_express_req, _raw_express_res, abortSignal }) => {
+      handler: async ({ body, adminUser, response, _raw_express_req, _raw_express_res, abortSignal }) => {
         const req = _raw_express_req as ExpressMulterRequest;
         const audioAdapter = this.options.audioAdapter;
         if (!audioAdapter) {
@@ -450,10 +443,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           currentPage,
           abortSignal,
           adminUser,
-          httpExtra: {
-            headers,
-            cookies,
-          },
           emitToolCallEvent: stream.toolCall,
           failureLogMessage: "Agent speech response failed",
           abortLogMessage: "Agent speech response aborted by the client",

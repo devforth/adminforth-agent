@@ -4,7 +4,6 @@ import {
   logger,
   type AdminUser,
   type CompletionAdapter,
-  type HttpExtra,
   type IAdminForth,
 } from "adminforth";
 import { BaseCallbackHandler } from "@langchain/core/callbacks/base";
@@ -28,7 +27,6 @@ export const contextSchema = z.object({
   turnId: z.string(),
   abortSignal: z.custom<AbortSignal>().optional(),
   currentPage: z.custom<CurrentPageContext>().optional(),
-  httpExtra: z.custom<Pick<HttpExtra, "headers" | "cookies">>().optional(),
   emitToolCallEvent: z.custom<ToolCallEventSink>(),
 });
 
@@ -235,7 +233,6 @@ export async function callAgent(params: {
   sessionId: string;
   turnId: string;
   currentPage?: CurrentPageContext;
-  httpExtra?: Pick<HttpExtra, "headers" | "cookies">;
   userTimeZone: string;
   abortSignal?: AbortSignal;
   emitToolCallEvent: ToolCallEventSink;
@@ -255,7 +252,6 @@ export async function callAgent(params: {
     sessionId,
     turnId,
     currentPage,
-    httpExtra,
     userTimeZone,
     abortSignal,
     emitToolCallEvent,
@@ -303,7 +299,6 @@ export async function callAgent(params: {
       turnId,
       abortSignal,
       currentPage,
-      httpExtra,
       emitToolCallEvent,
     },
   });

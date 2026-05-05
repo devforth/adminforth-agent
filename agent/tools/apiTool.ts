@@ -52,7 +52,6 @@ export function createApiTool(toolName: string, apiBasedTool: ApiBasedTool) {
       return apiBasedTool.call({
         adminUser: runtime.context.adminUser,
         abortSignal: runtime.context.abortSignal,
-        httpExtra: runtime.context.httpExtra,
         inputs: normalizedInput,
         userTimeZone: runtime.context.userTimeZone,
       });
