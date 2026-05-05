@@ -68,6 +68,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     let audioMimeType = 'audio/mpeg';
     let buffer = '';
 
+    agentStore.setCurrentChatStatus('streaming');
     try {
       while (true) {
         const { value, done } = await reader.read();
@@ -100,6 +101,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
       }
     } finally {
       reader.releaseLock();
+      agentStore.setCurrentChatStatus('ready');
     }
   }
 
@@ -130,10 +132,12 @@ export const useAgentAudio = defineStore('agentAudio', () => {
 
     if (event.type === 'transcript') {
       agentStore.addUserMessage(event.data.text);
+      agentStore.updateLastAgentMessage('');
       return;
     }
 
     if (event.type === 'speech-response') {
+      agentStore.setCurrentChatStatus('ready');
       agentStore.addAgentMessage(event.data.response.text);
       return;
     }
@@ -148,7 +152,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     }
 
     if (event.type === 'data-tool-call') {
-      agentStore.addDataToolCallMessage(event.data.toolName, event.data.toolInput);
+      agentStore.addDataToolCallMessage(event.data);
     }
   }
 

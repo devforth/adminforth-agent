@@ -114,6 +114,8 @@ export const useAgentStore = defineStore('agent', () => {
     addAgentMessage,
     addUserMessage,
     addDataToolCallMessage,
+    setCurrentChatStatus,
+    updateLastAgentMessage
   } = createAgentSessionManager({
     activeSessionId,
     currentSession,
@@ -361,6 +363,8 @@ export const useAgentStore = defineStore('agent', () => {
     registerOnBeforeChatCloseCallback,
     addAgentMessage,
     addUserMessage,
-    addDataToolCallMessage
+    addDataToolCallMessage,
+    setCurrentChatStatus,
+    updateLastAgentMessage
   }
 })
