@@ -3,7 +3,7 @@ import { callAdminForthApi } from '@/utils';
 import type { Chat } from '../../chat';
 import type { IAgentSession, ISessionsListItem, IPart } from '../../types';
 import { PRE_SESSION_ID } from './constants';
-
+import { ChatStatus } from 'ai';
 type AdminforthLike = {
   confirm(options: { message: string; yes: string; no: string }): Promise<boolean>;
 };
@@ -274,6 +274,20 @@ export function createAgentSessionManager({
     currentChat.value?.messages.push(agentMessage);
   }
 
+  function updateLastAgentMessage(message: string) {
+    const lastMsg = currentChat.value?.lastMessage;
+    if (lastMsg && lastMsg.role === 'assistant') {
+      lastMsg.parts = [{
+        type: 'text',
+        text: message,
+        state: 'done',
+      }];
+      currentChat.value?.messages.splice(currentChat.value.messages.length - 1, 1, lastMsg);
+    } else {
+      addAgentMessage(message);
+    }
+  }
+
   function addUserMessage(message: string) {
     const userMessage = {
       role: 'user',
@@ -286,8 +300,29 @@ export function createAgentSessionManager({
     currentChat.value?.messages.push(userMessage);
   }
 
-  function addDataToolCallMessage(toolName: string, toolInput: any) {
-    console.log('Adding data tool call message to chat:', toolName, toolInput);
+
+  function addDataToolCallMessage(data: any) {
+    const lastMessage = currentChat.value?.lastMessage;
+    if (lastMessage.role === 'assistant') {
+      lastMessage.parts.push({
+        type: 'data-tool-call',
+        data,
+      });
+      currentChat.value?.messages.splice(currentChat.value.messages.length - 1, 1, lastMessage);
+    } else {
+      const toolCallMessage = {
+        role: 'assistant',
+        parts: [{
+          type: 'data-tool-call',
+          data,
+        }]
+      };
+      currentChat.value?.messages.push(toolCallMessage);
+    }
+  }
+
+  function setCurrentChatStatus(status: ChatStatus) {
+    (currentChat.value as any)?.setStatus({status});
   }
 
   return {
@@ -300,6 +335,8 @@ export function createAgentSessionManager({
     addSystemMessage,
     addAgentMessage,
     addUserMessage,
-    addDataToolCallMessage
+    addDataToolCallMessage,
+    setCurrentChatStatus,
+    updateLastAgentMessage
   };
 }
