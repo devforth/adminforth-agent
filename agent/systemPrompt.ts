@@ -1,10 +1,10 @@
-import type { AdminForthResource, IAdminForth } from "adminforth";
+import type { AdminForthResource, AdminUser, IAdminForth } from "adminforth";
+import type { UserLanguage } from "./languageDetect.js";
 import {
   listBundledSkillManifests,
   listProjectSkillManifests,
   type AgentSkillManifest,
 } from "./skills/registry.js";
-import { ALWAYS_AVAILABLE_API_TOOL_NAMES } from "./tools/index.js";
 
 export const DEFAULT_AGENT_SYSTEM_PROMPT = [
   "You are helpful AI Assistant for Admin Panel.",
@@ -46,6 +46,39 @@ export function appendCustomSystemPrompt(
   return `${systemPrompt}\n\n${normalizedCustomSystemPrompt}`;
 }
 
+function formatLanguagePrompt(language: UserLanguage | null) {
+  if (!language) {
+    return "Respond in the user's language.";
+  }
+
+  return `Respond in ${language.language} (${language.code}).`;
+}
+
+function formatAdminUserPrompt(adminUser: AdminUser, usernameField: string) {
+  const adminUserContext = {
+    id: adminUser.pk,
+    email: adminUser.dbUser[usernameField],
+  };
+  return [
+    "Current admin user context:",
+    JSON.stringify(adminUserContext, null, 2),
+    "Use this admin user email when the user asks to send information to themselves, the current admin, or the logged-in user.",
+  ].join("\n");
+}
+
+export function buildAgentTurnSystemPrompt(input: {
+  agentSystemPrompt: string;
+  adminUser: AdminUser;
+  usernameField: string;
+  userLanguage: UserLanguage | null;
+}) {
+  return [
+    input.agentSystemPrompt,
+    formatAdminUserPrompt(input.adminUser, input.usernameField),
+    formatLanguagePrompt(input.userLanguage),
+  ].join("\n\n");
+}
+
 function formatResources(resources: AdminForthResource[]) {
   return resources
     .map((resource) => `- resourceId: ${resource.resourceId}\n  label: ${resource.label}`)
@@ -66,7 +99,6 @@ export async function buildAgentSystemPrompt(
     listProjectSkillManifests(adminforth.config.customization.customComponentsDir),
     listBundledSkillManifests(),
   ]);
-  const alwaysAvailableTools = ALWAYS_AVAILABLE_API_TOOL_NAMES.join(", ");
   const adminBasePath = adminforth.config.baseUrlSlashed;
   const hiddenResourceIdSet = new Set(hiddenResourceIds);
   const visibleResources = adminforth.config.resources.filter(
@@ -76,7 +108,6 @@ export async function buildAgentSystemPrompt(
     DEFAULT_AGENT_SYSTEM_PROMPT,
     `ADMIN_BASE_PATH: ${adminBasePath}`,
     `List of resources:\n${formatResources(visibleResources)}`,
-    `You have always-available base tools: ${alwaysAvailableTools}.`,
     primarySkills.length > 0
       ? `You have primary skills set:\n${formatSkills(primarySkills, "skill_name")}`
       : "",
