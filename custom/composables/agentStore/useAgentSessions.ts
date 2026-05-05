@@ -286,18 +286,8 @@ export function createAgentSessionManager({
     currentChat.value?.messages.push(userMessage);
   }
 
- function addDataToolCallMessage(toolName: string, toolInput: any) {
-    const toolCallMessage = {
-      role: 'assistant',
-      parts: [{
-        type: 'data-tool-call',
-        data: {
-          toolName,
-          toolInput,
-        }
-      }],
-    };
-    currentChat.value?.messages.push(toolCallMessage);
+  function addDataToolCallMessage(toolName: string, toolInput: any) {
+    console.log('Adding data tool call message to chat:', toolName, toolInput);
   }
 
   return {
