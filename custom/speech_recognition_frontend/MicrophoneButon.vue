@@ -1,9 +1,9 @@
 <template>
   <button 
     class="absolute bottom-2 h-9 bg-lightPrimary dark:bg-darkPrimary 
-      hover:opacity-90 rounded-full flex items-center justify-center right-16
+      hover:opacity-90 rounded-full flex items-center justify-center
       transition-all duration-300 ease-in-out overflow-hidden"
-    :class="isAudioChatMode ? 'w-20 px-2': 'w-9'" 
+    :class="[isAudioChatMode ? 'w-32 px-2': 'w-9', !agentStore.isAudioChatMode ? 'right-16': 'right-4']" 
     @click="toggleChatMode"
   >
     <div class="w-5 h-5 flex items-center justify-center">
@@ -18,18 +18,22 @@
 
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import debounce from 'lodash/debounce';
 import { requestMicAndStartVAD, stopUserMedia, getRecorder, CALIBRATION_DURATION } from './voiceActivityDetection';
 import { Spinner } from '@/afcl'
 import { useAdminforth } from '@/adminforth';
+import { storeToRefs } from 'pinia';
 import { useAgentStore } from '../composables/useAgentStore';
 import { useAgentAudio } from '../composables/useAgentAudio';
 import AudioLines from './AudioLines.vue';
 
 const adminforth = useAdminforth();
 const agentStore = useAgentStore();
-const { sendAudioToServerAndHandleResponse, isStreamingResponse } = useAgentAudio();
+const agentAudio = useAgentAudio();
+const { sendAudioToServerAndHandleResponse } = agentAudio;
+const { stopGenerationAndAudio } = agentAudio;
+const { isStreamingResponse } = storeToRefs(agentAudio);
 
 agentStore.registerOnBeforeChatCloseCallback(async () => {
   if(agentStore.isAudioChatMode) {
@@ -49,11 +53,20 @@ const sendUserRecordDebounced = debounce(() => {
 
 const isAudioChatMode = computed(() => agentStore.isAudioChatMode);
 
+watch(isStreamingResponse, (newVal) => {
+  if(!newVal) {
+    showButtonSpinner.value = false;
+  } else {
+    showButtonSpinner.value = true;
+  }
+})
+
 function toggleChatMode() {
   agentStore.setIsAudioChatMode(!isAudioChatMode.value);
   if (isAudioChatMode.value) {
     onStartRecording();
   } else {
+    resetAll();
     onStopRecording();
   }
 }
@@ -63,14 +76,24 @@ async function onStartRecording() {
   await requestMicAndStartVAD(saidSomething, stopRecording, onAnySound);
   setTimeout(() => {
     showButtonSpinner.value = false;
+    agentAudio.playBeep(1000);
     //Play a sound to indicate that recording has started
   }, CALIBRATION_DURATION);
 }
 
 function onStopRecording() {
+  agentAudio.playBeep(600);
   stopUserMedia();
   showAnimation.value = false;
   // Play a sound to indicate that recording has stopped
+}
+
+function resetAll() {
+  stopGenerationAndAudio();
+  showAnimation.value = false;
+  showButtonSpinner.value = false;
+  hideAnimationDebounced.cancel();
+  sendUserRecordDebounced.cancel();
 }
 
 
@@ -95,6 +118,9 @@ function onAnySound(amplitude: number) {
 }
 
 onBeforeUnmount(() => {
+  stopUserMedia();
+  agentStore.setIsAudioChatMode(false);
+  onStopRecording();
   hideAnimationDebounced.cancel();
   sendUserRecordDebounced.cancel();
 });
@@ -103,7 +129,11 @@ async function sendRecordForTranscription() {
   showAnimation.value = false;
   const recordBlob = await getRecorder();
   if (recordBlob) {
-    sendAudioToServerAndHandleResponse(recordBlob, onStartRecording, onStopRecording);
+    onStopRecording();
+    await sendAudioToServerAndHandleResponse(recordBlob);
+    if (agentStore.isAudioChatMode) {
+      await requestMicAndStartVAD(saidSomething, stopRecording, onAnySound);
+    }
   } else { 
     console.error('No audio recorded');
   }

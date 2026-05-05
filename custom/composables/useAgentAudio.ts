@@ -9,9 +9,19 @@ export const useAgentAudio = defineStore('agentAudio', () => {
   const agentStore = useAgentStore();
 
   const isStreamingResponse = ref(false);
+  
+  let currentAbortController: AbortController | null = null;
 
-  async function sendAudioToServerAndHandleResponse(blob: Blob, startRecordingCallback: () => void, stopRecordingCallback: () => void) {
-    stopRecordingCallback();
+  function stopGenerationAndAudio() {
+    if (isStreamingResponse.value) {
+      isStreamingResponse.value = false;
+      setIsPlaying(false);
+    }
+    currentAbortController?.abort();
+  }
+
+  async function sendAudioToServerAndHandleResponse(blob: Blob) {
+    currentAbortController = new AbortController();
     const formData = new FormData();
     formData.append('file', blob, 'user_prompt.webm');
     formData.append('sessionId', agentStore.activeSessionId);
@@ -27,6 +37,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
         headers: {
           Accept: 'text/event-stream',
         },
+        signal: currentAbortController!.signal,
       });
       if (res.ok) {
         await readSpeechResponseStream(res);
@@ -35,10 +46,13 @@ export const useAgentAudio = defineStore('agentAudio', () => {
         adminforth.alert({message: 'Failed to transcribe audio', variant: 'danger'});
       }
     } catch (error) {
-      console.error('Error sending audio to server:', error);
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        //
+      } else {
+        console.error('Error sending audio to server:', error);
+      }
     } finally {
       isStreamingResponse.value = false;
-      startRecordingCallback();
     }
   }
 
@@ -85,7 +99,6 @@ export const useAgentAudio = defineStore('agentAudio', () => {
         playBase64AudioChunks(audioChunks, audioMimeType);
       }
     } finally {
-      isStreamingResponse.value = false;
       reader.releaseLock();
     }
   }
@@ -95,6 +108,9 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     audioChunks: string[],
     setAudioMimeType: (mimeType: string) => void,
   ) {
+    if (currentAbortController?.signal.aborted) {
+      return;
+    }
     const data = eventBlock
       .split('\n')
       .filter((line) => line.startsWith('data:'))
@@ -108,18 +124,16 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     const event = JSON.parse(data) as SpeechStreamEvent;
 
     if (event.type === 'error') {
-      adminforth.alert({ message: event.error, variant: 'danger' });
+
       return;
     }
 
     if (event.type === 'transcript') {
-      console.log('Speech transcript:', event.data);
       agentStore.addUserMessage(event.data.text);
       return;
     }
 
     if (event.type === 'speech-response') {
-      console.log('Speech response:', event.data);
       agentStore.addAgentMessage(event.data.response.text);
       return;
     }
@@ -132,16 +146,35 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     if (event.type === 'audio-delta') {
       audioChunks.push(event.data.base64);
     }
+
+    if (event.type === 'data-tool-call') {
+      agentStore.addDataToolCallMessage(event.data.toolName, event.data.toolInput);
+    }
   }
+
+  let isPlaying = false;
+  let currentAudio: HTMLAudioElement | null = null;
+
+  function setIsPlaying(value: boolean) {
+    isPlaying = value;
+    if (!isPlaying && currentAudio) {
+      currentAudio?.pause();
+      currentAudio!.currentTime = 0;
+    } else {
+      currentAudio?.play();
+    }
+  }
+
 
   function playBase64AudioChunks(chunks: string[], mimeType: string) {
     const audioBlob = new Blob(chunks.map(base64ToUint8Array), { type: mimeType });
     const fileURL = URL.createObjectURL(audioBlob);
-    const audio = new Audio(fileURL);
-    audio.play().catch((error) => {
-      console.error('Failed to play speech response audio:', error);
-    });
-    audio.addEventListener('ended', () => URL.revokeObjectURL(fileURL), { once: true });
+    currentAudio = new Audio(fileURL);
+    setIsPlaying(true);
+    currentAudio.addEventListener('ended', () => {
+      URL.revokeObjectURL(fileURL);
+      currentAudio = null;
+    }, { once: true });
   }
 
   function base64ToUint8Array(base64: string) {
@@ -155,9 +188,30 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     return bytes;
   }
 
+  function playBeep(freq = 800, duration = 0.05) {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.frequency.value = freq;
+    osc.type = 'sine';
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start();
+
+    gain.gain.setValueAtTime(1, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+
+    osc.stop(ctx.currentTime + duration);
+  }
+
   return {
     sendAudioToServerAndHandleResponse,
     isStreamingResponse,
+    stopGenerationAndAudio,
+    playBeep
   };
 
 });

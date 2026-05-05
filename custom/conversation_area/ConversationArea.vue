@@ -35,7 +35,7 @@
 
       <div 
         v-for="(message, index) in props.messages" :key="index"
-        class="flex flex-col w-full mt-2"
+        class="flex flex-col w-full mt-2 pb-2"
         :class="message.role === 'user' ? 'self-end' : 'self-start'"
         ref="messagesRefs"
       >

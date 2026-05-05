@@ -170,26 +170,28 @@
                 </div>
               </div>
               <MicrophoneButton />
-              <Button 
-                v-if="!agentStore.isResponseInProgress"
-                class="absolute right-4 bottom-2 !p-0 h-9 w-9"                    
-                @click="sendMessage" 
-                :disabled="!agentStore.trimmedUserMessage || agentStore.isResponseInProgress"
-              >
-                <IconArrowUpOutline 
-                  class="w-8 h-8 p-1
-                    text-white" 
-                />
-              </Button>
-              <Button
-                v-else
-                class="absolute right-4 bottom-2 !p-0 h-9 w-9"    
-                @click="stopCurrentRequest"                
-              >
-                <div
-                  class="w-3 h-3 bg-white rounded-sm"
-                />
-              </Button>
+              <template v-if="!agentStore.isAudioChatMode">
+                <Button 
+                  v-if="!agentStore.isResponseInProgress"
+                  class="absolute right-4 bottom-2 !p-0 h-9 w-9 transition-opacity duration-200"                    
+                  @click="sendMessage" 
+                  :disabled="!agentStore.trimmedUserMessage || agentStore.isResponseInProgress"
+                >
+                  <IconArrowUpOutline 
+                    class="w-8 h-8 p-1
+                      text-white" 
+                  />
+                </Button>
+                <Button
+                  v-else
+                  class="absolute right-4 bottom-2 !p-0 h-9 w-9"    
+                  @click="stopCurrentRequest"                
+                >
+                  <div
+                    class="w-3 h-3 bg-white rounded-sm"
+                  />
+                </Button>
+              </template>
             </div>
           </div>
         </div>

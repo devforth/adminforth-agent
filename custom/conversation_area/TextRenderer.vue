@@ -16,9 +16,9 @@
       :components="incremarkComponents"
       :incremark-options="incremarkOptions"
     />
-    <p v-else class="text-red-500 py-2">
+    <!-- <p v-else class="text-red-500 py-2">
       {{ $t('No content to render') }}
-    </p>
+    </p> -->
   </div>
 </template>
 
