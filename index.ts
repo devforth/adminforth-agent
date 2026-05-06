@@ -417,10 +417,22 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             filename: req.file.originalname,
             mimeType: req.file.mimetype,
             language: "auto",
+            abortSignal,
           });
         } catch (error) {
+          if (abortSignal.aborted) {
+            logger.info("Agent speech transcription aborted by the client");
+            stream.end();
+            return null;
+          }
+
           logger.error(`Agent speech transcription failed:\n${error.message}`);
           stream.error("Speech transcription failed. Check server logs for details.");
+          stream.end();
+          return null;
+        }
+
+        if (abortSignal.aborted) {
           stream.end();
           return null;
         }
@@ -476,23 +488,39 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             stream: true,
             streamFormat: "audio",
             format: "mp3",
+            abortSignal,
           });
 
           stream.audioStart(speech.mimeType, speech.format);
 
           const reader = speech.audioStream.getReader();
+          const cancelAudioStream = () => {
+            void reader.cancel();
+          };
 
           try {
+            abortSignal.addEventListener("abort", cancelAudioStream, { once: true });
+
             while (true) {
+              if (abortSignal.aborted) {
+                await reader.cancel();
+                break;
+              }
+
               const { value, done } = await reader.read();
 
               if (done) {
                 break;
               }
 
+              if (abortSignal.aborted) {
+                break;
+              }
+
               stream.audioDelta(value);
             }
           } finally {
+            abortSignal.removeEventListener("abort", cancelAudioStream);
             reader.releaseLock();
           }
 
