@@ -14,11 +14,34 @@ type StreamingAudioState = {
   isDone: boolean;
 };
 
+const standByAudio = new Audio('./agentAudio/agent-processing.mp3');
+
+function playStandByAudio() {
+  standByAudio.currentTime = 0;
+  standByAudio.play()
+}
+
+function stopStandByAudio() {
+  standByAudio.pause();
+  standByAudio.currentTime = 0;
+}
+
+function restartStandByAudio() {
+  standByAudio.currentTime = 0;
+  playStandByAudio();
+}
+
+standByAudio.addEventListener('ended', () => {
+  if (!standByAudio.paused) {
+    restartStandByAudio();
+  }
+});
+
 export const useAgentAudio = defineStore('agentAudio', () => {
   const agentStore = useAgentStore();
-
+  const agentAudioMode = ref<'transcribing' | 'streaming' | 'fetchingAudio' | 'playingAgentResponse' | null>(null);
   const isStreamingResponse = ref(false);
-  
+    
   let currentAbortController: AbortController | null = null;
   let isPlaying = false;
   let currentAudio: HTMLAudioElement | null = null;
@@ -28,9 +51,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
   let bufferedAudioMimeType = 'audio/mpeg';
 
   function stopGenerationAndAudio() {
-    if (isStreamingResponse.value) {
-      isStreamingResponse.value = false;
-    }
+    agentAudioMode.value = null;
     stopCurrentAudioPlayback();
     currentAbortController?.abort();
   }
@@ -45,7 +66,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     formData.append('currentPage', JSON.stringify(getCurrentPageContext()));
     const fullPath = `${import.meta.env.VITE_ADMINFORTH_PUBLIC_PATH || ''}/adminapi/v1/agent/speech-response`;
     try {
-      isStreamingResponse.value = true;
+      agentAudioMode.value = 'transcribing';
       const res = await fetch(fullPath, {
         method: 'POST',
         body: formData,
@@ -54,7 +75,9 @@ export const useAgentAudio = defineStore('agentAudio', () => {
         },
         signal: currentAbortController!.signal,
       });
+      isStreamingResponse.value = true;
       if (res.ok) {
+        agentAudioMode.value = 'streaming';
         await readSpeechResponseStream(res);
       } else {
         console.error('Failed to transcribe audio:', res.statusText);
@@ -68,6 +91,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
       }
     } finally {
       isStreamingResponse.value = false;
+      agentAudioMode.value = null;
     }
   }
 
@@ -140,12 +164,16 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     }
 
     if (event.type === 'speech-response') {
+      // stopStandByAudio();
       agentStore.setCurrentChatStatus('ready');
       agentStore.addAgentMessage(event.data.response.text);
+      agentAudioMode.value = 'playingAgentResponse';
       return;
     }
 
     if (event.type === 'audio-start') {
+      isStreamingResponse.value = false;
+      agentAudioMode.value = 'fetchingAudio';
       initializeAudioStream(event.data.mimeType);
       return;
     }
@@ -161,6 +189,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     }
 
     if (event.type === 'data-tool-call') {
+      // playStandByAudio();
       agentStore.addDataToolCallMessage(event.data);
     }
   }
@@ -177,7 +206,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
       currentAudio.currentTime = 0;
       return;
     }
-
+    agentAudioMode.value = 'playingAgentResponse';
     void currentAudio.play().catch((error) => {
       console.error('Failed to play audio:', error);
     });
@@ -300,14 +329,18 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     isPlaying = false;
   }
 
-  function stopCurrentAudioPlayback() {
+  function stopCurrentAudioPlayback(dontResetMode = false) {
     bufferedAudioChunks = [];
     bufferedAudioMimeType = 'audio/mpeg';
     detachStreamingAudio();
     destroyCurrentAudioElement();
+    if (!dontResetMode) {
+      agentAudioMode.value = null;
+    }
   }
 
   function handleAudioEnded() {
+    agentAudioMode.value = null;
     stopCurrentAudioPlayback();
   }
 
@@ -350,9 +383,10 @@ export const useAgentAudio = defineStore('agentAudio', () => {
 
   return {
     sendAudioToServerAndHandleResponse,
-    isStreamingResponse,
     stopGenerationAndAudio,
-    playBeep
+    stopCurrentAudioPlayback,
+    playBeep,
+    agentAudioMode
   };
 
 });

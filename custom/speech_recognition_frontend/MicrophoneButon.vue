@@ -7,10 +7,10 @@
     @click="toggleChatMode"
   >
     <div class="w-5 h-5 flex items-center justify-center">
-      <div v-if="!showButtonSpinner" class="flex justify-evenly items-center gap-[0.1rem]">
-        <AudioLines :showAnimation="showAnimation" :isRecording="isAudioChatMode" />
+      <div v-if="microphoneButtonMode === 'listen' || microphoneButtonMode === 'off'" class="flex justify-evenly items-center gap-[0.1rem]">
+        <AudioLines :showAnimation="showAudioWavesAnimation" :isRecording="microphoneButtonMode === 'listen'" />
       </div>
-      <div v-else-if="showStopGenerationMessage" class="flex items-center justify-center gap-2 text-white text-sm">
+      <div v-else-if="microphoneButtonMode === 'generating'" class="flex items-center justify-center gap-2 text-white text-sm">
         <span class="w-3 h-3 bg-white rounded-sm" />
         {{ $t('Stop') }}
       </div>
@@ -22,49 +22,57 @@
 
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import debounce from 'lodash/debounce';
 import { requestMicAndStartVAD, stopUserMedia, getRecorder, CALIBRATION_DURATION } from './voiceActivityDetection';
 import { Spinner } from '@/afcl'
-import { useAdminforth } from '@/adminforth';
 import { storeToRefs } from 'pinia';
 import { useAgentStore } from '../composables/useAgentStore';
 import { useAgentAudio } from '../composables/useAgentAudio';
 import AudioLines from './AudioLines.vue';
 
-const adminforth = useAdminforth();
 const agentStore = useAgentStore();
 const agentAudio = useAgentAudio();
 const { sendAudioToServerAndHandleResponse } = agentAudio;
 const { stopGenerationAndAudio } = agentAudio;
-const { isStreamingResponse } = storeToRefs(agentAudio);
-
-agentStore.registerOnBeforeChatCloseCallback(async () => {
-  if(agentStore.isAudioChatMode) {
-    onStopRecording();
-    agentStore.setIsAudioChatMode(false);
-  }
-});
-
-const showAnimation = ref(false);
-const showButtonSpinner = ref(false);
-const showStopGenerationMessage = ref(false);
+const { stopCurrentAudioPlayback } = agentAudio;
+const { agentAudioMode } = storeToRefs(agentAudio);
+const microphoneButtonMode = ref<'off' | 'calibrating' | 'listen' | 'transcribing' | 'generating'>('off');
+const showAudioWavesAnimation = ref(false);
 const hideAnimationDebounced = debounce(() => {
-  showAnimation.value = false;
+  showAudioWavesAnimation.value = false;
 }, 100);
 const sendUserRecordDebounced = debounce(() => {
   sendRecordForTranscription();
-}, 1000);
+}, 500);
 
 const isAudioChatMode = computed(() => agentStore.isAudioChatMode);
 
-watch(isStreamingResponse, (newVal) => {
-  if(!newVal) {
-    showStopGenerationMessage.value = false;
-    showButtonSpinner.value = false;
+onMounted(() => {
+  agentStore.registerOnBeforeChatCloseCallback(async () => {
+    if(agentStore.isAudioChatMode) {
+      onStopRecording();
+      agentStore.setIsAudioChatMode(false);
+    }
+  });
+});
+
+watch(agentAudioMode, (newVal) => {
+  if(newVal === 'streaming') {
+    stopCurrentAudioPlayback(true);
+    microphoneButtonMode.value = 'generating';
+  } else if (newVal === 'transcribing') {
+    microphoneButtonMode.value = 'transcribing';
+  } else if (newVal === 'fetchingAudio') {
+    //Generation is done, waiting for audio to be ready
+  } else if (newVal === 'playingAgentResponse') {
+    // Audio is playing
   } else {
-    showButtonSpinner.value = true;
-    showStopGenerationMessage.value = true;
+    if(isAudioChatMode.value) {
+      microphoneButtonMode.value = 'listen';
+    } else {
+      microphoneButtonMode.value = 'off';
+    }
   }
 })
 
@@ -79,34 +87,31 @@ function toggleChatMode() {
 }
 
 async function onStartRecording() {
-  showButtonSpinner.value = true;
+  microphoneButtonMode.value = 'calibrating';
   await requestMicAndStartVAD(saidSomething, stopRecording, onAnySound);
   setTimeout(() => {
-    showButtonSpinner.value = false;
+    microphoneButtonMode.value = 'listen';
     agentAudio.playBeep(1000);
-    //Play a sound to indicate that recording has started
   }, CALIBRATION_DURATION);
 }
 
 function onStopRecording() {
   agentAudio.playBeep(600);
   stopUserMedia();
-  showAnimation.value = false;
-  // Play a sound to indicate that recording has stopped
+  showAudioWavesAnimation.value = false;
 }
 
 function resetAll() {
   stopGenerationAndAudio();
-  showAnimation.value = false;
-  showButtonSpinner.value = false;
-  showStopGenerationMessage.value = false;
+  microphoneButtonMode.value = 'off';
+  showAudioWavesAnimation.value = false;
   hideAnimationDebounced.cancel();
   sendUserRecordDebounced.cancel();
 }
 
 
 function saidSomething() {
-  showAnimation.value = true;
+  showAudioWavesAnimation.value = true;
   hideAnimationDebounced();
   sendUserRecordDebounced();
 }
@@ -118,23 +123,15 @@ function stopRecording() {
 
 function onAnySound(amplitude: number) {
   if(amplitude < 0.01) {
-    showAnimation.value = false;
+    showAudioWavesAnimation.value = false;
     return;
   }
-  showAnimation.value = true;
+  showAudioWavesAnimation.value = true;
   hideAnimationDebounced.cancel();
 }
 
-onBeforeUnmount(() => {
-  stopUserMedia();
-  agentStore.setIsAudioChatMode(false);
-  onStopRecording();
-  hideAnimationDebounced.cancel();
-  sendUserRecordDebounced.cancel();
-});
-
 async function sendRecordForTranscription() {
-  showAnimation.value = false;
+  showAudioWavesAnimation.value = false;
   const recordBlob = await getRecorder();
   if (recordBlob) {
     onStopRecording();
@@ -147,6 +144,13 @@ async function sendRecordForTranscription() {
   }
 }
 
+onBeforeUnmount(() => {
+  stopUserMedia();
+  agentStore.setIsAudioChatMode(false);
+  onStopRecording();
+  hideAnimationDebounced.cancel();
+  sendUserRecordDebounced.cancel();
+});
 
 
 </script>
