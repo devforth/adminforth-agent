@@ -52,6 +52,7 @@ onMounted(() => {
   agentStore.registerOnBeforeChatCloseCallback(async () => {
     if(agentStore.isAudioChatMode) {
       onStopRecording();
+      resetAll();
       agentStore.setIsAudioChatMode(false);
     }
   });
