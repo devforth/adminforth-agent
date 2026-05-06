@@ -2,6 +2,8 @@ import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { callAdminForthApi } from '@/utils';
 import type { Chat } from '../../chat';
 import type { IAgentSession, ISessionsListItem, IPart } from '../../types';
+import { PRE_SESSION_ID } from './constants';
+import { ChatStatus } from 'ai';
 import { useI18n } from 'vue-i18n';
 
 type AdminforthLike = {
@@ -91,8 +93,8 @@ export function createAgentSessionManager({
   }
 
   async function deletePreSession() {
-    sessionList.value = sessionList.value.filter((s: ISessionsListItem) => s.sessionId !== 'pre-session');
-    if (activeSessionId.value === 'pre-session') {
+    sessionList.value = sessionList.value.filter((s: ISessionsListItem) => s.sessionId !== PRE_SESSION_ID);
+    if (activeSessionId.value === PRE_SESSION_ID) {
       activeSessionId.value = null;
       currentSession.value = null;
     }
@@ -129,7 +131,7 @@ export function createAgentSessionManager({
     if (!message || isResponseInProgress.value) {
       return;
     }
-    if (!currentSession.value || currentSession.value.sessionId === 'pre-session') {
+    if (!currentSession.value || currentSession.value.sessionId === PRE_SESSION_ID) {
       await createNewSession(message);
     }
     currentSession.value!.timestamp = new Date().toISOString();
@@ -146,27 +148,27 @@ export function createAgentSessionManager({
 
   async function createPreSession() {
     saveCurrentSessionInCache();
-    if (!sessionList.value.some((s: ISessionsListItem) => s.sessionId === 'pre-session')) {
+    if (!sessionList.value.some((s: ISessionsListItem) => s.sessionId === PRE_SESSION_ID)) {
       sessionList.value.unshift({
-        sessionId: 'pre-session',
+        sessionId: PRE_SESSION_ID,
         title: 'New Session',
         timestamp: new Date().toISOString(),
       });
     }
 
-    activeSessionId.value = 'pre-session';
+    activeSessionId.value = PRE_SESSION_ID;
     currentSession.value = {
-      sessionId: 'pre-session',
+      sessionId: PRE_SESSION_ID,
       title: 'New Session',
       timestamp: new Date().toISOString(),
       messages: [],
     };
-    sessions.value['pre-session'] = currentSession.value;
-    setCurrentChat('pre-session');
+    sessions.value[PRE_SESSION_ID] = currentSession.value;
+    setCurrentChat(PRE_SESSION_ID);
   }
 
   async function deleteSession(sessionId: string) {
-    if (sessionId === 'pre-session') {
+    if (sessionId === PRE_SESSION_ID) {
       deletePreSession();
       return;
     }
@@ -236,7 +238,10 @@ export function createAgentSessionManager({
     currentChat.value?.messages.push(debugMessage);
   }
 
-  function addSystemMessage(message: string) {
+  async function addSystemMessage(message: string) {
+    if (!currentSession.value || currentSession.value.sessionId === PRE_SESSION_ID) {
+      await createNewSession('Audio chat');
+    }
     const systemMessage = {
       role: 'system',
       parts: [{
@@ -247,7 +252,7 @@ export function createAgentSessionManager({
     };
     currentChat.value?.messages.push(systemMessage);
     try {
-      const res = callAdminForthApi({
+      const res = await callAdminForthApi({
         method: 'POST',
         path: '/agent/add-system-message-to-turns',
         body: {
@@ -260,6 +265,69 @@ export function createAgentSessionManager({
     }
   }
 
+  function addAgentMessage(message: string) {
+    const agentMessage = {
+      role: 'assistant',
+      parts: [{
+        type: 'text',
+        text: message,
+        state: 'done',
+      }]
+    };
+    currentChat.value?.messages.push(agentMessage);
+  }
+
+  function updateLastAgentMessage(message: string) {
+    const lastMsg = currentChat.value?.lastMessage;
+    if (lastMsg && lastMsg.role === 'assistant') {
+      lastMsg.parts = [{
+        type: 'text',
+        text: message,
+        state: 'done',
+      }];
+      currentChat.value?.messages.splice(currentChat.value.messages.length - 1, 1, lastMsg);
+    } else {
+      addAgentMessage(message);
+    }
+  }
+
+  function addUserMessage(message: string) {
+    const userMessage = {
+      role: 'user',
+      parts: [{
+        type: 'text',
+        text: message,
+        state: 'done',
+      }]
+    };
+    currentChat.value?.messages.push(userMessage);
+  }
+
+
+  function addDataToolCallMessage(data: any) {
+    const lastMessage = currentChat.value?.lastMessage;
+    if (lastMessage.role === 'assistant') {
+      lastMessage.parts.push({
+        type: 'data-tool-call',
+        data,
+      });
+      currentChat.value?.messages.splice(currentChat.value.messages.length - 1, 1, lastMessage);
+    } else {
+      const toolCallMessage = {
+        role: 'assistant',
+        parts: [{
+          type: 'data-tool-call',
+          data,
+        }]
+      };
+      currentChat.value?.messages.push(toolCallMessage);
+    }
+  }
+
+  function setCurrentChatStatus(status: ChatStatus) {
+    (currentChat.value as any)?.setStatus({status});
+  }
+
   return {
     sendMessage,
     createPreSession,
@@ -268,5 +336,10 @@ export function createAgentSessionManager({
     deleteSession,
     addDebugMessage,
     addSystemMessage,
+    addAgentMessage,
+    addUserMessage,
+    addDataToolCallMessage,
+    setCurrentChatStatus,
+    updateLastAgentMessage
   };
 }

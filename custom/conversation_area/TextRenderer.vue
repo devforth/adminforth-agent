@@ -16,9 +16,9 @@
       :components="incremarkComponents"
       :incremark-options="incremarkOptions"
     />
-    <p v-else class="text-red-500 py-2">
+    <!-- <p v-else class="text-red-500 py-2">
       {{ $t('No content to render') }}
-    </p>
+    </p> -->
   </div>
 </template>
 
@@ -28,11 +28,12 @@
   import { useRouter } from 'vue-router';
   import { useAgentStore } from '../composables/useAgentStore';
   import { useCoreStore } from '@/stores/core';
+  import type { IMessage } from '../types';
 
   const props = defineProps<{
     message: string | undefined,
     state: string | undefined,
-    role: 'user' | 'assistant'
+    role: IMessage['role']
   }>();
 
   const emit = defineEmits(['toggle-thoughts']);

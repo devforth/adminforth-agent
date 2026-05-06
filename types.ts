@@ -49,7 +49,7 @@ export interface PluginOptions extends PluginsCommonOptions {
    */
   placeholderMessages?: ((input: {
     adminUser: AdminUser;
-    httpExtra: HttpExtra;
+    headers: HttpExtra["headers"];
   }) => string[] | Promise<string[]>);
 
   /**

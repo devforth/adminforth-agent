@@ -118,8 +118,12 @@
               transition: `transform ${agentTransitions.TRANSITION_DURATION}ms ease-in-out`
             }"            
           >
-            <div class="w-full border rounded-lg pb-8 dark:bg-gray-700">
+            <div 
+              class="w-full border rounded-lg pb-8 dark:bg-gray-700"
+              :class="agentStore.isAudioChatMode ? 'border-none mt-8' : 'border'"  
+            >
               <textarea
+                v-if="!agentStore.isAudioChatMode"
                 v-model="agentStore.userMessageInput"
                 ref="textInput"
                 @input="autoResize"
@@ -169,26 +173,29 @@
                   </button>
                 </div>
               </div>
-              <Button 
-                v-if="!agentStore.isResponseInProgress"
-                class="absolute right-4 bottom-2 !p-0 h-9 w-9"                    
-                @click="sendMessage" 
-                :disabled="!agentStore.trimmedUserMessage || agentStore.isResponseInProgress"
-              >
-                <IconArrowUpOutline 
-                  class="w-8 h-8 p-1
-                    text-white" 
-                />
-              </Button>
-              <Button
-                v-else
-                class="absolute right-4 bottom-2 !p-0 h-9 w-9"    
-                @click="stopCurrentRequest"                
-              >
-                <div
-                  class="w-3 h-3 bg-white rounded-sm"
-                />
-              </Button>
+              <MicrophoneButton v-if="props.meta.hasAudioAdapter" />
+              <template v-if="!agentStore.isAudioChatMode">
+                <Button 
+                  v-if="!agentStore.isResponseInProgress"
+                  class="absolute right-4 bottom-2 !p-0 h-9 w-9 transition-opacity duration-200"                    
+                  @click="sendMessage" 
+                  :disabled="!agentStore.trimmedUserMessage || agentStore.isResponseInProgress"
+                >
+                  <IconArrowUpOutline 
+                    class="w-8 h-8 p-1
+                      text-white" 
+                  />
+                </Button>
+                <Button
+                  v-else
+                  class="absolute right-4 bottom-2 !p-0 h-9 w-9"    
+                  @click="stopCurrentRequest"                
+                >
+                  <div
+                    class="w-3 h-3 bg-white rounded-sm"
+                  />
+                </Button>
+              </template>
             </div>
           </div>
         </div>
@@ -209,6 +216,7 @@ import { useAgentTransitions } from './composables/useAgentTransitions';
 import { Button } from '@/afcl';
 import { useCoreStore } from '@/stores/core';
 import { remToPx } from './utils';
+import MicrophoneButton from './speech_recognition_frontend/MicrophoneButon.vue';
 
 const props = defineProps<{
   meta: {
@@ -218,6 +226,7 @@ const props = defineProps<{
     }>;
     defaultModeName: string | null;
     stickByDefault: boolean;
+    hasAudioAdapter: boolean;
   }
   adminUser: any
 }>();
@@ -321,6 +330,7 @@ function selectMode(modeName: string) {
 }
 
 async function sendMessage() {
+  if (agentStore.isAudioChatMode) return;
   isModeMenuOpen.value = false;
   await agentStore.sendMessage();
   autoResize();

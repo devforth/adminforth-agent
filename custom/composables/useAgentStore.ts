@@ -11,6 +11,8 @@ import {
   DEFAULT_CHAT_WIDTH,
   MAX_WIDTH,
   MIN_WIDTH,
+  RESERVED_SYSTEM_MESSAGE_CONTENT,
+  PRE_SESSION_ID
 } from './agentStore/constants';
 import { createAgentChatManager } from './agentStore/useAgentChat';
 import { createAgentPlaceholderController } from './agentStore/useAgentPlaceholder';
@@ -67,6 +69,36 @@ export const useAgentStore = defineStore('agent', () => {
     return window.localStorage.getItem(`${coreStore.config.brandName || 'adminforth'}-${key}`);
   }
 
+  const isAudioChatMode = ref(false);
+
+  const onBeforeChatCloseCallbacks: Array<() => Promise<void>> = [];
+  function registerOnBeforeChatCloseCallback(hook: () => Promise<void>) {
+    onBeforeChatCloseCallbacks.push(hook);
+  }
+
+  async function executeOnBeforeChatCloseCallbacks() {
+    for(const hook of onBeforeChatCloseCallbacks) {
+      try {
+        await hook();
+      } catch (error) {
+        console.error('Error executing onBeforeChatClose callback:', error);
+      }
+    }
+  }
+
+  function setIsAudioChatMode(isAudioChat: boolean) {
+    isAudioChatMode.value = isAudioChat;
+  }
+
+  watch(isAudioChatMode, (newVal: boolean) => {
+    if (newVal) {
+      addSystemMessage(RESERVED_SYSTEM_MESSAGE_CONTENT.START_AUDIO_CHAT);
+    } else {
+      addSystemMessage(RESERVED_SYSTEM_MESSAGE_CONTENT.END_AUDIO_CHAT);
+    }
+  });
+
+
   const isResponseInProgress = computed( () => {
     return currentChat.value?.status === 'streaming';
   });
@@ -79,6 +111,11 @@ export const useAgentStore = defineStore('agent', () => {
     deleteSession,
     addDebugMessage,
     addSystemMessage,
+    addAgentMessage,
+    addUserMessage,
+    addDataToolCallMessage,
+    setCurrentChatStatus,
+    updateLastAgentMessage
   } = createAgentSessionManager({
     activeSessionId,
     currentSession,
@@ -144,7 +181,7 @@ export const useAgentStore = defineStore('agent', () => {
       }
     }
     lastSessionId.value = getLocalStorageItem('lastSessionId');
-    if (lastSessionId.value && lastSessionId.value !== 'pre-session') {
+    if (lastSessionId.value && lastSessionId.value !== PRE_SESSION_ID) {
       setActiveSession(lastSessionId.value);
     }
     if (coreStore.isMobile) {
@@ -231,7 +268,8 @@ export const useAgentStore = defineStore('agent', () => {
     activeModeName.value = modeName;
   }
 
-  function closeChat() {
+  async function closeChat() {
+    await executeOnBeforeChatCloseCallbacks();
     if(isFullScreen.value) {
       document.body.style.overflow = '';
     }
@@ -273,7 +311,7 @@ export const useAgentStore = defineStore('agent', () => {
 
   function abortCurrentChatRequestAndAddSystemMessage() {
     abortCurrentChatRequest();
-    addSystemMessage('[Response generation aborted]');
+    addSystemMessage(RESERVED_SYSTEM_MESSAGE_CONTENT.AGENT_RESPONSE_ABORTED);
   }
 
   return {
@@ -315,9 +353,18 @@ export const useAgentStore = defineStore('agent', () => {
     DEFAULT_CHAT_WIDTH,
     MAX_WIDTH,
     MIN_WIDTH,
+    RESERVED_SYSTEM_MESSAGE_CONTENT,
     getLocalStorageItem,
     addDebugMessage,
     abortCurrentChatRequestAndAddSystemMessage,
-    addSystemMessage
+    addSystemMessage,
+    isAudioChatMode,
+    setIsAudioChatMode,
+    registerOnBeforeChatCloseCallback,
+    addAgentMessage,
+    addUserMessage,
+    addDataToolCallMessage,
+    setCurrentChatStatus,
+    updateLastAgentMessage
   }
 })

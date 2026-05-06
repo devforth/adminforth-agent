@@ -51,7 +51,7 @@ export function createApiTool(toolName: string, apiBasedTool: ApiBasedTool) {
       const normalizedInput = (input ?? {}) as Record<string, unknown>;
       return apiBasedTool.call({
         adminUser: runtime.context.adminUser,
-        httpExtra: runtime.context.httpExtra,
+        abortSignal: runtime.context.abortSignal,
         inputs: normalizedInput,
         userTimeZone: runtime.context.userTimeZone,
       });

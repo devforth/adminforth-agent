@@ -109,7 +109,7 @@
   const hasToolSections = computed(() => toolSections.value.length > 0);
 
   onMounted(() => {
-    if (toolRendererRef.value) {
+    if (toolRendererRef.value && props.data.toolInfo) {
       toolRendererInitialWidth.value = toolRendererRef.value.offsetWidth;
     }
   });  

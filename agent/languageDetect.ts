@@ -26,14 +26,6 @@ const USER_LANGUAGE_OUTPUT_SCHEMA = {
   },
 } as const;
 
-export function formatLanguagePrompt(language: UserLanguage | null) {
-  if (!language) {
-    return "Respond in the user's language.";
-  }
-
-  return `Respond in ${language.language} (${language.code}).`;
-}
-
 function parseUserLanguage(content: string | undefined): UserLanguage | null {
   if (!content) {
     return null;
