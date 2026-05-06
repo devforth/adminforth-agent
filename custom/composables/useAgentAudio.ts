@@ -14,28 +14,36 @@ type StreamingAudioState = {
   isDone: boolean;
 };
 
-const standByAudio = new Audio('./agentAudio/agent-processing.mp3');
+let standByAudio: HTMLAudioElement | null = null;
 
 function playStandByAudio() {
+  if (!standByAudio) {
+    standByAudio = new Audio(`/plugins/AdminForthAgentPlugin/agentAudio/agent-processing.mp3`);
+    standByAudio.addEventListener('ended', () => {
+      if (!standByAudio.paused) {
+        restartStandByAudio();
+      }
+    });
+  }
   standByAudio.currentTime = 0;
   standByAudio.play()
 }
 
 function stopStandByAudio() {
+  if (!standByAudio) {
+    return;
+  }
   standByAudio.pause();
   standByAudio.currentTime = 0;
 }
 
 function restartStandByAudio() {
-  standByAudio.currentTime = 0;
+  if (standByAudio) {
+    standByAudio.currentTime = 0;
+  }
   playStandByAudio();
 }
 
-standByAudio.addEventListener('ended', () => {
-  if (!standByAudio.paused) {
-    restartStandByAudio();
-  }
-});
 
 export const useAgentAudio = defineStore('agentAudio', () => {
   const agentStore = useAgentStore();
@@ -164,7 +172,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     }
 
     if (event.type === 'speech-response') {
-      // stopStandByAudio();
+      stopStandByAudio();
       agentStore.setCurrentChatStatus('ready');
       agentStore.addAgentMessage(event.data.response.text);
       agentAudioMode.value = 'playingAgentResponse';
@@ -189,7 +197,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     }
 
     if (event.type === 'data-tool-call') {
-      // playStandByAudio();
+      playStandByAudio();
       agentStore.addDataToolCallMessage(event.data);
     }
   }
@@ -330,6 +338,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
   }
 
   function stopCurrentAudioPlayback(dontResetMode = false) {
+    stopStandByAudio();
     bufferedAudioChunks = [];
     bufferedAudioMimeType = 'audio/mpeg';
     detachStreamingAudio();
