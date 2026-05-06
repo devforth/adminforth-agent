@@ -173,7 +173,7 @@
                   </button>
                 </div>
               </div>
-              <MicrophoneButton />
+              <MicrophoneButton v-if="props.meta.hasAudioAdapter" />
               <template v-if="!agentStore.isAudioChatMode">
                 <Button 
                   v-if="!agentStore.isResponseInProgress"
@@ -226,6 +226,7 @@ const props = defineProps<{
     }>;
     defaultModeName: string | null;
     stickByDefault: boolean;
+    hasAudioAdapter: boolean;
   }
   adminUser: any
 }>();
