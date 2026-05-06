@@ -91,8 +91,10 @@ async function onStartRecording() {
   microphoneButtonMode.value = 'calibrating';
   await requestMicAndStartVAD(saidSomething, stopRecording, onAnySound);
   setTimeout(() => {
-    microphoneButtonMode.value = 'listen';
-    agentAudio.playBeep(1000);
+    if (isAudioChatMode.value) {
+      microphoneButtonMode.value = 'listen';
+      agentAudio.playBeep(1000);
+    }
   }, CALIBRATION_DURATION);
 }
 
