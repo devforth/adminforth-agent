@@ -10,7 +10,7 @@ import { z } from "zod";
 import { createAgentChatModel, callAgent } from "./agent/simpleAgent.js";
 import { AdminForthCheckpointSaver } from "./agent/checkpointer.js";
 import { createSequenceDebugCollector } from "./agent/middleware/sequenceDebug.js";
-import { detectUserLanguage } from "./agent/languageDetect.js";
+import { detectUserLanguage, type PreviousUserMessage } from "./agent/languageDetect.js";
 import { prepareApiBasedTools as buildApiBasedTools } from './apiBasedTools.js';
 import { createAgentEventStream } from "./agentResponseEvents.js";
 import { appendCustomSystemPrompt, buildAgentSystemPrompt, buildAgentTurnSystemPrompt, DEFAULT_AGENT_SYSTEM_PROMPT} from "./agent/systemPrompt.js";
@@ -29,6 +29,7 @@ type AgentTurnRunInput = {
   prompt: string;
   sessionId: string;
   turnId: string;
+  previousUserMessages: PreviousUserMessage[];
   modeName?: string | null;
   userTimeZone: string;
   currentPage?: CurrentPageContext;
@@ -41,7 +42,7 @@ type AgentTurnRunInput = {
 };
 
 type RunAndPersistAgentResponseInput =
-  Omit<AgentTurnRunInput, "turnId" | "sequenceDebugCollector"> & {
+  Omit<AgentTurnRunInput, "turnId" | "sequenceDebugCollector" | "previousUserMessages"> & {
     emitErrorResponse?: (response: string) => void;
     failureLogMessage: string;
     abortLogMessage: string;
@@ -114,6 +115,20 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       prompt: turn[this.options.turnResource.promptField],
       response: turn[this.options.turnResource.responseField],
     }));
+  }
+
+  private async getPreviousUserMessages(sessionId: string) {
+    const turns = await this.adminforth.resource(this.options.turnResource.resourceId).list(
+      [Filters.EQ(this.options.turnResource.sessionIdField, sessionId)],
+      2,
+      undefined,
+      [Sorts.DESC(this.options.turnResource.createdAtField)]
+    );
+    return turns
+      .reverse()
+      .map((turn): PreviousUserMessage => ({
+        text: turn[this.options.turnResource.promptField],
+      }));
   }
 
   private getCheckpointer() {
@@ -199,7 +214,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     const summaryModel = summaryModelSpec.model;
     const modelMiddleware = primaryModelSpec.middleware;
 
-    const userLanguage = await detectUserLanguage(selectedMode.completionAdapter, input.prompt)
+    const userLanguage = await detectUserLanguage(selectedMode.completionAdapter, input.prompt, input.previousUserMessages)
       .catch((error) => {
         logger.warn(`Failed to detect user language: ${error.message}`);
         return null;
@@ -284,6 +299,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
   }
 
   private async runAndPersistAgentResponse(input: RunAndPersistAgentResponseInput) {
+    const previousUserMessages = await this.getPreviousUserMessages(input.sessionId);
     const turnId = await this.createNewTurn(input.sessionId, input.prompt);
     await this.adminforth.resource(this.options.sessionResource.resourceId).update(input.sessionId, {
       [this.options.sessionResource.createdAtField]: new Date().toISOString(),
@@ -298,6 +314,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         prompt: input.prompt,
         sessionId: input.sessionId,
         turnId,
+        previousUserMessages,
         modeName: input.modeName,
         userTimeZone: input.userTimeZone,
         currentPage: input.currentPage,
@@ -417,10 +434,22 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             filename: req.file.originalname,
             mimeType: req.file.mimetype,
             language: "auto",
+            abortSignal,
           });
         } catch (error) {
+          if (abortSignal.aborted) {
+            logger.info("Agent speech transcription aborted by the client");
+            stream.end();
+            return null;
+          }
+
           logger.error(`Agent speech transcription failed:\n${error.message}`);
           stream.error("Speech transcription failed. Check server logs for details.");
+          stream.end();
+          return null;
+        }
+
+        if (abortSignal.aborted) {
           stream.end();
           return null;
         }
@@ -476,23 +505,39 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             stream: true,
             streamFormat: "audio",
             format: "mp3",
+            abortSignal,
           });
 
           stream.audioStart(speech.mimeType, speech.format);
 
           const reader = speech.audioStream.getReader();
+          const cancelAudioStream = () => {
+            void reader.cancel();
+          };
 
           try {
+            abortSignal.addEventListener("abort", cancelAudioStream, { once: true });
+
             while (true) {
+              if (abortSignal.aborted) {
+                await reader.cancel();
+                break;
+              }
+
               const { value, done } = await reader.read();
 
               if (done) {
                 break;
               }
 
+              if (abortSignal.aborted) {
+                break;
+              }
+
               stream.audioDelta(value);
             }
           } finally {
+            abortSignal.removeEventListener("abort", cancelAudioStream);
             reader.releaseLock();
           }
 

@@ -6,6 +6,8 @@ description: Fetch one or more records. Use to find records entities. To use thi
 
 You can use tool `get_resource_data` it returns one or more records and is capable of using filters
 
+When you only need specific fields, pass `columns` with the exact resource column names you need. This keeps large result sets small. For record links or user-facing record choices, include the primary key and enough display fields, or omit `columns` when you need the full row context.
+
 # Instructions
 
 To find specific data record you should use filters. ILIKE filters are preferred when we are unsure the input is clear.You can combine filters with OR if you want to search multiple fields.If user queries one record you should try to fetch up to 5 records and if more then one returned return output them all to user and ask to select one. When you communicate about record with user, show its several most important fields.

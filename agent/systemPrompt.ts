@@ -1,5 +1,5 @@
 import type { AdminForthResource, AdminUser, IAdminForth } from "adminforth";
-import type { UserLanguage } from "./languageDetect.js";
+import type { DetectedLanguage } from "./languageDetect.js";
 import {
   listBundledSkillManifests,
   listProjectSkillManifests,
@@ -46,8 +46,8 @@ export function appendCustomSystemPrompt(
   return `${systemPrompt}\n\n${normalizedCustomSystemPrompt}`;
 }
 
-function formatLanguagePrompt(language: UserLanguage | null) {
-  if (!language) {
+function formatLanguagePrompt(language: DetectedLanguage | null) {
+  if (!language || language.ambiguous) {
     return "Respond in the user's language.";
   }
 
@@ -70,7 +70,7 @@ export function buildAgentTurnSystemPrompt(input: {
   agentSystemPrompt: string;
   adminUser: AdminUser;
   usernameField: string;
-  userLanguage: UserLanguage | null;
+  userLanguage: DetectedLanguage | null;
 }) {
   return [
     input.agentSystemPrompt,
