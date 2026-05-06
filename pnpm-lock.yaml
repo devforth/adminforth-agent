@@ -18,8 +18,8 @@ importers:
         specifier: ^1.0.1
         version: 1.0.1(@langchain/core@1.1.40(openai@6.34.0(ws@8.20.0)(zod@4.3.6))(ws@8.20.0))
       adminforth:
-        specifier: ^2.52.0
-        version: 2.52.0(@types/node@25.6.0)(typescript@5.9.3)
+        specifier: ^2.53.5
+        version: 2.53.5(@types/node@25.6.0)(typescript@5.9.3)
       dayjs:
         specifier: ^1.11.20
         version: 1.11.20
@@ -527,8 +527,8 @@ packages:
     resolution: {integrity: sha512-PYAthTa2m2VKxuvSD3DPC/Gy+U+sOA1LAuT8mkmRuvw+NACSaeXEQ+NHcVF7rONl6qcaxV3Uuemwawk+7+SJLw==}
     engines: {node: '>= 0.6'}
 
-  adminforth@2.52.0:
-    resolution: {integrity: sha512-lY1i6nXnrs4ZjvV4fVZ8ja07oz3CwDL3aAr2AcotX+xKZ8yql7ZPtARqgBbjr1+4QNJmV+ZRSs+ei/650gRUsw==}
+  adminforth@2.53.5:
+    resolution: {integrity: sha512-Dprq9q4+PIKx4FjeTKnpbv4ojzLdYVzBFuAwBs+rEkYjkogw/P1l7rtmfI4lNBaXAggg9nL/cAYHjPVM2gyMfA==}
     hasBin: true
 
   agent-base@7.1.4:
@@ -3286,7 +3286,7 @@ snapshots:
       mime-types: 2.1.35
       negotiator: 0.6.3
 
-  adminforth@2.52.0(@types/node@25.6.0)(typescript@5.9.3):
+  adminforth@2.53.5(@types/node@25.6.0)(typescript@5.9.3):
     dependencies:
       '@babel/parser': 7.29.3
       '@clickhouse/client': 1.18.3
