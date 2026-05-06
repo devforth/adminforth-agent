@@ -1,97 +1,43 @@
-<template> 
-  <div 
-    class=" bg-white w-[0.2rem] rounded-sm transition-all duration-300 ease-in-out"
-    :class="{
-      'recordingAnimation1' : showAnimation,
-      'h-2': !isRecording,
-      'h-1': isRecording,
-    }"  
+<template>
+  <div
+    v-for="(height, index) in lineHeights"
+    :key="index"
+    class="bg-white w-[0.2rem] rounded-sm transition-all duration-100 ease-out"
+    :style="{ height }"
   />
-  <div 
-    class=" bg-white w-[0.2rem] rounded-sm transition-all duration-300 ease-in-out"
-    :class="{
-      'recordingAnimation2' : showAnimation,
-      'h-4': !isRecording,
-      'h-1': isRecording,
-    }"  
-  />
-  <div 
-    class=" bg-white w-[0.2rem] rounded-sm transition-all duration-300 ease-in-out"
-    :class="{
-      'recordingAnimation3' : showAnimation,
-      'h-3': !isRecording,
-      'h-1': isRecording,
-    }"  
-  />
-  <div 
-    class=" bg-white w-[0.2rem] rounded-sm transition-all duration-300 ease-in-out"
-    :class="{
-      'recordingAnimation4' : showAnimation,
-      'h-2': !isRecording,
-      'h-1': isRecording,
-    }"  
-  />
-  <template v-if="isRecording">
-    <div 
-      class=" bg-white w-[0.2rem] rounded-sm h-1 transition-all duration-300 ease-in-out"
-      :class="{
-        'recordingAnimation5' : showAnimation,
-      }"  
-    />
-    <p class="text-white ml-2">End</p>
-  </template>
+  <p v-if="isRecording" class="text-white ml-2">End</p>
 </template>
 
-
-
 <script setup lang="ts">
+import { computed } from 'vue';
+
+const IDLE_LINE_HEIGHTS = [0.5, 1, 0.75, 0.5];
+const RECORDING_LINE_WEIGHTS = [0.45, 1, 0.75, 0.9, 0.55];
+const MIN_RECORDING_HEIGHT = 0.25;
+const MAX_RECORDING_DELTA = 0.9;
 
 const props = defineProps<{
   showAnimation: boolean;
   isRecording: boolean;
+  amplitude: number;
 }>();
 
+const normalizedAmplitude = computed(() => {
+  if (!props.isRecording || !props.showAnimation) {
+    return 0;
+  }
+
+  return Math.min(Math.max(props.amplitude, 0), 1);
+});
+
+const lineHeights = computed(() => {
+  if (!props.isRecording) {
+    return IDLE_LINE_HEIGHTS.map((height) => `${height}rem`);
+  }
+
+  return RECORDING_LINE_WEIGHTS.map((weight) => {
+    const height = MIN_RECORDING_HEIGHT + normalizedAmplitude.value * MAX_RECORDING_DELTA * weight;
+    return `${height}rem`;
+  });
+});
 </script>
-
-<style scoped lang="scss">
-  .recordingAnimation1 {
-    animation: recordingAnimation 1s infinite;
-    height: 0.3rem;
-  }
-
-  .recordingAnimation2 {
-    animation: recordingAnimation 1s infinite;
-    animation-delay: 0.2s;
-    height: 0.5rem;
-  }
-
-  .recordingAnimation3 {
-    animation: recordingAnimation 1s infinite;
-    animation-delay: 0.4s;
-    height: 0.4rem;
-  }
-  
-  .recordingAnimation4 {
-    animation: recordingAnimation 1s infinite;
-    animation-delay: 0.6s;
-    height: 0.5rem;
-  }
-
-  .recordingAnimation5 {
-    animation: recordingAnimation 1s infinite;
-    animation-delay: 0.8s;
-    height: 0.3rem;
-  }
-
-  @keyframes recordingAnimation {
-    0% {
-      transform: scaleY(1);
-    }
-    50% {
-      transform: scaleY(2);
-    }
-    100% {
-      transform: scaleY(1);
-    }
-  }
-</style>

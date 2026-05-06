@@ -8,7 +8,11 @@
   >
     <div class="w-5 h-5 flex items-center justify-center">
       <div v-if="microphoneButtonMode === 'listen' || microphoneButtonMode === 'off'" class="flex justify-evenly items-center gap-[0.1rem]">
-        <AudioLines :showAnimation="showAudioWavesAnimation" :isRecording="microphoneButtonMode === 'listen'" />
+        <AudioLines
+          :showAnimation="showAudioWavesAnimation"
+          :isRecording="microphoneButtonMode === 'listen'"
+          :amplitude="audioAmplitude"
+        />
       </div>
       <div v-else-if="microphoneButtonMode === 'generating'" class="flex items-center justify-center gap-2 text-white text-sm">
         <span class="w-3 h-3 bg-white rounded-sm" />
@@ -39,6 +43,7 @@ const { stopCurrentAudioPlayback } = agentAudio;
 const { agentAudioMode } = storeToRefs(agentAudio);
 const microphoneButtonMode = ref<'off' | 'calibrating' | 'listen' | 'transcribing' | 'generating'>('off');
 const showAudioWavesAnimation = ref(false);
+const audioAmplitude = ref(0);
 const hideAnimationDebounced = debounce(() => {
   showAudioWavesAnimation.value = false;
 }, 100);
@@ -101,12 +106,14 @@ async function onStartRecording() {
 function onStopRecording() {
   agentAudio.playBeep(600);
   stopUserMedia();
+  audioAmplitude.value = 0;
   showAudioWavesAnimation.value = false;
 }
 
 function resetAll() {
   stopGenerationAndAudio();
   microphoneButtonMode.value = 'off';
+  audioAmplitude.value = 0;
   showAudioWavesAnimation.value = false;
   hideAnimationDebounced.cancel();
   sendUserRecordDebounced.cancel();
@@ -125,7 +132,10 @@ function stopRecording() {
 }
 
 function onAnySound(amplitude: number) {
+  audioAmplitude.value = Math.min(Math.max(amplitude, 0), 1);
+
   if(amplitude < 0.01) {
+    audioAmplitude.value = 0;
     showAudioWavesAnimation.value = false;
     return;
   }
