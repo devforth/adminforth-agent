@@ -18,8 +18,8 @@ importers:
         specifier: ^1.0.1
         version: 1.0.1(@langchain/core@1.1.40(openai@6.34.0(ws@8.20.0)(zod@4.3.6))(ws@8.20.0))
       adminforth:
-        specifier: ^2.51.0
-        version: 2.51.0(@types/node@25.6.0)(typescript@5.9.3)
+        specifier: ^2.52.0
+        version: 2.52.0(@types/node@25.6.0)(typescript@5.9.3)
       dayjs:
         specifier: ^1.11.20
         version: 1.11.20
@@ -473,8 +473,8 @@ packages:
     resolution: {integrity: sha512-PYAthTa2m2VKxuvSD3DPC/Gy+U+sOA1LAuT8mkmRuvw+NACSaeXEQ+NHcVF7rONl6qcaxV3Uuemwawk+7+SJLw==}
     engines: {node: '>= 0.6'}
 
-  adminforth@2.51.0:
-    resolution: {integrity: sha512-1SkHwbmW5V28kPy/3GkqSsiMmaPbp2rm3xbESyXYssnrXVgT5c+ju4A/3Ultnd9qcw1pXeWvXj398TWu4rgHLQ==}
+  adminforth@2.52.0:
+    resolution: {integrity: sha512-lY1i6nXnrs4ZjvV4fVZ8ja07oz3CwDL3aAr2AcotX+xKZ8yql7ZPtARqgBbjr1+4QNJmV+ZRSs+ei/650gRUsw==}
     hasBin: true
 
   agent-base@7.1.4:
@@ -3115,7 +3115,7 @@ snapshots:
       mime-types: 2.1.35
       negotiator: 0.6.3
 
-  adminforth@2.51.0(@types/node@25.6.0)(typescript@5.9.3):
+  adminforth@2.52.0(@types/node@25.6.0)(typescript@5.9.3):
     dependencies:
       '@babel/parser': 7.29.3
       '@clickhouse/client': 1.18.3
@@ -3145,6 +3145,7 @@ snapshots:
       jsonwebtoken: 9.0.3
       listr2: 8.3.3
       mongodb: 6.6.2
+      multer: 2.1.1
       mysql2: 3.22.3(@types/node@25.6.0)
       node-fetch: 3.3.2
       pg: 8.20.0
@@ -3516,7 +3517,7 @@ snapshots:
 
   ecdsa-sig-formatter@1.0.11:
     dependencies:
-      safe-buffer: 5.1.2
+      safe-buffer: 5.2.1
 
   ee-first@1.1.1: {}
 
@@ -3995,12 +3996,12 @@ snapshots:
     dependencies:
       buffer-equal-constant-time: 1.0.1
       ecdsa-sig-formatter: 1.0.11
-      safe-buffer: 5.1.2
+      safe-buffer: 5.2.1
 
   jws@4.0.1:
     dependencies:
       jwa: 2.0.1
-      safe-buffer: 5.1.2
+      safe-buffer: 5.2.1
 
   langchain@1.3.3(@langchain/core@1.1.40(openai@6.34.0(ws@8.20.0)(zod@4.3.6))(ws@8.20.0))(openai@6.34.0(ws@8.20.0)(zod@4.3.6))(ws@8.20.0):
     dependencies:
@@ -5082,7 +5083,7 @@ snapshots:
 
   tunnel-agent@0.6.0:
     dependencies:
-      safe-buffer: 5.1.2
+      safe-buffer: 5.2.1
 
   type-fest@1.4.0: {}
 
