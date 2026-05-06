@@ -4,6 +4,8 @@ import type { Chat } from '../../chat';
 import type { IAgentSession, ISessionsListItem, IPart } from '../../types';
 import { PRE_SESSION_ID } from './constants';
 import { ChatStatus } from 'ai';
+import { useI18n } from 'vue-i18n';
+
 type AdminforthLike = {
   confirm(options: { message: string; yes: string; no: string }): Promise<boolean>;
 };
@@ -41,6 +43,7 @@ export function createAgentSessionManager({
     return [...sessionsListToSort].sort((a: ISessionsListItem, b: ISessionsListItem) => b.timestamp.localeCompare(a.timestamp));
   }
 
+  const { t } = useI18n();
   function saveCurrentSessionInCache() {
     if (currentSession.value) {
       currentSession.value.messages = currentChat.value?.messages.map((m: any) => ({
@@ -170,7 +173,7 @@ export function createAgentSessionManager({
       return;
     }
     blockCloseOfChat.value = true;
-    const isConfirmed = await adminforth.confirm({message: 'Are you sure, that you want to delete this session?', yes: 'Yes', no: 'No'});
+    const isConfirmed = await adminforth.confirm({title: t('Are you sure, that you want to delete this session?'), message: t('This process is irreversible.'), yes: 'Yes', no: 'No'});
     blockCloseOfChat.value = false;
     if (!isConfirmed) {
       return;
