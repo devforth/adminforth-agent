@@ -67,7 +67,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
   async function sendAudioToServerAndHandleResponse(blob: Blob) {
     currentAbortController = new AbortController();
     const formData = new FormData();
-    formData.append('file', blob, 'user_prompt.webm');
+    formData.append('file', blob, 'user_prompt.wav');
     formData.append('sessionId', agentStore.activeSessionId);
     formData.append('mode', agentStore.activeModeName ?? '');
     formData.append('timeZone', Intl.DateTimeFormat().resolvedOptions().timeZone);
