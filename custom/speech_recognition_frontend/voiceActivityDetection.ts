@@ -1,151 +1,62 @@
-import vad from 'voice-activity-detection';
+import { MicVAD, utils } from "@ricky0123/vad-web"
 
-let currentStream: MediaStream | null = null;
-let vadInstance: any = null;
-let audioContext: AudioContext | null = null;
-let mediaRecorder: MediaRecorder | null = null;
-let recordedChunks: BlobPart[] = [];
-let wasVoiceStarted = false;
+let VADInstance: MicVAD | null = null;
+let recordedAudioChunks: Float32Array[] = [];
+let onVoiceStopCallback: () => void = () => {};
+let onVoiceStartCallback: () => void = () => {};
+let onUpdateCallback: (amplitude: number) => void = () => {};
 
-export const CALIBRATION_DURATION = 1000; // in ms
+async function createVADInstance(){
+  VADInstance = await MicVAD.new({
+    onFrameProcessed: ({ isSpeech }) => {
+      onUpdateCallback(isSpeech);
+    },
+    onSpeechEnd: (audio) => {
+      recordedAudioChunks.push(audio);
+      onVoiceStopCallback();
+    },
+    onSpeechStart: () => {
+      onVoiceStartCallback();
+    },
+    onnxWASMBasePath: "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/",
+    baseAssetPath: "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.29/dist/",
+  })
+}
 
 export async function requestMicAndStartVAD(
-  onVoiceStopCallback: () => void,
-  onVoiceStartCallback: () => void,
-  onUpdateCallback: (amplitude: number) => void
+  onVoiceStop: () => void,
+  onVoiceStart: () => void,
+  onUpdate: (amplitude: number) => void
 ) {
-  return new Promise<void>((resolve, reject) => {
-    try {
-      audioContext = new AudioContext();
+  onVoiceStopCallback = onVoiceStop;
+  onVoiceStartCallback = onVoiceStart;
+  onUpdateCallback = onUpdate;
 
-      navigator.mediaDevices
-        .getUserMedia({ audio: true })
-        .then((stream) => {
-          currentStream = stream;
-          startRecording(stream);
-          resolve();
-          startUserMedia(audioContext as AudioContext, stream, onVoiceStartCallback, onVoiceStopCallback, onUpdateCallback);
-        })
-        .catch((error) => {
-          handleMicConnectError();
-          reject(error);
-        });
-    } catch (e) {
-      handleUserMediaError();
-      reject(e);
-    }
-  });
-}
-
-function handleUserMediaError() {
-  console.error('Mic input is not supported by the browser.');
-}
-
-function handleMicConnectError() {
-  console.error('Could not connect microphone. Possible rejected by the user or is blocked by the browser.');
+  if (!VADInstance) {
+    await createVADInstance();
+  }
+  VADInstance?.start(); 
 }
 
 export async function stopUserMedia() {
-  wasVoiceStarted = false;
-  if (vadInstance && vadInstance.destroy) {
-    vadInstance.destroy();
-    vadInstance = null;
-  }
-
-  if (currentStream) {
-    currentStream.getTracks().forEach(track => track.stop());
-    currentStream = null;
-  }
-
-  if (audioContext) {
-    audioContext.close();
-    audioContext = null;
-  }
-
-  if (mediaRecorder) {
-    mediaRecorder.stop();
-    mediaRecorder = null;
-  }
-
+  await VADInstance?.pause();
 }
 
-function startRecording(stream: MediaStream) {
-  recordedChunks = [];
-  mediaRecorder = new MediaRecorder(stream);
-  mediaRecorder.ondataavailable = (event: BlobEvent) => {
-    if (event.data.size > 0) {
-      recordedChunks.push(event.data);
-    }
-  };
-  mediaRecorder.start();
-}
-
-export async function getRecorder(): Promise<Blob | null> {
-  if (!mediaRecorder) {
-    return Promise.resolve(null);
+export async function getRecord() {
+  const totalSamples = recordedAudioChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  if (totalSamples === 0) {
+    return null;
   }
 
-  const recorder = mediaRecorder;
-  mediaRecorder = null;
-
-  const finalizeBlob = () => {
-    const blob = new Blob(recordedChunks, { type: recorder.mimeType || 'audio/webm' });
-    recordedChunks = [];
-    return blob;
-  };
-
-  if (recorder.state === 'inactive') {
-    return Promise.resolve(finalizeBlob());
+  const mergedAudio = new Float32Array(totalSamples);
+  let offset = 0;
+  for (const chunk of recordedAudioChunks) {
+    mergedAudio.set(chunk, offset);
+    offset += chunk.length;
   }
 
-  return new Promise<Blob>((resolve, reject) => {
-    recorder.onstop = () => {
-      resolve(finalizeBlob());
-    };
-    recorder.onerror = () => {
-      recordedChunks = [];
-      reject(new Error('Failed to finalize audio recording.'));
-    };
-    recorder.stop();
-  });
-}
-
-function startUserMedia(
-  audioContext: AudioContext, 
-  stream: MediaStream, 
-  onVoiceStartCallback: () => void,
-  onVoiceStopCallback: () => void,
-  onUpdateCallback: (amplitude: number) => void
-) {
-  const options = {
-    fftSize: 1024,
-    bufferLen: 1024,
-    smoothingTimeConstant: 0.2,
-    minCaptureFreq: 85,         // in Hz
-    maxCaptureFreq: 255,        // in Hz
-    noiseCaptureDuration: CALIBRATION_DURATION, // in ms
-    minNoiseLevel: 0.5,         // from 0 to 1
-    maxNoiseLevel: 0.7,         // from 0 to 1
-    avgNoiseMultiplier: 1.2,
-    onVoiceStart() {
-      wasVoiceStarted = true;
-      if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-        startRecording(currentStream as MediaStream);
-      }
-      console.log('👹👹👹voice start👹👹👹');
-      onVoiceStartCallback();
-    },
-    onVoiceStop() {
-      if (!wasVoiceStarted) {
-        return;
-      }
-      console.log('👿👿👿voice stop👿👿👿');
-      onVoiceStopCallback();
-    }, //Doesn't work properly, so we will handle it with onUpdate callback
-    onUpdate(val: number) {
-      onUpdateCallback(val);
-    }
-  };
-
-  vadInstance = vad(audioContext, stream, options);
+  const wavBuffer = utils.encodeWAV(mergedAudio, 1, 16000, 1, 16);
+  const recordToReturn = new Blob([wavBuffer], { type: 'audio/wav' });
+  recordedAudioChunks = [];
+  return recordToReturn;
 }
