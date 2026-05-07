@@ -27,7 +27,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue';
-import debounce from 'lodash/debounce';
+import debounce from 'lodash.debounce';
 import { requestMicAndStartVAD, stopUserMedia, getRecorder, CALIBRATION_DURATION } from './voiceActivityDetection';
 import { Spinner } from '@/afcl'
 import { storeToRefs } from 'pinia';
