@@ -16,7 +16,7 @@ type StreamingAudioState = {
 
 let standByAudio: HTMLAudioElement | null = null;
 let isStandByAudioPlaying = false;
-function playStandByAudio() {
+async function playStandByAudio() {
   if (!standByAudio) {
     standByAudio = new Audio(`/plugins/AdminForthAgentPlugin/agentAudio/agent-processing.mp3`);
     standByAudio.addEventListener('ended', () => {
@@ -26,7 +26,7 @@ function playStandByAudio() {
     });
   }
   standByAudio.currentTime = 0;
-  standByAudio.play()
+  await standByAudio.play();
   isStandByAudioPlaying = true;
 }
 
@@ -215,7 +215,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     }
   }
 
-  function setIsPlaying(value: boolean) {
+  async function setIsPlaying(value: boolean) {
     isPlaying = value;
 
     if (!currentAudio) {
@@ -228,7 +228,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
       return;
     }
     agentAudioMode.value = 'playingAgentResponse';
-    void currentAudio.play().catch((error) => {
+    await void currentAudio.play().catch((error) => {
       console.error('Failed to play audio:', error);
     });
   }
