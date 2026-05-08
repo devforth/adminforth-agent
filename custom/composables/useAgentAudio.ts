@@ -15,7 +15,7 @@ type StreamingAudioState = {
 };
 
 let standByAudio: HTMLAudioElement | null = null;
-
+let isStandByAudioPlaying = false;
 function playStandByAudio() {
   if (!standByAudio) {
     standByAudio = new Audio(`/plugins/AdminForthAgentPlugin/agentAudio/agent-processing.mp3`);
@@ -27,6 +27,7 @@ function playStandByAudio() {
   }
   standByAudio.currentTime = 0;
   standByAudio.play()
+  isStandByAudioPlaying = true;
 }
 
 function stopStandByAudio() {
@@ -35,6 +36,7 @@ function stopStandByAudio() {
   }
   standByAudio.pause();
   standByAudio.currentTime = 0;
+  isStandByAudioPlaying = false;
 }
 
 function restartStandByAudio() {
@@ -197,7 +199,9 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     }
 
     if (event.type === 'data-tool-call') {
-      playStandByAudio();
+      if (!isStandByAudioPlaying) {
+        playStandByAudio();
+      }
       agentStore.addDataToolCallMessage(event.data);
     }
   }

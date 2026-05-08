@@ -94,8 +94,8 @@ function toggleChatMode() {
 
 async function onStartRecording() {
   await requestMicAndStartVAD(saidSomething, stopRecording, onAnySound);
-      microphoneButtonMode.value = 'listen';
-      agentAudio.playBeep(1000);
+  microphoneButtonMode.value = 'listen';
+  agentAudio.playBeep(1000);
 }
 
 function onStopRecording() {
