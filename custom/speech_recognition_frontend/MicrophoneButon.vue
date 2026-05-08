@@ -28,7 +28,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import debounce from 'lodash.debounce';
-import { requestMicAndStartVAD, stopUserMedia, getRecorder, CALIBRATION_DURATION } from './voiceActivityDetection';
+import { requestMicAndStartVAD, stopUserMedia, getRecord } from './voiceActivityDetection';
 import { Spinner } from '@/afcl'
 import { storeToRefs } from 'pinia';
 import { useAgentStore } from '../composables/useAgentStore';
@@ -41,7 +41,7 @@ const { sendAudioToServerAndHandleResponse } = agentAudio;
 const { stopGenerationAndAudio } = agentAudio;
 const { stopCurrentAudioPlayback } = agentAudio;
 const { agentAudioMode } = storeToRefs(agentAudio);
-const microphoneButtonMode = ref<'off' | 'calibrating' | 'listen' | 'transcribing' | 'generating'>('off');
+const microphoneButtonMode = ref<'off' | 'listen' | 'transcribing' | 'generating'>('off');
 const showAudioWavesAnimation = ref(false);
 const audioAmplitude = ref(0);
 const hideAnimationDebounced = debounce(() => {
@@ -93,14 +93,9 @@ function toggleChatMode() {
 }
 
 async function onStartRecording() {
-  microphoneButtonMode.value = 'calibrating';
   await requestMicAndStartVAD(saidSomething, stopRecording, onAnySound);
-  setTimeout(() => {
-    if (isAudioChatMode.value) {
       microphoneButtonMode.value = 'listen';
       agentAudio.playBeep(1000);
-    }
-  }, CALIBRATION_DURATION);
 }
 
 function onStopRecording() {
@@ -145,8 +140,9 @@ function onAnySound(amplitude: number) {
 
 async function sendRecordForTranscription() {
   showAudioWavesAnimation.value = false;
-  const recordBlob = await getRecorder();
+  const recordBlob = await getRecord();
   if (recordBlob) {
+    console.log('Audio recorded, sending to server for transcription. Audio Blob size:', recordBlob.size, recordBlob.type);
     onStopRecording();
     await sendAudioToServerAndHandleResponse(recordBlob);
     if (agentStore.isAudioChatMode) {
