@@ -1,7 +1,7 @@
 <template>
   <div 
     class="absolute bottom-2 flex items-center justify-center z-10 gap-4"
-    :class="[!agentStore.isAudioChatMode ? 'right-16': 'right-1/2 translate-x-1/2']"
+    :class="[!agentStore.isAudioChatMode ? 'right-16': agentStore.isMobile ? 'right-1/2 translate-x-1/2' : 'right-1/2 translate-x-3/4']"
   > 
     <button 
       v-if="isAudioChatMode && microphoneButtonMode === 'generating'"
