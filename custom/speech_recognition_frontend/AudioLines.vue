@@ -5,7 +5,7 @@
     class="bg-white w-[0.2rem] rounded-sm transition-all duration-100 ease-out"
     :style="{ height }"
   />
-  <p v-if="isRecording" class="text-white ml-2">End</p>
+  <p v-if="isRecording" class="text-white ml-2">{{ $t('End') }}</p>
 </template>
 
 <script setup lang="ts">

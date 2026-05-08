@@ -1,27 +1,39 @@
 <template>
-  <button 
-    class="absolute bottom-2 h-9 bg-lightPrimary dark:bg-darkPrimary 
-      hover:opacity-90 rounded-full flex items-center justify-center
-      transition-all duration-300 ease-in-out overflow-hidden"
-    :class="[isAudioChatMode ? 'w-32 px-2': 'w-9', !agentStore.isAudioChatMode ? 'right-16': 'right-1/2 translate-x-1/2']" 
-    @click="toggleChatMode"
-  >
-    <div class="w-5 h-5 flex items-center justify-center">
-      <div v-if="microphoneButtonMode === 'listen' || microphoneButtonMode === 'off'" class="flex justify-evenly items-center gap-[0.1rem]">
-        <AudioLines
-          :showAnimation="showAudioWavesAnimation"
-          :isRecording="microphoneButtonMode === 'listen'"
-          :amplitude="audioAmplitude"
-        />
+  <div 
+    class="absolute bottom-2 flex items-center justify-center z-10 gap-4"
+    :class="[!agentStore.isAudioChatMode ? 'right-16': 'right-1/2 translate-x-1/2']"
+  > 
+    <button 
+      v-if="isAudioChatMode && microphoneButtonMode === 'generating'"
+      class="bg-red-500 hover:bg-red-600 dark:bg-red-700 dark:hover:bg-red-800 h-9 flex items-center justify-center rounded-full gap-2 text-white px-4"
+      @click="stopCurrentGeneration()"
+    >
+      <div class="w-3 h-3 bg-white rounded-full"/>
+      {{ $t('Break') }}
+    </button>
+    <button 
+      class="h-9 bg-lightPrimary dark:bg-darkPrimary 
+        hover:opacity-90 rounded-full flex items-center justify-center
+        transition-all duration-300 ease-in-out overflow-hidden"
+      :class="[isAudioChatMode ? 'w-32 px-2': 'w-9']" 
+      @click="toggleChatMode"
+    >
+      <div class="w-5 h-5 flex items-center justify-center">
+        <div v-if="microphoneButtonMode === 'listen' || microphoneButtonMode === 'off'" class="flex justify-evenly items-center gap-[0.1rem]">
+          <AudioLines
+            :showAnimation="showAudioWavesAnimation"
+            :isRecording="microphoneButtonMode === 'listen'"
+            :amplitude="audioAmplitude"
+          />
+        </div>
+        <div v-else-if="microphoneButtonMode === 'generating'" class="flex items-center justify-center gap-2 text-white text-sm">
+          <span class="w-3 h-3 bg-white rounded-sm" />
+          {{ $t('End') }}
+        </div>
+        <Spinner v-else class="w-4 h-4 text-lightButtonsText dark:text-darkButtonsText fill-lightButtonsBackground dark:fill-darkPrimary" />
       </div>
-      <div v-else-if="microphoneButtonMode === 'generating'" class="flex items-center justify-center gap-2 text-white text-sm">
-        <span class="w-3 h-3 bg-white rounded-sm" />
-        {{ $t('Stop') }}
-      </div>
-      <Spinner v-else class="w-4 h-4 text-lightButtonsText dark:text-darkButtonsText fill-lightButtonsBackground dark:fill-darkPrimary" />
-    </div>
-   
-  </button>
+    </button>
+  </div>
 </template>
 
 
@@ -82,6 +94,11 @@ watch(agentAudioMode, async (newVal) => {
     }
   }
 })
+
+function stopCurrentGeneration() {
+  stopGenerationAndAudio();
+  agentAudio.playBeep(1000);
+}
 
 function toggleChatMode() {
   agentStore.setIsAudioChatMode(!isAudioChatMode.value);
