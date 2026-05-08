@@ -75,6 +75,20 @@ const createSessionBodySchema = z.object({
   triggerMessage: z.string().optional(),
 }).strict();
 
+function isAbortError(error: unknown): boolean {
+  return (
+    error instanceof DOMException && error.name === "AbortError"
+  ) || (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    (error.name === "AbortError" || error.name === "APIUserAbortError")
+  );
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 export default class AdminForthAgentPlugin extends AdminForthPlugin {
   options: PluginOptions;
@@ -233,7 +247,11 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
 
     const userLanguage = await detectUserLanguage(selectedMode.completionAdapter, input.prompt, input.previousUserMessages)
       .catch((error) => {
-        logger.warn(`Failed to detect user language: ${error.message}`);
+        if (input.abortSignal?.aborted || isAbortError(error)) {
+          throw error;
+        }
+
+        logger.warn(`Failed to detect user language: ${getErrorMessage(error)}`);
         return null;
       });
     const systemPrompt = buildAgentTurnSystemPrompt({
@@ -274,6 +292,10 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     });
 
     for await (const rawChunk of stream as AsyncIterable<[any, any]>) {
+      if (input.abortSignal?.aborted) {
+        throw new DOMException("This operation was aborted", "AbortError");
+      }
+
       const [token, metadata] = rawChunk;
 
       const nodeName =
@@ -344,13 +366,13 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       });
       fullResponse = agentResponse.text;
     } catch (error) {
-      if (input.abortSignal?.aborted) {
+      if (input.abortSignal?.aborted || isAbortError(error)) {
         aborted = true;
         logger.info(input.abortLogMessage);
       } else {
         failed = true;
-        logger.error(`${input.failureLogMessage}:\n${error.message}`);
-        fullResponse = error.message;
+        fullResponse = getErrorMessage(error);
+        logger.error(`${input.failureLogMessage}:\n${fullResponse}`);
         input.emitErrorResponse?.(fullResponse);
       }
     }
@@ -454,13 +476,13 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             abortSignal,
           });
         } catch (error) {
-          if (abortSignal.aborted) {
+          if (abortSignal.aborted || isAbortError(error)) {
             logger.info("Agent speech transcription aborted by the client");
             stream.end();
             return null;
           }
 
-          logger.error(`Agent speech transcription failed:\n${error.message}`);
+          logger.error(`Agent speech transcription failed:\n${getErrorMessage(error)}`);
           stream.error("Speech transcription failed. Check server logs for details.");
           stream.end();
           return null;
@@ -562,7 +584,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           stream.end();
           return null;
         } catch (error) {
-          if (abortSignal.aborted) {
+          if (abortSignal.aborted || isAbortError(error)) {
             logger.info("Agent speech audio streaming aborted by the client");
           } else {
             logger.error(`Agent speech audio streaming failed:\n${error}`);
