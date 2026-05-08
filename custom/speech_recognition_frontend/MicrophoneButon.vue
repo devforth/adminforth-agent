@@ -63,7 +63,7 @@ onMounted(() => {
   });
 });
 
-watch(agentAudioMode, (newVal) => {
+watch(agentAudioMode, async (newVal) => {
   if(newVal === 'streaming') {
     stopCurrentAudioPlayback(true);
     microphoneButtonMode.value = 'generating';
@@ -72,10 +72,11 @@ watch(agentAudioMode, (newVal) => {
   } else if (newVal === 'fetchingAudio') {
     //Generation is done, waiting for audio to be ready
   } else if (newVal === 'playingAgentResponse') {
-    // Audio is playing
-  } else {
+    // Audio is playing' 
+  } else if (newVal === 'readyToRespond') {
     if(isAudioChatMode.value) {
       microphoneButtonMode.value = 'listen';
+      await requestMicAndStartVAD(saidSomething, stopRecording, onAnySound);
     } else {
       microphoneButtonMode.value = 'off';
     }
@@ -142,12 +143,8 @@ async function sendRecordForTranscription() {
   showAudioWavesAnimation.value = false;
   const recordBlob = await getRecord();
   if (recordBlob) {
-    console.log('Audio recorded, sending to server for transcription. Audio Blob size:', recordBlob.size, recordBlob.type);
     onStopRecording();
     await sendAudioToServerAndHandleResponse(recordBlob);
-    if (agentStore.isAudioChatMode) {
-      await requestMicAndStartVAD(saidSomething, stopRecording, onAnySound);
-    }
   } else { 
     console.error('No audio recorded');
   }
