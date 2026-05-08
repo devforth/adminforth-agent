@@ -551,7 +551,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
 
           const reader = speech.audioStream.getReader();
           const cancelAudioStream = () => {
-            void reader.cancel();
+            void reader.cancel().catch(() => undefined);
           };
 
           try {
@@ -559,7 +559,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
 
             while (true) {
               if (abortSignal.aborted) {
-                await reader.cancel();
+                await reader.cancel().catch(() => undefined);
                 break;
               }
 
