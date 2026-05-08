@@ -14,26 +14,118 @@ type StreamingAudioState = {
   isDone: boolean;
 };
 
+let audioUnlockSourceUrl: string | null = null;
+let audioUnlockInFlight: Promise<void> | null = null;
+let isAudioPlaybackUnlocked = false;
 let standByAudio: HTMLAudioElement | null = null;
 let isStandByAudioPlaying = false;
+
+function writeAsciiString(view: DataView, offset: number, value: string) {
+  for (let index = 0; index < value.length; index += 1) {
+    view.setUint8(offset + index, value.charCodeAt(index));
+  }
+}
+
+function createSilentWavBlob(durationMs = 50) {
+  const sampleRate = 8000;
+  const bitsPerSample = 16;
+  const channelCount = 1;
+  const bytesPerSample = bitsPerSample / 8;
+  const sampleCount = Math.max(1, Math.round((sampleRate * durationMs) / 1000));
+  const pcmDataSize = sampleCount * channelCount * bytesPerSample;
+  const buffer = new ArrayBuffer(44 + pcmDataSize);
+  const view = new DataView(buffer);
+
+  writeAsciiString(view, 0, 'RIFF');
+  view.setUint32(4, 36 + pcmDataSize, true);
+  writeAsciiString(view, 8, 'WAVE');
+  writeAsciiString(view, 12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, channelCount, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * channelCount * bytesPerSample, true);
+  view.setUint16(32, channelCount * bytesPerSample, true);
+  view.setUint16(34, bitsPerSample, true);
+  writeAsciiString(view, 36, 'data');
+  view.setUint32(40, pcmDataSize, true);
+
+  return new Blob([buffer], { type: 'audio/wav' });
+}
+
+function getAudioUnlockSourceUrl() {
+  if (!audioUnlockSourceUrl) {
+    audioUnlockSourceUrl = URL.createObjectURL(createSilentWavBlob());
+  }
+
+  return audioUnlockSourceUrl;
+}
+
+async function unlockAudioPlayback() {
+  if (isAudioPlaybackUnlocked) {
+    return;
+  }
+
+  if (audioUnlockInFlight) {
+    await audioUnlockInFlight;
+    return;
+  }
+
+  audioUnlockInFlight = (async () => {
+    const unlockAudio = new Audio(getAudioUnlockSourceUrl());
+    unlockAudio.muted = true;
+    unlockAudio.preload = 'auto';
+    unlockAudio.setAttribute('playsinline', '');
+
+    try {
+      await unlockAudio.play();
+      unlockAudio.pause();
+      unlockAudio.currentTime = 0;
+      isAudioPlaybackUnlocked = true;
+    } catch (error) {
+      console.error('Failed to unlock audio playback:', error);
+    } finally {
+      unlockAudio.removeAttribute('src');
+      unlockAudio.load();
+      audioUnlockInFlight = null;
+    }
+  })();
+
+  await audioUnlockInFlight;
+}
+
 async function playStandByAudio() {
   if (!standByAudio) {
     standByAudio = new Audio(`/plugins/AdminForthAgentPlugin/agentAudio/agent-processing.mp3`);
+    standByAudio.preload = 'auto';
+    standByAudio.setAttribute('playsinline', '');
     standByAudio.addEventListener('ended', () => {
-      if (!standByAudio.paused) {
+      if (standByAudio?.paused === false) {
         restartStandByAudio();
       }
     });
   }
+
+  if (!standByAudio) {
+    return;
+  }
+
   standByAudio.currentTime = 0;
-  await standByAudio.play();
-  isStandByAudioPlaying = true;
+
+  try {
+    await standByAudio.play();
+    isStandByAudioPlaying = true;
+  } catch (error) {
+    isStandByAudioPlaying = false;
+    console.error('Failed to play standby audio:', error);
+  }
 }
 
 function stopStandByAudio() {
   if (!standByAudio) {
     return;
   }
+
   standByAudio.pause();
   standByAudio.currentTime = 0;
   isStandByAudioPlaying = false;
@@ -43,15 +135,15 @@ function restartStandByAudio() {
   if (standByAudio) {
     standByAudio.currentTime = 0;
   }
-  playStandByAudio();
-}
 
+  void playStandByAudio();
+}
 
 export const useAgentAudio = defineStore('agentAudio', () => {
   const agentStore = useAgentStore();
-  const agentAudioMode = ref<'transcribing' | 'streaming' | 'fetchingAudio' | 'playingAgentResponse' | 'readyToRespond' >('readyToRespond');
+  const agentAudioMode = ref<'transcribing' | 'streaming' | 'fetchingAudio' | 'playingAgentResponse' | 'readyToRespond'>('readyToRespond');
   const isStreamingResponse = ref(false);
-    
+
   let currentAbortController: AbortController | null = null;
   let isPlaying = false;
   let currentAudio: HTMLAudioElement | null = null;
@@ -81,6 +173,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     formData.append('timeZone', Intl.DateTimeFormat().resolvedOptions().timeZone);
     formData.append('currentPage', JSON.stringify(getCurrentPageContext()));
     const fullPath = `${import.meta.env.VITE_ADMINFORTH_PUBLIC_PATH || ''}/adminapi/v1/agent/speech-response`;
+
     try {
       agentAudioMode.value = 'transcribing';
       const res = await fetch(fullPath, {
@@ -91,22 +184,23 @@ export const useAgentAudio = defineStore('agentAudio', () => {
         },
         signal: currentAbortController!.signal,
       });
+
       isStreamingResponse.value = true;
+
       if (res.ok) {
         agentAudioMode.value = 'streaming';
         await readSpeechResponseStream(res);
       } else {
         console.error('Failed to transcribe audio:', res.statusText);
-        adminforth.alert({message: 'Failed to transcribe audio', variant: 'danger'});
+        adminforth.alert({ message: 'Failed to transcribe audio', variant: 'danger' });
       }
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        //
-      } else {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) {
         console.error('Error sending audio to server:', error);
       }
     } finally {
       isStreamingResponse.value = false;
+
       if (!wasAudioResponseReceived) {
         setAudioModeReadyToRespond();
       }
@@ -115,8 +209,9 @@ export const useAgentAudio = defineStore('agentAudio', () => {
 
   async function readSpeechResponseStream(res: Response) {
     const reader = res.body?.getReader();
+
     if (!reader) {
-      adminforth.alert({message: 'Speech response stream is not available', variant: 'danger'});
+      adminforth.alert({ message: 'Speech response stream is not available', variant: 'danger' });
       return;
     }
 
@@ -124,6 +219,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     let buffer = '';
 
     agentStore.setCurrentChatStatus('streaming');
+
     try {
       while (true) {
         const { value, done } = await reader.read();
@@ -158,6 +254,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     if (currentAbortController?.signal.aborted) {
       return;
     }
+
     const data = eventBlock
       .split('\n')
       .filter((line) => line.startsWith('data:'))
@@ -171,7 +268,6 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     const event = JSON.parse(data) as SpeechStreamEvent;
 
     if (event.type === 'error') {
-
       return;
     }
 
@@ -209,8 +305,9 @@ export const useAgentAudio = defineStore('agentAudio', () => {
 
     if (event.type === 'data-tool-call') {
       if (!isStandByAudioPlaying) {
-        playStandByAudio();
+        void playStandByAudio();
       }
+
       agentStore.addDataToolCallMessage(event.data);
     }
   }
@@ -227,10 +324,16 @@ export const useAgentAudio = defineStore('agentAudio', () => {
       currentAudio.currentTime = 0;
       return;
     }
+
     agentAudioMode.value = 'playingAgentResponse';
-    await void currentAudio.play().catch((error) => {
+
+    try {
+      await currentAudio.play();
+    } catch (error) {
+      isPlaying = false;
+      setAudioModeReadyToRespond();
       console.error('Failed to play audio:', error);
-    });
+    }
   }
 
   function initializeAudioStream(mimeType: string) {
@@ -244,6 +347,8 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     const mediaSource = new MediaSource();
     currentAudioObjectUrl = URL.createObjectURL(mediaSource);
     currentAudio = new Audio(currentAudioObjectUrl);
+    currentAudio.preload = 'auto';
+    currentAudio.setAttribute('playsinline', '');
     currentAudio.addEventListener('ended', handleAudioEnded, { once: true });
     currentStreamingAudio = {
       mimeType,
@@ -299,7 +404,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
 
       if (!currentStreamingAudio.hasStartedPlayback) {
         currentStreamingAudio.hasStartedPlayback = true;
-        setIsPlaying(true);
+        void setIsPlaying(true);
       }
 
       return;
@@ -356,6 +461,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     bufferedAudioMimeType = 'audio/mpeg';
     detachStreamingAudio();
     destroyCurrentAudioElement();
+
     if (!dontResetMode) {
       setAudioModeReadyToRespond();
     }
@@ -369,8 +475,10 @@ export const useAgentAudio = defineStore('agentAudio', () => {
   function playAudioChunks(chunks: ArrayBuffer[], mimeType: string) {
     currentAudioObjectUrl = URL.createObjectURL(new Blob(chunks, { type: mimeType }));
     currentAudio = new Audio(currentAudioObjectUrl);
+    currentAudio.preload = 'auto';
+    currentAudio.setAttribute('playsinline', '');
     currentAudio.addEventListener('ended', handleAudioEnded, { once: true });
-    setIsPlaying(true);
+    void setIsPlaying(true);
   }
 
   function base64ToArrayBuffer(base64: string) {
@@ -407,8 +515,9 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     sendAudioToServerAndHandleResponse,
     stopGenerationAndAudio,
     stopCurrentAudioPlayback,
+    unlockAudioPlayback,
     playBeep,
-    agentAudioMode
+    agentAudioMode,
+    playStandByAudio,
   };
-
 });
