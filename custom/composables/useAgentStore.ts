@@ -43,8 +43,10 @@ export const useAgentStore = defineStore('agent', () => {
   const chatWidth = ref(DEFAULT_CHAT_WIDTH);
   const availableModes = ref<AgentMode[]>([]);
   const activeModeName = ref<string | null>(null);
-  const { width: windowWidth } = useWindowSize();
-
+  const { width: viewportWidth } = useWindowSize({
+    type: 'visual',
+    includeScrollbar: false,
+  });
   const {
     currentChat,
     setCurrentChat,
@@ -131,7 +133,7 @@ export const useAgentStore = defineStore('agent', () => {
     setCurrentChat,
   });
 
-  watch(() => windowWidth.value, (newWidth) => {
+  watch(() => viewportWidth.value, (newWidth) => {
     if (isFullScreen.value) {
       setChatWidth(newWidth, false);
     }
