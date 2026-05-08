@@ -16,6 +16,7 @@ import { createAgentEventStream } from "./agentResponseEvents.js";
 import { appendCustomSystemPrompt, buildAgentSystemPrompt, buildAgentTurnSystemPrompt, DEFAULT_AGENT_SYSTEM_PROMPT} from "./agent/systemPrompt.js";
 import type { ToolCallEvent } from "./agent/toolCallEvents.js";
 import type { CurrentPageContext } from "./agent/tools/getUserLocation.js";
+import { sanitizeSpeechText } from "./sanitizeSpeechText.js";
 
 type MulterFile = {
   buffer: Buffer;
@@ -540,7 +541,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             agentResponse.turnId,
           );
           const speech = await audioAdapter.synthesize({
-            text: agentResponse.text,
+            text: sanitizeSpeechText(agentResponse.text),
             stream: true,
             streamFormat: "audio",
             format: "mp3",
