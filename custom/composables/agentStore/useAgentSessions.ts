@@ -205,6 +205,7 @@ export function createAgentSessionManager({
         currentSession.value = null;
       }
     }
+    createPreSession();
   }
 
   async function fetchSessionsList() {

@@ -15,8 +15,8 @@ type StreamingAudioState = {
 };
 
 let standByAudio: HTMLAudioElement | null = null;
-
-function playStandByAudio() {
+let isStandByAudioPlaying = false;
+async function playStandByAudio() {
   if (!standByAudio) {
     standByAudio = new Audio(`/plugins/AdminForthAgentPlugin/agentAudio/agent-processing.mp3`);
     standByAudio.addEventListener('ended', () => {
@@ -26,7 +26,8 @@ function playStandByAudio() {
     });
   }
   standByAudio.currentTime = 0;
-  standByAudio.play()
+  await standByAudio.play();
+  isStandByAudioPlaying = true;
 }
 
 function stopStandByAudio() {
@@ -35,6 +36,7 @@ function stopStandByAudio() {
   }
   standByAudio.pause();
   standByAudio.currentTime = 0;
+  isStandByAudioPlaying = false;
 }
 
 function restartStandByAudio() {
@@ -47,7 +49,7 @@ function restartStandByAudio() {
 
 export const useAgentAudio = defineStore('agentAudio', () => {
   const agentStore = useAgentStore();
-  const agentAudioMode = ref<'transcribing' | 'streaming' | 'fetchingAudio' | 'playingAgentResponse' | null>(null);
+  const agentAudioMode = ref<'transcribing' | 'streaming' | 'fetchingAudio' | 'playingAgentResponse' | 'readyToRespond' >('readyToRespond');
   const isStreamingResponse = ref(false);
     
   let currentAbortController: AbortController | null = null;
@@ -57,17 +59,23 @@ export const useAgentAudio = defineStore('agentAudio', () => {
   let currentStreamingAudio: StreamingAudioState | null = null;
   let bufferedAudioChunks: ArrayBuffer[] = [];
   let bufferedAudioMimeType = 'audio/mpeg';
+  let wasAudioResponseReceived = false;
 
   function stopGenerationAndAudio() {
-    agentAudioMode.value = null;
+    setAudioModeReadyToRespond();
     stopCurrentAudioPlayback();
     currentAbortController?.abort();
   }
 
+  function setAudioModeReadyToRespond() {
+    agentAudioMode.value = 'readyToRespond';
+  }
+
   async function sendAudioToServerAndHandleResponse(blob: Blob) {
     currentAbortController = new AbortController();
+    wasAudioResponseReceived = false;
     const formData = new FormData();
-    formData.append('file', blob, 'user_prompt.webm');
+    formData.append('file', blob, 'user_prompt.wav');
     formData.append('sessionId', agentStore.activeSessionId);
     formData.append('mode', agentStore.activeModeName ?? '');
     formData.append('timeZone', Intl.DateTimeFormat().resolvedOptions().timeZone);
@@ -99,7 +107,9 @@ export const useAgentAudio = defineStore('agentAudio', () => {
       }
     } finally {
       isStreamingResponse.value = false;
-      agentAudioMode.value = null;
+      if (!wasAudioResponseReceived) {
+        setAudioModeReadyToRespond();
+      }
     }
   }
 
@@ -175,14 +185,15 @@ export const useAgentAudio = defineStore('agentAudio', () => {
       stopStandByAudio();
       agentStore.setCurrentChatStatus('ready');
       agentStore.addAgentMessage(event.data.response.text);
-      agentAudioMode.value = 'playingAgentResponse';
       return;
     }
 
     if (event.type === 'audio-start') {
+      wasAudioResponseReceived = true;
       isStreamingResponse.value = false;
       agentAudioMode.value = 'fetchingAudio';
       initializeAudioStream(event.data.mimeType);
+      agentAudioMode.value = 'playingAgentResponse';
       return;
     }
 
@@ -197,12 +208,14 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     }
 
     if (event.type === 'data-tool-call') {
-      playStandByAudio();
+      if (!isStandByAudioPlaying) {
+        playStandByAudio();
+      }
       agentStore.addDataToolCallMessage(event.data);
     }
   }
 
-  function setIsPlaying(value: boolean) {
+  async function setIsPlaying(value: boolean) {
     isPlaying = value;
 
     if (!currentAudio) {
@@ -215,7 +228,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
       return;
     }
     agentAudioMode.value = 'playingAgentResponse';
-    void currentAudio.play().catch((error) => {
+    await void currentAudio.play().catch((error) => {
       console.error('Failed to play audio:', error);
     });
   }
@@ -344,12 +357,12 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     detachStreamingAudio();
     destroyCurrentAudioElement();
     if (!dontResetMode) {
-      agentAudioMode.value = null;
+      setAudioModeReadyToRespond();
     }
   }
 
   function handleAudioEnded() {
-    agentAudioMode.value = null;
+    setAudioModeReadyToRespond();
     stopCurrentAudioPlayback();
   }
 
