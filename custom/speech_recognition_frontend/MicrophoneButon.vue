@@ -55,6 +55,7 @@ const { sendAudioToServerAndHandleResponse } = agentAudio;
 const { stopGenerationAndAudio } = agentAudio;
 const { stopCurrentAudioPlayback } = agentAudio;
 const { agentAudioMode } = storeToRefs(agentAudio);
+const { unlockAudio } = agentAudio;
 const microphoneButtonMode = ref<'off' | 'listen' | 'transcribing' | 'generating'>('off');
 const showAudioWavesAnimation = ref(false);
 const audioAmplitude = ref(0);
@@ -90,6 +91,7 @@ watch(agentAudioMode, async (newVal) => {
   } else if (newVal === 'readyToRespond') {
     if(isAudioChatMode.value) {
       microphoneButtonMode.value = 'listen';
+      await unlockAudio();
       await requestMicAndStartVAD(saidSomething, stopRecording, onAnySound);
       agentAudio.playBeep(1000);
     } else {
@@ -114,6 +116,7 @@ function toggleChatMode() {
 }
 
 async function onStartRecording() {
+  await unlockAudio();
   await requestMicAndStartVAD(saidSomething, stopRecording, onAnySound);
   microphoneButtonMode.value = 'listen';
   agentAudio.playBeep(1000);

@@ -1,5 +1,6 @@
 const ctx = new AudioContext();
 let standbySource: AudioBufferSourceNode | null = null;
+let isAudioUnlocked = false;
 
 const DEFAULT_PCM_SAMPLE_RATE = 24000;
 const DEFAULT_PCM_CHANNEL_COUNT = 1;
@@ -19,6 +20,10 @@ export type ChatResponseAudioPlayback = {
 };
 
 export async function unlockAudio() {
+  if (isAudioUnlocked) {
+    return;
+  }
+
   await ctx.resume();
 
   const buffer = ctx.createBuffer(1, 1, 22050);
@@ -27,11 +32,12 @@ export async function unlockAudio() {
   source.buffer = buffer;
   source.connect(ctx.destination);
   source.start(0);
+  isAudioUnlocked = true;
 }
 
 export async function startStandByAudio() {
   const response = await fetch(
-    `/plugins/AdminForthAgentPlugin/agentAudio/agent-processing.mp3`
+    `${import.meta.env.VITE_ADMINFORTH_PUBLIC_PATH}/plugins/AdminForthAgentPlugin/agentAudio/agent-processing.mp3`
   );
 
   const arrayBuffer = await response.arrayBuffer();

@@ -16,7 +16,6 @@ import {
 import type { ChatResponseAudioPlayback } from './agentAudio/utils';
 
 let isStandByAudioPlaying = false;
-let isAudioUnlocked = false;
 async function playStandByAudio() {
   isStandByAudioPlaying = true;
   await startStandByAudio();
@@ -47,10 +46,6 @@ export const useAgentAudio = defineStore('agentAudio', () => {
   }
 
   async function sendAudioToServerAndHandleResponse(blob: Blob) {
-    if (!isAudioUnlocked) {
-      await unlockAudio();
-      isAudioUnlocked = true;
-    }
     currentAbortController = new AbortController();
     wasAudioResponseReceived = false;
     const formData = new FormData();
@@ -264,7 +259,8 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     stopGenerationAndAudio,
     stopCurrentAudioPlayback,
     playBeep,
-    agentAudioMode
+    agentAudioMode,
+    unlockAudio,
   };
 
 });
