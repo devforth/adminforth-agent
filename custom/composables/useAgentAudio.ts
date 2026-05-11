@@ -4,48 +4,28 @@ import { defineStore } from 'pinia';
 import type { SpeechStreamEvent } from '../types';
 import { ref } from 'vue';
 import { getCurrentPageContext } from './agentStore/pageContext';
+import {
+  createChatResponseAudioPlayback,
+  endStandByAudio,
+  finishChatResponseAudio,
+  playChatResponseCurrentChunks,
+  startStandByAudio,
+  stopChatResponseAudio,
+  unlockAudio,
+} from './agentAudio/utils';
+import type { ChatResponseAudioPlayback } from './agentAudio/utils';
 
-type StreamingAudioState = {
-  mimeType: string;
-  mediaSource: MediaSource;
-  sourceBuffer: SourceBuffer | null;
-  pendingChunks: ArrayBuffer[];
-  hasStartedPlayback: boolean;
-  isDone: boolean;
-};
-
-let standByAudio: HTMLAudioElement | null = null;
 let isStandByAudioPlaying = false;
+let isAudioUnlocked = false;
 async function playStandByAudio() {
-  if (!standByAudio) {
-    standByAudio = new Audio(`/plugins/AdminForthAgentPlugin/agentAudio/agent-processing.mp3`);
-    standByAudio.addEventListener('ended', () => {
-      if (!standByAudio.paused) {
-        restartStandByAudio();
-      }
-    });
-  }
-  standByAudio.currentTime = 0;
-  await standByAudio.play();
   isStandByAudioPlaying = true;
+  await startStandByAudio();
 }
 
 function stopStandByAudio() {
-  if (!standByAudio) {
-    return;
-  }
-  standByAudio.pause();
-  standByAudio.currentTime = 0;
+  endStandByAudio();
   isStandByAudioPlaying = false;
 }
-
-function restartStandByAudio() {
-  if (standByAudio) {
-    standByAudio.currentTime = 0;
-  }
-  playStandByAudio();
-}
-
 
 export const useAgentAudio = defineStore('agentAudio', () => {
   const agentStore = useAgentStore();
@@ -53,12 +33,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
   const isStreamingResponse = ref(false);
     
   let currentAbortController: AbortController | null = null;
-  let isPlaying = false;
-  let currentAudio: HTMLAudioElement | null = null;
-  let currentAudioObjectUrl: string | null = null;
-  let currentStreamingAudio: StreamingAudioState | null = null;
-  let bufferedAudioChunks: ArrayBuffer[] = [];
-  let bufferedAudioMimeType = 'audio/mpeg';
+  let currentStreamingAudio: ChatResponseAudioPlayback | null = null;
   let wasAudioResponseReceived = false;
 
   function stopGenerationAndAudio() {
@@ -72,6 +47,10 @@ export const useAgentAudio = defineStore('agentAudio', () => {
   }
 
   async function sendAudioToServerAndHandleResponse(blob: Blob) {
+    if (!isAudioUnlocked) {
+      await unlockAudio();
+      isAudioUnlocked = true;
+    }
     currentAbortController = new AbortController();
     wasAudioResponseReceived = false;
     const formData = new FormData();
@@ -192,7 +171,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
       wasAudioResponseReceived = true;
       isStreamingResponse.value = false;
       agentAudioMode.value = 'fetchingAudio';
-      initializeAudioStream(event.data.mimeType);
+      initializeAudioStream(event.data);
       agentAudioMode.value = 'playingAgentResponse';
       return;
     }
@@ -215,162 +194,39 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     }
   }
 
-  async function setIsPlaying(value: boolean) {
-    isPlaying = value;
-
-    if (!currentAudio) {
-      return;
-    }
-
-    if (!isPlaying) {
-      currentAudio.pause();
-      currentAudio.currentTime = 0;
-      return;
-    }
-    agentAudioMode.value = 'playingAgentResponse';
-    await void currentAudio.play().catch((error) => {
-      console.error('Failed to play audio:', error);
+  function initializeAudioStream(audioData: Extract<SpeechStreamEvent, { type: 'audio-start' }>['data']) {
+    stopCurrentAudioPlayback();
+    currentStreamingAudio = createChatResponseAudioPlayback({
+      sampleRate: audioData.sampleRate,
+      channelCount: audioData.channelCount,
+      bitsPerSample: audioData.bitsPerSample,
+      onEnded: handleAudioEnded,
     });
   }
 
-  function initializeAudioStream(mimeType: string) {
-    stopCurrentAudioPlayback();
-    bufferedAudioMimeType = mimeType;
-
-    if (typeof MediaSource === 'undefined' || !MediaSource.isTypeSupported(mimeType)) {
-      return;
-    }
-
-    const mediaSource = new MediaSource();
-    currentAudioObjectUrl = URL.createObjectURL(mediaSource);
-    currentAudio = new Audio(currentAudioObjectUrl);
-    currentAudio.addEventListener('ended', handleAudioEnded, { once: true });
-    currentStreamingAudio = {
-      mimeType,
-      mediaSource,
-      sourceBuffer: null,
-      pendingChunks: [],
-      hasStartedPlayback: false,
-      isDone: false,
-    };
-
-    mediaSource.addEventListener('sourceopen', handleMediaSourceOpen, { once: true });
-  }
-
-  function handleMediaSourceOpen() {
-    if (!currentStreamingAudio) {
-      return;
-    }
-
-    try {
-      currentStreamingAudio.sourceBuffer = currentStreamingAudio.mediaSource.addSourceBuffer(currentStreamingAudio.mimeType);
-      currentStreamingAudio.sourceBuffer.mode = 'sequence';
-      currentStreamingAudio.sourceBuffer.addEventListener('updateend', flushStreamingAudioQueue);
-      flushStreamingAudioQueue();
-    } catch (error) {
-      console.error('Failed to initialize streaming audio playback:', error);
-      bufferedAudioChunks.push(...currentStreamingAudio.pendingChunks);
-      detachStreamingAudio();
-      destroyCurrentAudioElement();
-    }
-  }
-
   function appendAudioChunk(base64: string) {
-    const chunk = base64ToArrayBuffer(base64);
-
-    if (!currentStreamingAudio) {
-      bufferedAudioChunks.push(chunk);
-      return;
-    }
-
-    currentStreamingAudio.pendingChunks.push(chunk);
-    flushStreamingAudioQueue();
-  }
-
-  function flushStreamingAudioQueue() {
-    if (!currentStreamingAudio?.sourceBuffer || currentStreamingAudio.sourceBuffer.updating) {
-      return;
-    }
-
-    const nextChunk = currentStreamingAudio.pendingChunks.shift();
-
-    if (nextChunk) {
-      currentStreamingAudio.sourceBuffer.appendBuffer(nextChunk);
-
-      if (!currentStreamingAudio.hasStartedPlayback) {
-        currentStreamingAudio.hasStartedPlayback = true;
-        setIsPlaying(true);
-      }
-
-      return;
-    }
-
-    if (currentStreamingAudio.isDone && currentStreamingAudio.mediaSource.readyState === 'open') {
-      currentStreamingAudio.mediaSource.endOfStream();
-    }
+    playChatResponseCurrentChunks({
+      playback: currentStreamingAudio!,
+      chunks: [base64ToArrayBuffer(base64)],
+    });
   }
 
   function finishAudioStream() {
-    if (currentStreamingAudio) {
-      currentStreamingAudio.isDone = true;
-      flushStreamingAudioQueue();
-      return;
-    }
-
-    if (!bufferedAudioChunks.length) {
-      return;
-    }
-
-    playAudioChunks(bufferedAudioChunks, bufferedAudioMimeType);
-    bufferedAudioChunks = [];
-  }
-
-  function detachStreamingAudio() {
-    if (currentStreamingAudio?.sourceBuffer) {
-      currentStreamingAudio.sourceBuffer.removeEventListener('updateend', flushStreamingAudioQueue);
-    }
-
-    currentStreamingAudio = null;
-  }
-
-  function destroyCurrentAudioElement() {
-    if (currentAudio) {
-      currentAudio.pause();
-      currentAudio.currentTime = 0;
-      currentAudio.src = '';
-      currentAudio.load();
-      currentAudio = null;
-    }
-
-    if (currentAudioObjectUrl) {
-      URL.revokeObjectURL(currentAudioObjectUrl);
-      currentAudioObjectUrl = null;
-    }
-
-    isPlaying = false;
+    finishChatResponseAudio(currentStreamingAudio);
   }
 
   function stopCurrentAudioPlayback(dontResetMode = false) {
     stopStandByAudio();
-    bufferedAudioChunks = [];
-    bufferedAudioMimeType = 'audio/mpeg';
-    detachStreamingAudio();
-    destroyCurrentAudioElement();
+    stopChatResponseAudio(currentStreamingAudio);
+    currentStreamingAudio = null;
     if (!dontResetMode) {
       setAudioModeReadyToRespond();
     }
   }
 
   function handleAudioEnded() {
+    currentStreamingAudio = null;
     setAudioModeReadyToRespond();
-    stopCurrentAudioPlayback();
-  }
-
-  function playAudioChunks(chunks: ArrayBuffer[], mimeType: string) {
-    currentAudioObjectUrl = URL.createObjectURL(new Blob(chunks, { type: mimeType }));
-    currentAudio = new Audio(currentAudioObjectUrl);
-    currentAudio.addEventListener('ended', handleAudioEnded, { once: true });
-    setIsPlaying(true);
   }
 
   function base64ToArrayBuffer(base64: string) {

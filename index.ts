@@ -544,11 +544,11 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             text: sanitizeSpeechText(agentResponse.text),
             stream: true,
             streamFormat: "audio",
-            format: "mp3",
+            format: "pcm",
             abortSignal,
           });
 
-          stream.audioStart(speech.mimeType, speech.format);
+          stream.audioStart(speech.mimeType, speech.format, 24000, 1, 16);
 
           const reader = speech.audioStream.getReader();
           const cancelAudioStream = () => {

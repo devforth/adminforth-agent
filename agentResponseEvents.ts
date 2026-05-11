@@ -145,12 +145,21 @@ export function createAgentEventStream(
       });
     },
 
-    audioStart(mimeType: string, format: string) {
+    audioStart(
+      mimeType: string,
+      format: string,
+      sampleRate: number,
+      channelCount: number,
+      bitsPerSample: number,
+    ) {
       stream.send({
         type: "audio-start",
         data: {
           mimeType,
           format,
+          sampleRate,
+          channelCount,
+          bitsPerSample,
         },
       });
     },

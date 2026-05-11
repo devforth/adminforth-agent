@@ -74,6 +74,9 @@ export type SpeechStreamEvent =
       data: {
         mimeType: string;
         format: string;
+        sampleRate: number;
+        channelCount: number;
+        bitsPerSample: number;
       };
     }
   | {
