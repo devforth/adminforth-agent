@@ -1,3 +1,5 @@
+import { loadFile } from '@/utils';
+
 const ctx = new AudioContext();
 let standbySource: AudioBufferSourceNode | null = null;
 let isAudioUnlocked = false;
@@ -37,7 +39,7 @@ export async function unlockAudio() {
 
 export async function startStandByAudio() {
   const response = await fetch(
-    `${import.meta.env.VITE_ADMINFORTH_PUBLIC_PATH}/plugins/AdminForthAgentPlugin/agentAudio/agent-processing.mp3`
+    loadFile('plugins/AdminForthAgentPlugin/agentAudio/agent-processing.mp3')
   );
 
   const arrayBuffer = await response.arrayBuffer();
