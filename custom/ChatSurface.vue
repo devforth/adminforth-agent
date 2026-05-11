@@ -173,7 +173,9 @@
                   </button>
                 </div>
               </div>
-              <MicrophoneButton v-if="props.meta.hasAudioAdapter && !agentStore.isResponseInProgress" />
+              <MicrophoneButton 
+                v-if="props.meta.hasAudioAdapter"   
+              />
               <template v-if="!agentStore.isAudioChatMode">
                 <Button 
                   v-if="!agentStore.isResponseInProgress"
