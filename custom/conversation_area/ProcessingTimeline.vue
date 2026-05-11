@@ -60,6 +60,7 @@
   const scrollContainerRef = ref<InstanceType<typeof CustomAutoScrollContainer> | null>(null);
   const innerScrollContainerRef = ref<HTMLElement | null>(null);
   const isExpanded = ref(true);
+  let isUserScrolled = false;
   const ToolOrReasoningParts = computed(() => {
     return props.message.parts.filter((part: IPart) => part.type === 'data-tool-call' || part.type === 'reasoning');
   });
@@ -83,16 +84,23 @@
 
   onUnmounted(() => {
     scrollContainerRef.value?.container.scrollEl?.removeEventListener('scroll', handleScroll);
+    scrollContainerRef.value?.container.scrollEl?.removeEventListener('wheel', toggleIsUserScrolled);
+    scrollContainerRef.value?.container.scrollEl?.removeEventListener('touchmove', toggleIsUserScrolled);
   })
 
   watch(scrollContainerRef, async () => {
     if (innerScrollContainerRef.value) {
       innerScrollContainerRef.value.removeEventListener('scroll', handleScroll);
+      innerScrollContainerRef.value.removeEventListener('wheel', toggleIsUserScrolled);
+      innerScrollContainerRef.value.removeEventListener('touchmove', toggleIsUserScrolled);
     }
 
     if (scrollContainerRef.value) {
       innerScrollContainerRef.value = scrollContainerRef.value.container.scrollEl;
       innerScrollContainerRef.value.addEventListener('scroll', handleScroll);
+      innerScrollContainerRef.value.addEventListener('wheel', toggleIsUserScrolled);
+      innerScrollContainerRef.value.addEventListener('touchmove', toggleIsUserScrolled);
+
     }
   })
 
@@ -182,7 +190,16 @@
   };
 
   function handleScroll() {
-    scrollContainerRef.value?.handleScroll();
+    if (isUserScrolled) { 
+      scrollContainerRef.value?.handleScroll();
+    }
+  }
+
+  function toggleIsUserScrolled() {
+    isUserScrolled = true;
+    setTimeout(() => {
+      isUserScrolled = false;
+    }, 100);
   }
 </script>
 
