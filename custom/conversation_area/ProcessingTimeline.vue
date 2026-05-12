@@ -50,14 +50,15 @@
 
 <script setup lang="ts">
   import type { IFormattedToolCallPart, IMessage, IPart, IToolGroup } from '../types';
-  import { ref, computed, watch, onUnmounted, onMounted } from 'vue';
+  import { ref, computed, watch, onUnmounted, onMounted, defineAsyncComponent } from 'vue';
   import ReasoningRenderer from './ReasoningRenderer.vue';
   import { IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
   import ThreeDotsAnimation from './ThreeDotsAnimation.vue';
   import { useAgentStore } from '../composables/useAgentStore';
   import { getMessageParts } from '../utils';
   import ToolsGroup from './ToolsGroup.vue';
-  import CustomAutoScrollContainer from '../CustomAutoScrollContainer.vue';
+
+  const CustomAutoScrollContainer = defineAsyncComponent(() => import('../CustomAutoScrollContainer.vue'));
 
   const props = defineProps<{
     message: IMessage

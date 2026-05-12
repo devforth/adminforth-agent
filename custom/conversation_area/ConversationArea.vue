@@ -68,13 +68,14 @@
 
 <script setup lang="ts">
 import type { IMessage } from '../types';
-import { useTemplateRef, ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
+import { useTemplateRef, ref, onMounted, onUnmounted, watch, nextTick, defineAsyncComponent } from 'vue';
 import { IconArrowDownOutline } from '@iconify-prerendered/vue-flowbite';
 import SessionsHistory from '../SessionsHistory.vue';
 import { useAgentStore } from '../composables/useAgentStore';
 import { useAgentTransitions } from '../composables/useAgentTransitions';
 import MessageRenderer from './MessageRenderer.vue';
-import CustomAutoScrollContainer from '../CustomAutoScrollContainer.vue';
+
+const CustomAutoScrollContainer = defineAsyncComponent(() => import('../CustomAutoScrollContainer.vue'));
 
 const props = defineProps<{
   messages: IMessage[]
