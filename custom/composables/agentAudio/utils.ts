@@ -25,7 +25,7 @@ export async function unlockAudio() {
   if (isAudioUnlocked) {
     return;
   }
-
+  console.log('Unlocking audio context by playing silent audio');
   await ctx.resume();
 
   const buffer = ctx.createBuffer(1, 1, 22050);
@@ -35,13 +35,15 @@ export async function unlockAudio() {
   source.connect(ctx.destination);
   source.start(0);
   isAudioUnlocked = true;
+  console.log('Audio context unlocked');
 }
 
 export async function startStandByAudio() {
+  console.log('Starting standby audio');
   const response = await fetch(
     loadFile('plugins/AdminForthAgentPlugin/agentAudio/agent-processing.mp3')
   );
-
+  console.log('Standby audio file loaded:, response:', response);
   const arrayBuffer = await response.arrayBuffer();
   const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
 
@@ -50,7 +52,7 @@ export async function startStandByAudio() {
 
   source.buffer = audioBuffer;
   source.connect(ctx.destination);
-
+  console.log('Playing standby audio');
   source.start();
 }
 
@@ -81,6 +83,7 @@ export function playChatResponseCurrentChunks({
   playback: ChatResponseAudioPlayback;
   chunks: ArrayBuffer[];
 }) {
+  console.log('Playing chat response audio chunks:', chunks.length);
   void ctx.resume().catch(() => undefined);
 
   for (const chunk of chunks) {
@@ -133,7 +136,7 @@ export function finishChatResponseAudio(playback: ChatResponseAudioPlayback | nu
   if (!playback || playback.isStopped) {
     return;
   }
-
+  console.log('Finishing chat response audio playback');
   playback.isDone = true;
 
   if (playback.pendingSourceCount === 0) {
@@ -145,7 +148,7 @@ export function stopChatResponseAudio(playback: ChatResponseAudioPlayback | null
   if (!playback || playback.isStopped) {
     return;
   }
-
+  console.log('Stopping chat response audio playback');
   playback.isStopped = true;
 
   for (const source of playback.activeSources) {
@@ -207,6 +210,7 @@ function concatUint8Arrays(left: Uint8Array, right: Uint8Array) {
 
 export function endStandByAudio() {
   if (standbySource) {
+    console.log('Ending standby audio');
     standbySource.stop();
     standbySource = null;
   }

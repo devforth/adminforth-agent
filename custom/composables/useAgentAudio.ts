@@ -57,6 +57,7 @@ export const useAgentAudio = defineStore('agentAudio', () => {
     const fullPath = `${import.meta.env.VITE_ADMINFORTH_PUBLIC_PATH || ''}/adminapi/v1/agent/speech-response`;
     try {
       agentAudioMode.value = 'transcribing';
+      console.log('Sending audio to server for transcription and response generation');
       const res = await fetch(fullPath, {
         method: 'POST',
         body: formData,
@@ -137,12 +138,12 @@ export const useAgentAudio = defineStore('agentAudio', () => {
       .filter((line) => line.startsWith('data:'))
       .map((line) => line.slice(5).trimStart())
       .join('\n');
-
     if (!data || data === '[DONE]') {
       return;
     }
 
     const event = JSON.parse(data) as SpeechStreamEvent;
+    console.log('Received speech stream event type:', event.type);
 
     if (event.type === 'error') {
 
