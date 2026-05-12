@@ -1,12 +1,22 @@
 <template>
-  <template v-if="ToolOrReasoningParts.length > 0 || isResponseInProgress || showFakeThinkingMessage">
+  <template v-if="ToolOrReasoningParts.length > 0 || inProgress">
     <div 
-      class="ml-2 px-4 flex items-center gap-1 cursor-pointer select-none hover:opacity-80 tracking-wide font-medium text-sm text-listTableHeadingText dark:text-darkListTableHeadingText"
+      class="shine-text-container ml-2 px-4 flex items-center gap-1 cursor-pointer select-none hover:opacity-80 tracking-wide font-medium text-sm text-listTableHeadingText dark:text-darkListTableHeadingText"
       @click="isExpanded = !isExpanded"
     >
-      {{ $t('Thoughts') }}
+      <p 
+        :class="[
+          inProgress ? `
+            shine-text text-listTableHeadingText dark:text-darkListTableHeadingText 
+            bg-[linear-gradient(-65deg,currentColor,_rgb(120,120,120)_50%,currentColor)] 
+            dark:bg-[linear-gradient(-65deg,currentColor,_rgb(250,250,250,0.8)_70%,currentColor)]
+            ` 
+          : '']"
+      >
+        {{ $t('Thoughts') }} 
+      </p>
       <span v-if="thinkingDuration > 0">({{ (thinkingDuration/1000).toFixed(2) }} s)</span>
-      <ThreeDotsAnimation v-if="isResponseInProgress || showFakeThinkingMessage" />
+      <!-- <ThreeDotsAnimation v-if="inProgress" /> -->
       <IconAngleDownOutline 
         :class="isExpanded ? 'rotate-180' : 'rotate-0'"
         class="transition-transform duration-200"
@@ -71,6 +81,10 @@
   const showFakeThinkingMessage = computed(() => {
     if (props.message.parts.length === 0 && props.isLastMessageInChat) return true;
     return false;
+  })
+
+  const inProgress = computed(() => {
+    return isResponseInProgress.value || showFakeThinkingMessage.value;
   })
 
   onMounted(() => {
@@ -224,5 +238,24 @@
       max-height: 192px;
     }
   }
- 
+
+
+.shine-text {
+
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-position: -12rem;
+}
+
+.shine-text {
+  animation: shineText 6s infinite linear;
+}
+
+@keyframes shineText {
+  to {
+    background-position: -100%;
+  }
+}
+
 </style>
