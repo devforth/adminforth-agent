@@ -36,74 +36,7 @@
           height: !agentStore.isIos ? dvh + 'px' : '100dvh',
         }"
       >
-      <!-- Header -->
-        <div 
-          ref="headerRef"
-          class="flex items-center justify-between h-14 border-b border-gray-200 dark:border-gray-700"         
-        >
-          <div 
-            class="flex items-center"
-          >
-            <IconBarsOutline 
-              class="m-2 w-8 h-8 p-1 cursor-pointer hover:scale-110 rounded transition-colors duration-200
-                text-lightNavbarIcons hover:text-lightNavbarIcons/80 hover:bg-lightNavbarIcons/20 
-                dark:text-darkNavbarIcons hover:text-darkNavbarIcons/80 hover:bg-darkNavbarIcons/20 "
-              :class="agentStore.isSessionHistoryOpen ? 
-                'bg-lightNavbarIcons/20 text-lightNavbarIcons/80 dark:bg-darkNavbarIcons/20 dark:text-darkNavbarIcons/80' : 
-                ''" 
-              @click="agentStore.setSessionHistoryOpen(!agentStore.isSessionHistoryOpen)" 
-            />
-            <IconOpenSidebarSolid 
-              v-if="!agentStore.isTeleportedToBody && !coreStore.isMobile && !agentStore.isFullScreen"
-              class="m-2 w-8 h-8 p-1 cursor-pointer hover:scale-110 rounded transition-colors duration-200
-                text-lightNavbarIcons hover:text-lightNavbarIcons/80 hover:bg-lightNavbarIcons/20 
-                dark:text-darkNavbarIcons hover:text-darkNavbarIcons/80 hover:bg-darkNavbarIcons/20 " 
-              @click="agentStore.setIsTeleportedToBody(true)" 
-            />
-            <IconCloseSidebarSolid 
-              v-else-if="!coreStore.isMobile && !agentStore.isFullScreen"
-              class="m-2 w-8 h-8 p-1 cursor-pointer hover:scale-110 rounded transition-colors duration-200
-                text-lightNavbarIcons hover:text-lightNavbarIcons/80 bg-lightNavbarIcons/20 
-                dark:bg-darkNavbarIcons/20 dark:text-darkNavbarIcons/80 hover:text-darkNavbarIcons/80 hover:bg-darkNavbarIcons/20 " 
-              @click="agentStore.setIsTeleportedToBody(false)" 
-            />
-            <IconArrowsPointingOut 
-              v-if="!agentStore.isFullScreen && !coreStore.isMobile"
-              class="m-2 w-8 h-8 p-1 cursor-pointer hover:scale-110 rounded transition-colors duration-200
-                text-lightNavbarIcons hover:text-lightNavbarIcons/80 hover:bg-lightNavbarIcons/20 
-                dark:text-darkNavbarIcons hover:text-darkNavbarIcons/80 hover:bg-darkNavbarIcons/20 " 
-              @click="agentStore.setFullScreen(true)" 
-            />
-            <IconArrowsPointingIn 
-              v-else-if="!coreStore.isMobile"
-              class="m-2 w-8 h-8 p-1 cursor-pointer hover:scale-110 rounded transition-colors duration-200
-                text-lightNavbarIcons hover:text-lightNavbarIcons/80 hover:bg-lightNavbarIcons/20 
-                dark:text-darkNavbarIcons hover:text-darkNavbarIcons/80 hover:bg-darkNavbarIcons/20 "
-              :class="agentStore.isFullScreen ? 
-                'bg-lightNavbarIcons/20 text-lightNavbarIcons/80 dark:bg-darkNavbarIcons/20 dark:text-darkNavbarIcons/80' : 
-                ''" 
-              @click="agentStore.setFullScreen(false)" 
-            />
-          </div>
-          <div class="flex items-center justify-center">
-            <Button 
-              @click="agentStore.createPreSession(); agentStore.setSessionHistoryOpen(false); agentStore.focusTextInput();" 
-              class="!py-1 !px-2 rounded-3xl text-gray-800 dark:text-gray-200 max-w-64 mr-2"
-            >
-              <IconPlusOutline class="w-5 h-5" />
-              {{ $t('New chat') }}
-            </Button>
-            <IconCloseOutline 
-              class="m-2 w-8 h-8 p-1 cursor-pointer hover:scale-110 rounded transition-colors duration-200
-                text-lightNavbarIcons hover:text-lightNavbarIcons/80 hover:bg-lightNavbarIcons/20 
-                dark:text-darkNavbarIcons hover:text-darkNavbarIcons/80 hover:bg-darkNavbarIcons/20 " 
-              @click="agentStore.setFullScreen(false); agentStore.setIsChatOpen(false)" 
-            />
-          </div>
-
-        </div>
-        <!-- Header end -->
-         <!-- Body start -->
+        <ChatHeader />
         <div 
           class="relative flex-1 min-h-0 flex flex-col overflow-hidden"
         >
@@ -112,100 +45,12 @@
             v-if="agentStore.isChatOpen"
             :messages="agentStore.chatMessages"
           />
-          <!-- text input -->
-          <div
-            ref="promptInput" 
-            class="w-full mb-2 flex items-center justify-center px-2 bg-transparent relative translate-x-[-50%] left-1/2"
-            :style="{ 
-              maxWidth: agentStore.isFullScreen ? remToPx(agentStore.MAX_WIDTH)+'px' : '100%',
-              transition: `transform ${agentTransitions.TRANSITION_DURATION}ms ease-in-out`
-            }"            
-          >
-            <div 
-              class="w-full border rounded-lg pb-8"
-              :class="agentStore.isAudioChatMode ? 'border-none mt-8' : 'border dark:bg-gray-700'"  
-            >
-              <textarea
-                v-if="!agentStore.isAudioChatMode"
-                v-model="agentStore.userMessageInput"
-                ref="textInput"
-                @input="autoResize"
-                :class="[
-                  'min-h-12 px-4 pt-4 rounded-xl w-full resize-none overflow-hidden text-lightInputText dark:text-darkInputText rounded-md bg-transparent text-sm bg-gray-50 dark:bg-gray-700 dark:border-gray-600 focus:outline-none',
-                  { '!text-base': coreStore.isIos }
-                ]"
-                :placeholder="agentStore.userMessagePlaceholder"
-                @keydown.enter.exact.prevent="sendMessage"
-              />
-              <div
-                v-if="agentStore.availableModes.length > 1"
-                ref="modeMenu"
-                class="absolute bottom-2 left-4"
-              >
-                <button
-                  aria-label="Select mode"
-                  class="flex px-2 py-1 items-center text-sm justify-center 
-                    rounded-md bg-white text-lightListTableHeadingText 
-                    transition-colors duration-200 hover:bg-gray-100 
-                    dark:text-darkListTableHeadingText dark:bg-gray-700 dark:hover:bg-gray-800"
-                  :class="isModeMenuOpen ? 'bg-gray-100 dark:bg-gray-700' : ''"
-                  :disabled="agentStore.isResponseInProgress"
-                  title="Select mode"
-                  type="button"
-                  @click="toggleModeMenu"
-                >
-                  {{ agentStore.activeModeName }}
-                  <IconAngleDownOutline 
-                    class="w-4 h-4 ml-1" 
-                  />
-                </button>
-
-                <div
-                  v-if="isModeMenuOpen"
-                  class="absolute bottom-full left-0 mb-2 min-w-40 overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-600 dark:bg-gray-800"
-                >
-                  <button
-                    v-for="mode in agentStore.availableModes"
-                    :key="mode.name"
-                    class="block w-full px-3 py-2 text-left text-sm text-lightInputText transition-colors duration-150 hover:bg-gray-100 dark:text-darkInputText dark:hover:bg-gray-700"
-                    :class="mode.name === agentStore.activeModeName ? 'bg-gray-100 dark:bg-gray-700' : ''"
-                    type="button"
-                    @click="selectMode(mode.name)"
-                  >
-                    {{ mode.name }}
-                  </button>
-                </div>
-              </div>
-              <MicrophoneButton 
-                v-if="props.meta.hasAudioAdapter"   
-              />
-              <template v-if="!agentStore.isAudioChatMode">
-                <Button 
-                  v-if="!agentStore.isResponseInProgress"
-                  class="absolute right-4 bottom-2 !p-0 h-9 w-9 transition-opacity duration-200"                    
-                  @click="sendMessage" 
-                  :disabled="!agentStore.trimmedUserMessage || agentStore.isResponseInProgress"
-                >
-                  <IconArrowUpOutline 
-                    class="w-8 h-8 p-1
-                      text-white" 
-                  />
-                </Button>
-                <Button
-                  v-else
-                  class="absolute right-4 bottom-2 !p-0 h-9 w-9"    
-                  @click="stopCurrentRequest"                
-                >
-                  <div
-                    class="w-3 h-3 bg-white rounded-sm"
-                  />
-                </Button>
-              </template>
-            </div>
-          </div>
-          <!-- text input end -->
+          <ChatFooter 
+            :meta="props.meta"
+            :adminUser="props.adminUser"
+            :conversationAreaRef="conversationArea"
+          />
         </div>
-        <!-- Body end -->
       </div>
     </div>
   </Teleport>
@@ -213,17 +58,16 @@
 </template>
 
 <script setup lang="ts">
-import { IconChatBubbleLeft20Solid, IconSparklesSolid, IconArrowsPointingOut, IconArrowsPointingIn } from '@iconify-prerendered/vue-heroicons';
-import { IconCloseOutline, IconBarsOutline, IconArrowUpOutline, IconCloseSidebarSolid, IconOpenSidebarSolid, IconAngleDownOutline, IconPlusOutline } from '@iconify-prerendered/vue-flowbite';
+import { IconChatBubbleLeft20Solid, IconSparklesSolid } from '@iconify-prerendered/vue-heroicons';
 import { useTemplateRef, onMounted, ref, onUnmounted } from 'vue';
 import { onClickOutside } from '@vueuse/core'
 import ConversationArea from './conversation_area/ConversationArea.vue';
+import ChatHeader from './ChatHeader.vue';
+import ChatFooter from './ChatFooter.vue';
 import { useAgentStore } from './composables/useAgentStore';
 import { useAgentTransitions } from './composables/useAgentTransitions';
-import { Button } from '@/afcl';
 import { useCoreStore } from '@/stores/core';
 import { remToPx } from './utils';
-import MicrophoneButton from './speech_recognition_frontend/MicrophoneButon.vue';
 
 const props = defineProps<{
   meta: {
@@ -239,28 +83,20 @@ const props = defineProps<{
 }>();
 
 const chatSurface = useTemplateRef('chatSurface');
-const textInput = useTemplateRef('textInput');
-const modeMenu = useTemplateRef('modeMenu');
 const conversationArea = useTemplateRef('conversationArea');
 const agentStore = useAgentStore();
 const agentTransitions = useAgentTransitions();
 const coreStore = useCoreStore();
-const isModeMenuOpen = ref(false);
 
 const dvh = ref(window.innerHeight)
 
 let startX = 0
 let startWidth = 0
 
-onClickOutside(chatSurface, () => {if (!agentStore.isTeleportedToBody && !agentStore.isFullScreen) agentStore.setIsChatOpen(false);});
-onClickOutside(modeMenu, () => { isModeMenuOpen.value = false; });
+onClickOutside(chatSurface as any, () => {if (!agentStore.isTeleportedToBody && !agentStore.isFullScreen) agentStore.setIsChatOpen(false);});
 
 onMounted(async () => {
-  agentStore.setAvailableModes(props.meta.modes, props.meta.defaultModeName);
-  agentStore.setCurrentGenerationModeFromLocalStorage();
-  agentStore.regisrerTextInput(textInput.value);
   window.addEventListener('resize', updateHeight)
-  textInput.value?.focus();
   const savedIsTeleportedToBody = agentStore.getLocalStorageItem('isTeleportedToBody');
   const savedIsTeleportedToBodyBeforeFullScreen = agentStore.getLocalStorageItem('isTeleportedToBodyBeforeFullScreen');
   let isTeleportedToBodyFromLocalStorage = true;
@@ -309,43 +145,6 @@ const stopResize = () => {
     agentTransitions.setAppRootTransition(false);
     agentTransitions.setChatSurfaceTransition(false);
   }
-}
-
-function autoResize() {
-  const el = textInput.value
-  if (!el) return
-
-  el.style.height = 'auto'
-  //max-w-48
-  const maxHeight = 192
-  if (el.scrollHeight > maxHeight) {
-    el.style.height = maxHeight + 'px'
-    el.style.overflowY = 'auto'
-  } else {
-    el.style.height = el.scrollHeight + 'px'
-    el.style.overflowY = 'hidden'
-  }
-}
-
-function toggleModeMenu() {
-  isModeMenuOpen.value = !isModeMenuOpen.value;
-}
-
-function selectMode(modeName: string) {
-  agentStore.setActiveMode(modeName);
-  isModeMenuOpen.value = false;
-}
-
-async function sendMessage() {
-  if (agentStore.isAudioChatMode) return;
-  isModeMenuOpen.value = false;
-  await agentStore.sendMessage();
-  autoResize();
-  conversationArea.value?.handleSendMessage();
-}
-
-function stopCurrentRequest() {
-  agentStore.abortCurrentChatRequestAndAddSystemMessage();
 }
 
 function updateHeight() {
