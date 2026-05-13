@@ -40,9 +40,10 @@ export async function unlockAudio() {
 
 export async function startStandByAudio() {
   console.log('Starting standby audio');
-  const response = await fetch(
-    loadFile('plugins/AdminForthAgentPlugin/agentAudio/agent-processing.mp3')
-  );
+  const filePath = 'plugins/AdminForthAgentPlugin/agentAudio/agent-processing.mp3';
+  const fileUrl = await loadFile(filePath);
+  console.log('Standby audio file URL:', fileUrl);
+  const response = await fetch(fileUrl);
   console.log('Standby audio file loaded:, response:', response);
   const arrayBuffer = await response.arrayBuffer();
   const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
