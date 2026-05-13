@@ -38,7 +38,10 @@ export async function unlockAudio() {
 }
 
 export async function startStandByAudio() {
-  const standByAudio = '/plugins/AdminForthAgentPlugin/agentAudio/agent-processing.mp3';
+  const standByAudio = new URL(
+    '../../public/agentAudio/agent-processing.mp3',
+    import.meta.url
+  ).href;
   const response = await fetch(standByAudio);
   console.log('status', response.status);
   console.log('content-type', response.headers.get('content-type'));
