@@ -33,7 +33,7 @@
       <div 
         class="w-full min-h-0 max-h-full flex flex-col h-dvh"
         :style="{
-          height: !agentStore.isIos ? dvh + 'px' : '100dvh',
+          height: !coreStore.isIos ? dvh + 'px' : '100dvh',
         }"
       >
         <ChatHeader />
@@ -88,7 +88,7 @@ const agentStore = useAgentStore();
 const agentTransitions = useAgentTransitions();
 const coreStore = useCoreStore();
 
-const dvh = ref(window.innerHeight)
+const dvh = ref(window.visualViewport?.height || window.innerHeight);
 
 let startX = 0
 let startWidth = 0
