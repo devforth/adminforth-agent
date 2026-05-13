@@ -271,6 +271,9 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   async function closeChat() {
+    if (!isChatOpen.value) {
+      return;
+    }
     await executeOnBeforeChatCloseCallbacks();
     if(isFullScreen.value) {
       document.body.style.overflow = '';
@@ -279,7 +282,9 @@ export const useAgentStore = defineStore('agent', () => {
       return;
     }
     isChatOpen.value = false;
-    setFullScreen(false);
+    if (isFullScreen.value) {
+      setFullScreen(false);
+    }
     isSessionHistoryOpen.value = false;
   }
 

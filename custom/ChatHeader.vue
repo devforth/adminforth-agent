@@ -59,7 +59,7 @@
         class="m-2 w-8 h-8 p-1 cursor-pointer hover:scale-110 rounded transition-colors duration-200
           text-lightNavbarIcons hover:text-lightNavbarIcons/80 hover:bg-lightNavbarIcons/20 
           dark:text-darkNavbarIcons hover:text-darkNavbarIcons/80 hover:bg-darkNavbarIcons/20 " 
-        @click="agentStore.setFullScreen(false); agentStore.setIsChatOpen(false)" 
+        @click="agentStore.setIsChatOpen(false)" 
       />
     </div>
   </div>
