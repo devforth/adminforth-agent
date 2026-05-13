@@ -36,6 +36,7 @@
           height: !agentStore.isIos ? dvh + 'px' : '100dvh',
         }"
       >
+      <!-- Header -->
         <div 
           ref="headerRef"
           class="flex items-center justify-between h-14 border-b border-gray-200 dark:border-gray-700"         
@@ -101,6 +102,8 @@
           </div>
 
         </div>
+        <!-- Header end -->
+         <!-- Body start -->
         <div 
           class="relative flex-1 min-h-0 flex flex-col overflow-hidden"
         >
@@ -109,7 +112,7 @@
             v-if="agentStore.isChatOpen"
             :messages="agentStore.chatMessages"
           />
-
+          <!-- text input -->
           <div
             ref="promptInput" 
             class="w-full mb-2 flex items-center justify-center px-2 bg-transparent relative translate-x-[-50%] left-1/2"
@@ -200,7 +203,9 @@
               </template>
             </div>
           </div>
+          <!-- text input end -->
         </div>
+        <!-- Body end -->
       </div>
     </div>
   </Teleport>
