@@ -1,7 +1,8 @@
-import { DefaultChatTransport } from 'ai';
+// import { DefaultChatTransport } from 'ai';
 import { shallowRef, type Ref } from 'vue';
 import { Chat } from '../../chat';
 import { getCurrentPageContext } from './pageContext';
+const { DefaultChatTransport } = await import('ai');
 
 type AgentImportMeta = ImportMeta & {
   env: {

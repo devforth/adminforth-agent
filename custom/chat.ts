@@ -11,14 +11,15 @@
  * Or resolve the circular module initialization issue in a better way
  */
 
-import {
-  AbstractChat,
+import type {
   ChatInit as BaseChatInit,
   ChatState,
   ChatStatus,
   UIMessage,
 } from 'ai';
 import { Ref, ref } from 'vue';
+
+const { AbstractChat } = await import('ai');
 
 class VueChatState<
   UI_MESSAGE extends UIMessage,

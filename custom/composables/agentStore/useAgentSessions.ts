@@ -3,7 +3,6 @@ import { callAdminForthApi } from '@/utils';
 import type { Chat } from '../../chat';
 import type { IAgentSession, ISessionsListItem, IPart } from '../../types';
 import { PRE_SESSION_ID } from './constants';
-import { ChatStatus } from 'ai';
 import { useI18n } from 'vue-i18n';
 
 type AdminforthLike = {
@@ -325,7 +324,7 @@ export function createAgentSessionManager({
     }
   }
 
-  function setCurrentChatStatus(status: ChatStatus) {
+  function setCurrentChatStatus(status: any) { // ChatStatus type
     (currentChat.value as any)?.setStatus({status});
   }
 

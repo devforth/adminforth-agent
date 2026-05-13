@@ -1,6 +1,6 @@
-import { MicVAD, utils } from "@ricky0123/vad-web"
+const { MicVAD, utils } = await import("@ricky0123/vad-web");
 
-let VADInstance: MicVAD | null = null;
+let VADInstance: any = null;
 let recordedAudioChunks: Float32Array[] = [];
 let onVoiceStopCallback: () => void = () => {};
 let onVoiceStartCallback: () => void = () => {};
