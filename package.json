@@ -21,7 +21,7 @@
     "session-memory"
   ],
   "author": "DevForth (https://devforth.io)",
-  "license": "ISC",
+  "license": "MIT",
   "description": "AI agent plugin for AdminForth with tool-based workflows and persistent chat sessions",
   "devDependencies": {
     "@types/node": "latest",
