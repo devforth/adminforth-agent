@@ -1,4 +1,10 @@
-import type { HighlighterGeneric, LanguageInput, ThemeInput } from 'shiki/core';
+import {
+	createBundledHighlighter,
+	type HighlighterGeneric,
+	type LanguageInput,
+	type ThemeInput
+} from 'shiki/core';
+import { createOnigurumaEngine } from 'shiki/engine/oniguruma';
 
 export type IncremarkCodeTheme = 'dark' | 'light';
 
@@ -110,6 +116,12 @@ const SHIKI_LANGUAGE_LOADERS = {
 	vue: () => import('@shikijs/langs/vue')
 } as const satisfies Record<SupportedShikiLanguage, LanguageInput>;
 
+const createShikiHighlighter = createBundledHighlighter({
+	themes: SHIKI_THEME_LOADERS,
+	langs: SHIKI_LANGUAGE_LOADERS,
+	engine: () => createOnigurumaEngine(() => import('shiki/wasm'))
+});
+
 interface HighlighterState {
 	highlighter: HighlighterGeneric<SupportedShikiLanguage, SupportedShikiTheme>;
 	loadedLanguages: Set<SupportedShikiLanguage>;
@@ -214,15 +226,6 @@ function setHighlightedHtmlCache(cacheKey: string, highlightedHtml: string): voi
 async function getHighlighter(): Promise<HighlighterState> {
 	if (!highlighterPromise) {
 		highlighterPromise = (async () => {
-			const [{ createBundledHighlighter }, { createOnigurumaEngine }] = await Promise.all([
-				import('shiki/core'),
-				import('shiki/engine/oniguruma')
-			]);
-			const createShikiHighlighter = createBundledHighlighter({
-				themes: SHIKI_THEME_LOADERS,
-				langs: SHIKI_LANGUAGE_LOADERS,
-				engine: () => createOnigurumaEngine(() => import('shiki/wasm'))
-			});
 			const highlighter = await createShikiHighlighter({
 				themes: [],
 				langs: []
