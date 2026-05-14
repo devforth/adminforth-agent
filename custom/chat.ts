@@ -17,9 +17,8 @@ import type {
   ChatStatus,
   UIMessage,
 } from 'ai';
+import {   AbstractChat, } from 'ai'
 import { Ref, ref } from 'vue';
-
-const { AbstractChat } = await import('ai');
 
 class VueChatState<
   UI_MESSAGE extends UIMessage,
