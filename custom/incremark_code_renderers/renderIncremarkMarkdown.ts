@@ -1,4 +1,4 @@
-import { createIncremarkParser, type IncremarkParserOptions } from '@incremark/core';
+import type { IncremarkParserOptions } from '@incremark/core';
 
 import {
 	highlightCodeSnippetHtml,
@@ -12,6 +12,8 @@ const INCREMARK_PARSER_OPTIONS = {
 	containers: true,
 	htmlTree: true
 } satisfies IncremarkParserOptions;
+
+let incremarkCorePromise: Promise<typeof import('@incremark/core')> | null = null;
 
 const INCREMARK_CODE_BLOCK_PATTERN =
 	/(<div class="incremark-block incremark-code"><div class="incremark-code-toolbar">[\s\S]*?<\/div>)<pre><code(?: class="language-([^"]+)")?>([\s\S]*?)<\/code><\/pre><\/div>/g;
@@ -29,6 +31,7 @@ export async function renderIncremarkMarkdown(
 	markdown: string,
 	theme: IncremarkCodeTheme = 'dark'
 ): Promise<string> {
+	const { createIncremarkParser } = await getIncremarkCore();
 	const parser = createIncremarkParser(INCREMARK_PARSER_OPTIONS);
 
 	if (markdown) {
@@ -40,6 +43,14 @@ export async function renderIncremarkMarkdown(
 	const baseHtml = renderIncremarkAst(parser.getAst());
 	const mathHtml = await renderKatexIncremarkHtml(baseHtml);
 	return highlightRenderedIncremarkHtmlServer(mathHtml, theme);
+}
+
+async function getIncremarkCore(): Promise<typeof import('@incremark/core')> {
+	if (!incremarkCorePromise) {
+		incremarkCorePromise = import('@incremark/core');
+	}
+
+	return incremarkCorePromise;
 }
 
 async function highlightRenderedIncremarkHtmlServer(
