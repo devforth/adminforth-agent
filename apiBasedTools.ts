@@ -169,6 +169,7 @@ export type ApiBasedToolCallParams = {
   abortSignal?: AbortSignal;
   inputs?: Record<string, unknown>;
   userTimeZone?: string;
+  acceptLanguage?: string;
 };
 
 export type ApiBasedTool = {
@@ -516,8 +517,9 @@ async function callOpenApiSchema(params: {
   schema: RegisteredApiToolSchema;
   toolName: string;
   userTimeZone?: string;
+  acceptLanguage?: string;
 }) {
-  const { adminforth, adminUser, abortSignal, inputs, schema, toolName, userTimeZone } = params;
+  const { adminforth, adminUser, abortSignal, inputs, schema, toolName, userTimeZone, acceptLanguage } = params;
   const method = schema.method.toUpperCase();
   const normalizedInputs = normalizeDateTimeInputsToUtc(
     (inputs ?? {}) as Record<string, unknown>,
@@ -535,12 +537,13 @@ async function callOpenApiSchema(params: {
 
   const response = createDirectToolResponse();
   logger.info(`Calling OpenAPI tool "${toolName}" with direct handler`);
+  const lang = acceptLanguage ?? "en";
   const tr = (
     msg: string,
     category: string,
     trParams: unknown,
     pluralizationNumber?: number,
-  ) => adminforth.tr(msg, category, undefined, trParams, pluralizationNumber);
+  ) => adminforth.tr(msg, category, lang, trParams, pluralizationNumber);
   const output = await schema.handler({
     body,
     query,
@@ -614,7 +617,7 @@ export function prepareApiBasedTools(
       description: schema.description,
       input_schema: schema.request_schema,
       output_schema: schema.response_schema,
-      call: async ({ adminUser, adminuser, abortSignal, inputs, userTimeZone } = {}) => {
+      call: async ({ adminUser, adminuser, abortSignal, inputs, userTimeZone, acceptLanguage } = {}) => {
         if (isHiddenResourceCall(hiddenResourceIdSet, inputs)) {
           return YAML.stringify({
             error: 'RESOURCE_NOT_AVAILABLE',
@@ -630,6 +633,7 @@ export function prepareApiBasedTools(
           toolName,
           inputs,
           userTimeZone,
+          acceptLanguage,
         });
 
         const processedOutput = await applyToolOverride({

@@ -95,8 +95,9 @@ export async function buildAgentSystemPrompt(
   adminforth: IAdminForth,
   hiddenResourceIds: Iterable<string> = [],
 ) {
+  const customComponentsDir = adminforth.config.customization.customComponentsDir ?? "custom";
   const [primarySkills, defaultSkills] = await Promise.all([
-    listProjectSkillManifests(adminforth.config.customization.customComponentsDir),
+    listProjectSkillManifests(customComponentsDir),
     listBundledSkillManifests(),
   ]);
   const adminBasePath = adminforth.config.baseUrlSlashed;

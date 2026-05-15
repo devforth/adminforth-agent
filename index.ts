@@ -91,6 +91,14 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function requireAdminUser(adminUser: AdminUser | undefined): AdminUser {
+  if (!adminUser) {
+    throw new Error("AdminForth Agent endpoint requires an authenticated admin user");
+  }
+
+  return adminUser;
+}
+
 export default class AdminForthAgentPlugin extends AdminForthPlugin {
   options: PluginOptions;
   agentSystemPromptPromise: Promise<string>;
@@ -98,7 +106,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
   private parseBody<T>(
     schema: z.ZodType<T>,
     body: unknown,
-    response: { setStatus: (code: number, message?: string) => void },
+    response: { setStatus: (code: number, message: string) => void },
   ): T | null {
     const parsed = schema.safeParse(body ?? {});
     if (!parsed.success) {
@@ -258,7 +266,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     const systemPrompt = buildAgentTurnSystemPrompt({
       agentSystemPrompt: await this.agentSystemPromptPromise,
       adminUser: input.adminUser,
-      usernameField: this.adminforth.config.auth.usernameField,
+      usernameField: this.adminforth.config.auth!.usernameField,
       userLanguage,
     });
     const apiBasedTools = buildApiBasedTools(
@@ -279,7 +287,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       adminUser: input.adminUser,
       adminforth: this.adminforth,
       apiBasedTools,
-      customComponentsDir: this.adminforth.config.customization.customComponentsDir,
+  customComponentsDir: this.adminforth.config.customization.customComponentsDir ?? "custom",
       sessionId: input.sessionId,
       turnId: input.turnId,
       currentPage: input.currentPage,
@@ -402,6 +410,8 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       method: 'POST',
       path: `/agent/get-placeholder-messages`,
       handler: async ({ headers, adminUser }) => {
+        const currentAdminUser = requireAdminUser(adminUser);
+
         if (!this.options.placeholderMessages) {
           return {
             messages: [],
@@ -409,7 +419,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         }
 
         const messages = await this.options.placeholderMessages({
-          adminUser,
+          adminUser: currentAdminUser,
           headers,
         });
 
@@ -422,6 +432,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       method: 'POST',
       path: `/agent/response`,
       handler: async ({ body, adminUser, response, _raw_express_res, abortSignal }) => {
+        const currentAdminUser = requireAdminUser(adminUser);
         const data = this.parseBody(agentResponseBodySchema, body, response);
         if (!data) return;
         const stream = createAgentEventStream(_raw_express_res, {vercelAiUiMessageStream: true, closeActiveBlockOnToolStart: true});
@@ -435,7 +446,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           userTimeZone: data.timeZone ?? 'UTC',
           currentPage: data.currentPage,
           abortSignal,
-          adminUser,
+          adminUser: currentAdminUser,
           emitToolCallEvent: stream.toolCall,
           emitReasoningDelta: stream.reasoningDelta,
           emitTextDelta: stream.textDelta,
@@ -452,16 +463,17 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       path: `/agent/speech-response`,
       target: 'upload',
       handler: async ({ body, adminUser, response, _raw_express_req, _raw_express_res, abortSignal }) => {
+        const currentAdminUser = requireAdminUser(adminUser);
         const req = _raw_express_req as ExpressMulterRequest;
         const audioAdapter = this.options.audioAdapter;
         if (!audioAdapter) {
-          response.setStatus(400, undefined);
+          response.setStatus(400, "Audio adapter is not configured for AdminForth Agent");
           return { error: "Audio adapter is not configured for AdminForth Agent" };
         }
         const data = this.parseBody(agentSpeechResponseBodySchema, body, response);
         if (!data) return;
         if (!req.file) {
-          response.setStatus(400, undefined);
+          response.setStatus(400, "Audio file is required");
           return { error: "Audio file is required" };
         }
         const stream = createAgentEventStream(_raw_express_res);
@@ -511,7 +523,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           userTimeZone: data.timeZone ?? 'UTC',
           currentPage,
           abortSignal,
-          adminUser,
+          adminUser: currentAdminUser,
           emitToolCallEvent: stream.toolCall,
           failureLogMessage: "Agent speech response failed",
           abortLogMessage: "Agent speech response aborted by the client",
@@ -589,7 +601,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             logger.info("Agent speech audio streaming aborted by the client");
           } else {
             logger.error(`Agent speech audio streaming failed:\n${error}`);
-            stream.error(error);
+            stream.error(getErrorMessage(error));
           }
           stream.end();
           return null;
@@ -600,9 +612,10 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       method: 'POST',
       path: `/agent/get-sessions`,
       handler: async ({body, adminUser, response }) => {
+        const currentAdminUser = requireAdminUser(adminUser);
         const data = this.parseBody(getSessionsBodySchema, body, response);
         if (!data) return;
-        const userId = adminUser.pk;
+        const userId = currentAdminUser.pk;
         const limit = data.limit ?? 20;
         const sessions = await this.adminforth.resource(this.options.sessionResource.resourceId).list(
           [Filters.EQ(this.options.sessionResource.askerIdField, userId)], limit, undefined, [Sorts.DESC(this.options.sessionResource.createdAtField)]
@@ -620,12 +633,13 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       method: 'POST',
       path: `/agent/get-session-info`,
       handler: async ({body, adminUser, response }) => {
+        const currentAdminUser = requireAdminUser(adminUser);
         const parsedBody = sessionIdBodySchema.safeParse(body);
         if (!parsedBody.success) {
           response.setStatus(422, parsedBody.error.message);
           return;
         }
-        const userId = adminUser.pk;
+        const userId = currentAdminUser.pk;
         const sessionId = parsedBody.data.sessionId;
         const session = await this.adminforth.resource(this.options.sessionResource.resourceId).get(
           [Filters.EQ(this.options.sessionResource.idField, sessionId)]
@@ -647,7 +661,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             title: session[this.options.sessionResource.titleField],
             timestamp: session[this.options.sessionResource.createdAtField],
             messages: turns.flatMap(turn => {
-              const messages = [];
+              const messages: Array<{ text: string; role: 'user' | 'assistant' }> = [];
               if (turn.prompt) {
                 messages.push({
                   text: turn.prompt,
@@ -670,10 +684,11 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       method: 'POST',
       path: `/agent/create-session`,
       handler: async ({body, adminUser, response }) => {
+        const currentAdminUser = requireAdminUser(adminUser);
         const data = this.parseBody(createSessionBodySchema, body, response);
         if (!data) return;
         const triggerMessage = data.triggerMessage;
-        const userId = adminUser.pk;
+        const userId = currentAdminUser.pk;
         const title = triggerMessage?.slice(0, 40) || "New Session";
         const newSession = {
           [this.options.sessionResource.idField]: randomUUID(),
@@ -693,10 +708,11 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       method: 'POST',
       path: `/agent/delete-session`,
       handler: async ({body, adminUser, response }) => {
+        const currentAdminUser = requireAdminUser(adminUser);
         const data = this.parseBody(sessionIdBodySchema, body, response);
         if (!data) return;
         const sessionId = data.sessionId;
-        const userId = adminUser.pk;
+        const userId = currentAdminUser.pk;
         const session = await this.adminforth.resource(this.options.sessionResource.resourceId).get(
           [Filters.EQ(this.options.sessionResource.idField, sessionId)]
         );

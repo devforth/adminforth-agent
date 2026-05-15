@@ -12,6 +12,7 @@ import type { PluginOptions } from "../types.js";
 import { Filters } from "adminforth";
 
 const ROOT_CHECKPOINT_NAMESPACE = "__root__";
+type CheckpointRow = Record<string, unknown>;
 
 export class AdminForthCheckpointSaver extends BaseCheckpointSaver {
   constructor(
@@ -227,7 +228,7 @@ export class AdminForthCheckpointSaver extends BaseCheckpointSaver {
       [{ field: r.sequenceField, direction: "asc" }],
     );
 
-    const pendingWrites: CheckpointPendingWrite[] = writesRows.flatMap((row) => {
+    const pendingWrites: CheckpointPendingWrite[] = writesRows.flatMap((row: CheckpointRow) => {
       const taskId = String(row[r.taskIdField] ?? "");
       const write = this.deserialize<PendingWrite>(row[r.writesPayloadField]);
       if (!write) {
