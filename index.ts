@@ -28,15 +28,6 @@ import { sanitizeSpeechText } from "./sanitizeSpeechText.js";
 
 export type { AgentEvent, AgentEventEmitter } from "./agentEvents.js";
 
-export type {
-  ChatSurfaceAdapter,
-  ChatSurfaceCapabilities,
-  ChatSurfaceEvent,
-  ChatSurfaceEventSink,
-  ChatSurfaceIncomingMessage,
-  ChatSurfaceRequestContext,
-} from "adminforth";
-
 type MulterFile = {
   buffer: Buffer;
   originalname: string;
