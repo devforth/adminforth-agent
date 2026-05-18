@@ -1,4 +1,12 @@
-import type { AdminUser, AdminForthResource, IAdminForth, IHttpServer } from "adminforth";
+import type {
+  AdminUser,
+  AdminForthResource,
+  ChatSurfaceAdapter,
+  ChatSurfaceEventSink,
+  ChatSurfaceIncomingMessage,
+  IAdminForth,
+  IHttpServer,
+} from "adminforth";
 
 import { AdminForthPlugin, logger, Filters, Sorts } from "adminforth";
 
@@ -12,11 +20,22 @@ import { AdminForthCheckpointSaver } from "./agent/checkpointer.js";
 import { createSequenceDebugCollector } from "./agent/middleware/sequenceDebug.js";
 import { detectUserLanguage, type PreviousUserMessage } from "./agent/languageDetect.js";
 import { prepareApiBasedTools as buildApiBasedTools } from './apiBasedTools.js';
-import { createAgentEventStream } from "./agentResponseEvents.js";
+import type { AgentEventEmitter } from "./agentEvents.js";
+import { createSseEventEmitter } from "./surfaces/web-sse/createSseEventEmitter.js";
 import { appendCustomSystemPrompt, buildAgentSystemPrompt, buildAgentTurnSystemPrompt, DEFAULT_AGENT_SYSTEM_PROMPT} from "./agent/systemPrompt.js";
-import type { ToolCallEvent } from "./agent/toolCallEvents.js";
 import type { CurrentPageContext } from "./agent/tools/getUserLocation.js";
 import { sanitizeSpeechText } from "./sanitizeSpeechText.js";
+
+export type { AgentEvent, AgentEventEmitter } from "./agentEvents.js";
+
+export type {
+  ChatSurfaceAdapter,
+  ChatSurfaceCapabilities,
+  ChatSurfaceEvent,
+  ChatSurfaceEventSink,
+  ChatSurfaceIncomingMessage,
+  ChatSurfaceRequestContext,
+} from "adminforth";
 
 type MulterFile = {
   buffer: Buffer;
@@ -37,17 +56,20 @@ type AgentTurnRunInput = {
   abortSignal?: AbortSignal;
   adminUser: AdminUser;
   sequenceDebugCollector: ReturnType<typeof createSequenceDebugCollector>;
-  emitReasoningDelta?: (delta: string) => void;
-  emitTextDelta?: (delta: string) => void;
-  emitToolCallEvent?: (event: ToolCallEvent) => void;
+  emit?: AgentEventEmitter;
 };
 
 type RunAndPersistAgentResponseInput =
   Omit<AgentTurnRunInput, "turnId" | "sequenceDebugCollector" | "previousUserMessages"> & {
-    emitErrorResponse?: (response: string) => void;
     failureLogMessage: string;
     abortLogMessage: string;
   };
+
+type HandleTurnInput = Omit<RunAndPersistAgentResponseInput, "failureLogMessage" | "abortLogMessage"> & {
+  emit: AgentEventEmitter;
+  failureLogMessage?: string;
+  abortLogMessage?: string;
+};
 
 const agentResponseBodySchema = z.object({
   message: z.string(),
@@ -154,6 +176,33 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       }));
   }
 
+  private getChatSurfaceSessionId(incoming: ChatSurfaceIncomingMessage) {
+    return `${incoming.surface}:${incoming.externalConversationId}`;
+  }
+
+  private async getOrCreateChatSurfaceSession(
+    incoming: ChatSurfaceIncomingMessage,
+    adminUser: AdminUser,
+  ) {
+    const sessionId = this.getChatSurfaceSessionId(incoming);
+    const sessionResource = this.adminforth.resource(this.options.sessionResource.resourceId);
+    const session = await sessionResource.get(
+      [Filters.EQ(this.options.sessionResource.idField, sessionId)]
+    );
+
+    if (session) {
+      return sessionId;
+    }
+
+    await sessionResource.create({
+      [this.options.sessionResource.idField]: sessionId,
+      [this.options.sessionResource.titleField]: incoming.prompt.slice(0, 40) || "New Session",
+      [this.options.sessionResource.askerIdField]: adminUser.pk,
+    });
+
+    return sessionId;
+  }
+
   private getCheckpointer() {
     if (this.checkpointer) return this.checkpointer;
 
@@ -223,6 +272,9 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
   
   validateConfigAfterDiscover(adminforth: IAdminForth, resourceConfig: AdminForthResource) {
     this.options.audioAdapter?.validate();
+    for (const chatSurfaceAdapter of this.options.chatSurfaceAdapters ?? []) {
+      chatSurfaceAdapter.validate();
+    }
     this.agentSystemPromptPromise = buildAgentSystemPrompt(
       adminforth,
       this.getInternalAgentResourceIds(),
@@ -295,7 +347,10 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       abortSignal: input.abortSignal,
       emitToolCallEvent: (event) => {
         input.sequenceDebugCollector.handleToolCallEvent(event);
-        input.emitToolCallEvent?.(event);
+        void input.emit?.({
+          type: "tool-call",
+          data: event,
+        });
       },
       sequenceDebugSink: input.sequenceDebugCollector,
     });
@@ -332,12 +387,18 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         .join("");
 
       if (reasoningDelta) {
-        input.emitReasoningDelta?.(reasoningDelta);
+        await input.emit?.({
+          type: "reasoning-delta",
+          delta: reasoningDelta,
+        });
       }
 
       if (textDelta) {
         fullResponse += textDelta;
-        input.emitTextDelta?.(textDelta);
+        await input.emit?.({
+          type: "text-delta",
+          delta: textDelta,
+        });
       }
     }
 
@@ -369,9 +430,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         abortSignal: input.abortSignal,
         adminUser: input.adminUser,
         sequenceDebugCollector,
-        emitToolCallEvent: input.emitToolCallEvent,
-        emitReasoningDelta: input.emitReasoningDelta,
-        emitTextDelta: input.emitTextDelta,
+        emit: input.emit,
       });
       fullResponse = agentResponse.text;
     } catch (error) {
@@ -382,7 +441,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         failed = true;
         fullResponse = getErrorMessage(error);
         logger.error(`${input.failureLogMessage}:\n${fullResponse}`);
-        input.emitErrorResponse?.(fullResponse);
       }
     }
 
@@ -405,7 +463,134 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     };
   }
 
+  async handleTurn(input: HandleTurnInput) {
+    await input.emit({
+      type: "turn-started",
+      messageId: randomUUID(),
+    });
+
+    const agentResponse = await this.runAndPersistAgentResponse({
+      prompt: input.prompt,
+      sessionId: input.sessionId,
+      modeName: input.modeName,
+      userTimeZone: input.userTimeZone,
+      currentPage: input.currentPage,
+      abortSignal: input.abortSignal,
+      adminUser: input.adminUser,
+      emit: input.emit,
+      failureLogMessage: input.failureLogMessage ?? "Agent response failed",
+      abortLogMessage: input.abortLogMessage ?? "Agent response aborted",
+    });
+
+    if (agentResponse.failed) {
+      await input.emit({
+        type: "error",
+        error: agentResponse.text,
+      });
+    } else if (!agentResponse.aborted) {
+      await input.emit({
+        type: "response",
+        text: agentResponse.text,
+        sessionId: input.sessionId,
+        turnId: agentResponse.turnId,
+      });
+    }
+
+    await input.emit({
+      type: "finish",
+    });
+
+    return agentResponse;
+  }
+
+  private createChatSurfaceEventEmitter(sink: ChatSurfaceEventSink): AgentEventEmitter {
+    return async (event) => {
+      if (event.type === "text-delta") {
+        await sink.emit({
+          type: "text_delta",
+          delta: event.delta,
+        });
+        return;
+      }
+
+      if (event.type === "response") {
+        await sink.emit({
+          type: "done",
+          text: event.text,
+        });
+        return;
+      }
+
+      if (event.type === "error") {
+        await sink.emit({
+          type: "error",
+          message: event.error,
+        });
+      }
+    };
+  }
+
+  private async handleChatSurfaceMessage(
+    adapter: ChatSurfaceAdapter,
+    incoming: ChatSurfaceIncomingMessage,
+    sink: ChatSurfaceEventSink,
+  ) {
+    const adminUser = await adapter.resolveAdminUser({
+      adminforth: this.adminforth,
+      incoming,
+    });
+
+    if (!adminUser) {
+      await sink.emit({
+        type: "error",
+        message: "This chat account is not authorized to use AdminForth Agent.",
+      });
+      return;
+    }
+
+    await this.handleTurn({
+      prompt: incoming.prompt,
+      sessionId: await this.getOrCreateChatSurfaceSession(incoming, adminUser),
+      modeName: incoming.modeName,
+      userTimeZone: incoming.userTimeZone ?? "UTC",
+      adminUser,
+      emit: this.createChatSurfaceEventEmitter(sink),
+      failureLogMessage: `Agent ${incoming.surface} surface response failed`,
+      abortLogMessage: `Agent ${incoming.surface} surface response aborted`,
+    });
+  }
+
   setupEndpoints(server: IHttpServer) {
+    for (const adapter of this.options.chatSurfaceAdapters ?? []) {
+      server.endpoint({
+        method: "POST",
+        noAuth: true,
+        path: `/agent/surface/${adapter.name}/webhook`,
+        handler: async (ctx) => {
+          const surfaceContext = {
+            body: ctx.body,
+            headers: ctx.headers,
+            abortSignal: ctx.abortSignal,
+            rawRequest: ctx._raw_express_req,
+            rawResponse: ctx._raw_express_res,
+          };
+          const incoming = await adapter.parseIncomingMessage(surfaceContext);
+
+          if (!incoming) return { ok: true };
+
+          const sink = await adapter.createEventSink(surfaceContext, incoming);
+
+          try {
+            await this.handleChatSurfaceMessage(adapter, incoming, sink);
+          } finally {
+            await sink.close?.();
+          }
+
+          return { ok: true };
+        },
+      });
+    }
+
     server.endpoint({
       method: 'POST',
       path: `/agent/get-placeholder-messages`,
@@ -435,11 +620,12 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         const currentAdminUser = requireAdminUser(adminUser);
         const data = this.parseBody(agentResponseBodySchema, body, response);
         if (!data) return;
-        const stream = createAgentEventStream(_raw_express_res, {vercelAiUiMessageStream: true, closeActiveBlockOnToolStart: true});
-        const messageId = randomUUID();
+        const emit = createSseEventEmitter(_raw_express_res, {
+          vercelAiUiMessageStream: true,
+          closeActiveBlockOnToolStart: true,
+        });
 
-        stream.start(messageId);
-        await this.runAndPersistAgentResponse({
+        await this.handleTurn({
           prompt: data.message,
           sessionId: data.sessionId,
           modeName: data.mode,
@@ -447,14 +633,10 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           currentPage: data.currentPage,
           abortSignal,
           adminUser: currentAdminUser,
-          emitToolCallEvent: stream.toolCall,
-          emitReasoningDelta: stream.reasoningDelta,
-          emitTextDelta: stream.textDelta,
-          emitErrorResponse: stream.textDelta,
+          emit,
           failureLogMessage: "Agent response streaming failed",
           abortLogMessage: "Agent response streaming aborted by the client",
         });
-        stream.end();
         return null;
       }
     });
@@ -476,7 +658,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           response.setStatus(400, "Audio file is required");
           return { error: "Audio file is required" };
         }
-        const stream = createAgentEventStream(_raw_express_res);
+        const emit = createSseEventEmitter(_raw_express_res);
         
         let transcription;
 
@@ -491,28 +673,38 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         } catch (error) {
           if (abortSignal.aborted || isAbortError(error)) {
             logger.info("Agent speech transcription aborted by the client");
-            stream.end();
+            await emit({ type: "finish" });
             return null;
           }
 
           logger.error(`Agent speech transcription failed:\n${getErrorMessage(error)}`);
-          stream.error("Speech transcription failed. Check server logs for details.");
-          stream.end();
+          await emit({
+            type: "error",
+            error: "Speech transcription failed. Check server logs for details.",
+          });
+          await emit({ type: "finish" });
           return null;
         }
 
         if (abortSignal.aborted) {
-          stream.end();
+          await emit({ type: "finish" });
           return null;
         }
 
         const prompt = transcription.text;
         if (!prompt) {
-          stream.error("Speech transcription is empty");
-          stream.end();
+          await emit({
+            type: "error",
+            error: "Speech transcription is empty",
+          });
+          await emit({ type: "finish" });
           return null;
         }
-        stream.transcript(transcription.text, transcription.language);
+        await emit({
+          type: "transcript",
+          text: transcription.text,
+          language: transcription.language,
+        });
 
         const sessionId = data.sessionId as string;
         const currentPage = data.currentPage;
@@ -524,34 +716,42 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           currentPage,
           abortSignal,
           adminUser: currentAdminUser,
-          emitToolCallEvent: stream.toolCall,
+          emit: async (event) => {
+            if (event.type === "tool-call") {
+              await emit(event);
+            }
+          },
           failureLogMessage: "Agent speech response failed",
           abortLogMessage: "Agent speech response aborted by the client",
         });
 
         if (agentResponse.aborted) {
-          stream.end();
+          await emit({ type: "finish" });
           return null;
         }
 
         if (agentResponse.failed) {
-          stream.error(agentResponse.text);
-          stream.end();
+          await emit({
+            type: "error",
+            error: agentResponse.text,
+          });
+          await emit({ type: "finish" });
           return null;
         }
 
         try {
-          stream.speechResponse(
-            {
+          await emit({
+            type: "speech-response",
+            transcript: {
               text: transcription.text,
               language: transcription.language,
             },
-            {
+            response: {
               text: agentResponse.text,
             },
             sessionId,
-            agentResponse.turnId,
-          );
+            turnId: agentResponse.turnId,
+          });
           const speech = await audioAdapter.synthesize({
             text: sanitizeSpeechText(agentResponse.text),
             stream: true,
@@ -560,7 +760,14 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
             abortSignal,
           });
 
-          stream.audioStart(speech.mimeType, speech.format, 24000, 1, 16);
+          await emit({
+            type: "audio-start",
+            mimeType: speech.mimeType,
+            format: speech.format,
+            sampleRate: 24000,
+            channelCount: 1,
+            bitsPerSample: 16,
+          });
 
           const reader = speech.audioStream.getReader();
           const cancelAudioStream = () => {
@@ -586,24 +793,30 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
                 break;
               }
 
-              stream.audioDelta(value);
+              await emit({
+                type: "audio-delta",
+                value,
+              });
             }
           } finally {
             abortSignal.removeEventListener("abort", cancelAudioStream);
             reader.releaseLock();
           }
 
-          stream.audioDone();
-          stream.end();
+          await emit({ type: "audio-done" });
+          await emit({ type: "finish" });
           return null;
         } catch (error) {
           if (abortSignal.aborted || isAbortError(error)) {
             logger.info("Agent speech audio streaming aborted by the client");
           } else {
             logger.error(`Agent speech audio streaming failed:\n${error}`);
-            stream.error(getErrorMessage(error));
+            await emit({
+              type: "error",
+              error: getErrorMessage(error),
+            });
           }
-          stream.end();
+          await emit({ type: "finish" });
           return null;
         }
       }

@@ -3,6 +3,7 @@ import {
   type AdminUser,
   type HttpExtra,
   type AudioAdapter,
+  type ChatSurfaceAdapter,
 } from "adminforth";
 import type { AgentModeCompletionAdapter } from "./agent/simpleAgent.js";
 
@@ -66,6 +67,11 @@ export interface PluginOptions extends PluginsCommonOptions {
    * Optional audio adapter for speech-to-text and text-to-speech flows.
    */
   audioAdapter?: AudioAdapter;
+
+  /**
+   * Optional external chat surfaces, such as Telegram webhooks.
+   */
+  chatSurfaceAdapters?: ChatSurfaceAdapter[];
 
   /**
    * Max tokens for the generation.
