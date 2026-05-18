@@ -108,6 +108,20 @@ function createAgentEventStream(
       });
     },
 
+    rendering(phase: "start" | "end", label: string) {
+      if (phase === "start") {
+        stream.endActiveBlock();
+      }
+
+      stream.send({
+        type: "data-rendering",
+        data: {
+          phase,
+          label,
+        },
+      });
+    },
+
     transcript(text: string, language?: string) {
       stream.send({
         type: "transcript",
@@ -225,6 +239,9 @@ export function createSseEventEmitter(
         break;
       case "tool-call":
         stream.toolCall(event.data);
+        break;
+      case "rendering":
+        stream.rendering(event.phase, event.label);
         break;
       case "transcript":
         stream.transcript(event.text, event.language);

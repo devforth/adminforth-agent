@@ -89,6 +89,9 @@ const createSessionBodySchema = z.object({
   triggerMessage: z.string().optional(),
 }).strict();
 
+const VEGA_LITE_FENCE_START = "```vega-lite";
+const COMPLETE_VEGA_LITE_BLOCK_RE = /```vega-lite[\s\S]*?```/;
+
 function isAbortError(error: unknown): boolean {
   return (
     error instanceof DOMException && error.name === "AbortError"
@@ -279,6 +282,8 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
 
   private async runAgentTurn(input: AgentTurnRunInput) {
     let fullResponse = "";
+    let bufferedTextDelta = "";
+    let isRenderingVegaLite = false;
     const maxTokens = this.options.maxTokens ?? 1000;
     const selectedMode = this.options.modes.find((mode) => mode.name === input.modeName) ?? this.options.modes[0];
     const [primaryModelSpec, summaryModelSpec] = await Promise.all([
@@ -386,11 +391,61 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
 
       if (textDelta) {
         fullResponse += textDelta;
+        bufferedTextDelta += textDelta;
+
+        if (
+          bufferedTextDelta.includes(VEGA_LITE_FENCE_START) &&
+          !COMPLETE_VEGA_LITE_BLOCK_RE.test(bufferedTextDelta)
+        ) {
+          if (!isRenderingVegaLite) {
+            isRenderingVegaLite = true;
+            await input.emit?.({
+              type: "rendering",
+              phase: "start",
+              label: "Rendering...",
+            });
+          }
+          continue;
+        }
+
+        if (isRenderingVegaLite) {
+          isRenderingVegaLite = false;
+          await input.emit?.({
+            type: "rendering",
+            phase: "end",
+            label: "Rendering...",
+          });
+        }
+
+        const streamableLength = bufferedTextDelta.includes(VEGA_LITE_FENCE_START)
+          ? bufferedTextDelta.length
+          : bufferedTextDelta.length - getPartialVegaLiteFenceStartLength(bufferedTextDelta);
+
+        if (!streamableLength) {
+          continue;
+        }
+
         await input.emit?.({
           type: "text-delta",
-          delta: textDelta,
+          delta: bufferedTextDelta.slice(0, streamableLength),
         });
+        bufferedTextDelta = bufferedTextDelta.slice(streamableLength);
       }
+    }
+
+    if (isRenderingVegaLite) {
+      await input.emit?.({
+        type: "rendering",
+        phase: "end",
+        label: "Rendering...",
+      });
+    }
+
+    if (bufferedTextDelta) {
+      await input.emit?.({
+        type: "text-delta",
+        delta: bufferedTextDelta,
+      });
     }
 
     return {
@@ -955,4 +1010,14 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       }
     })
   }
+}
+
+function getPartialVegaLiteFenceStartLength(text: string): number {
+  for (let length = Math.min(text.length, VEGA_LITE_FENCE_START.length - 1); length > 0; length -= 1) {
+    if (VEGA_LITE_FENCE_START.startsWith(text.slice(-length))) {
+      return length;
+    }
+  }
+
+  return 0;
 }

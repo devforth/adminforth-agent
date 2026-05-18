@@ -39,6 +39,15 @@
           <template v-for="(part, index) in ToolOrReasoningParts" :key="index">
             <ReasoningRenderer v-if="part.type === 'reasoning'" :state="part.state" :text="part.text" />
             <ToolsGroup v-else-if="part.type==='data-tool-call'" :toolGroup="groupToolCallParts(message, part)" />
+            <li v-else-if="part.type === 'data-rendering'" class="mb-6 mx-2 mt-2 px-2 z-50 overflow-hidden">
+              <span class="bg-lightNavbar dark:bg-darkNavbar absolute flex items-center text-listTableHeadingText dark:text-darkListTableHeadingText justify-center w-5 h-5 rounded-full -start-[0.68rem] ring-4 ring-lightNavbar dark:ring-darkNavbar">
+                <div class="w-2 h-2 rounded-full bg-current animate-pulse"></div>
+              </span>
+              <h3 class="flex items-center mb-1 text-sm ml-3 gap-1 text-listTableHeadingText dark:text-darkListTableHeadingText">
+                <span class="font-semibold">{{ part.data?.label ?? 'Rendering...' }}</span>
+                <ThreeDotsAnimation />
+              </h3>
+            </li>
           </template>
         </ol>
       </CustomAutoScrollContainer>
@@ -73,7 +82,11 @@
   const isExpanded = ref(true);
   let isUserScrolled = false;
   const ToolOrReasoningParts = computed(() => {
-    return props.message.parts.filter((part: IPart) => part.type === 'data-tool-call' || part.type === 'reasoning');
+    return props.message.parts.filter((part: IPart) => {
+      return part.type === 'data-tool-call'
+        || part.type === 'reasoning'
+        || isActiveRenderingPart(part);
+    });
   });
   const isResponseInProgress = computed(() =>{
     return props.isLastMessageInChat && agentStore.isResponseInProgress; 
@@ -156,6 +169,14 @@
       return part.type === 'reasoning' || (part.type === 'data-tool-call' && part.data?.phase === 'start');
     });
   };
+
+  function isActiveRenderingPart(part: IPart) {
+    return part.type === 'data-rendering'
+      && part.data?.phase === 'start'
+      && !props.message.parts.some((candidate: IPart) => {
+        return candidate.type === 'data-rendering' && candidate.data?.phase === 'end';
+      });
+  }
 
   const groupToolCallParts = (message: IMessage, currentPart: IPart): IToolGroup[] => {
     if (currentPart.type !== 'data-tool-call') {

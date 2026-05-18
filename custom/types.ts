@@ -1,14 +1,15 @@
 export interface IPartData {
-  toolCallId: string;
-  toolName: string;
-  phase: 'start' | 'end';
+  toolCallId?: string;
+  toolName?: string;
+  phase?: 'start' | 'end';
+  label?: string;
   input?: any;
   output?: any;
   durationMs?: number;
   toolInfo?: string;
 }
 export interface IPart {
-  type: 'reasoning' | 'data-tool-call' | 'text';
+  type: 'reasoning' | 'data-tool-call' | 'data-rendering' | 'text';
   text?: string;
   state?: 'started' | 'thinking' | 'processing' | 'streaming' | 'done';
   data?: IPartData;
