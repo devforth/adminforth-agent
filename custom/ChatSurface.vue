@@ -106,7 +106,13 @@ onMounted(async () => {
   if( coreStore.isMobile ) {
     agentStore.setIsTeleportedToBody(false);
   } else {
-    agentStore.setIsTeleportedToBody(isTeleportedToBodyFromLocalStorage || props.meta.stickByDefault);
+    const shouldTeleportToBody = isTeleportedToBodyFromLocalStorage || props.meta.stickByDefault;
+    const savedIsChatOpen = agentStore.getLocalStorageItem('isChatOpen');
+
+    agentStore.setIsTeleportedToBody(shouldTeleportToBody);
+    if (shouldTeleportToBody && savedIsChatOpen === null) {
+      agentStore.setIsChatOpen(true);
+    }
   }
   await agentStore.fetchSessionsList();
 });

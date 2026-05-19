@@ -174,7 +174,10 @@ export const useAgentStore = defineStore('agent', () => {
     if (!coreStore.isMobile) {
       const savedIsTeleportedToBody = getLocalStorageItem('isTeleportedToBody');
       const savedIsTeleportedToBodyBeforeFullScreen = getLocalStorageItem('isTeleportedToBodyBeforeFullScreen');
-      const isTeleportedToBodyFromLocalStorage = savedIsTeleportedToBody === 'true' || savedIsTeleportedToBodyBeforeFullScreen === 'true';
+      let isTeleportedToBodyFromLocalStorage = true;
+      if (savedIsTeleportedToBody !== null || savedIsTeleportedToBodyBeforeFullScreen !== null) {
+        isTeleportedToBodyFromLocalStorage = savedIsTeleportedToBody === 'true' || savedIsTeleportedToBodyBeforeFullScreen === 'true';
+      }
       const savedIsChatOpen = getLocalStorageItem('isChatOpen');
 
       setIsTeleportedToBody(isTeleportedToBodyFromLocalStorage);
