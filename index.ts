@@ -4,6 +4,7 @@ import type {
   ChatSurfaceAdapter,
   ChatSurfaceEventSink,
   ChatSurfaceIncomingMessage,
+  IAdminForthEndpointHandlerInput,
   IAdminForth,
   IHttpServer,
 } from "adminforth";
@@ -35,6 +36,24 @@ type MulterFile = {
 };
 
 type ExpressMulterRequest = { file?: MulterFile };
+
+type ChatSurfaceConnectAction = {
+  type: "url";
+  label: string;
+  url: string;
+};
+
+type ChatSurfaceAdapterWithConnectAction = ChatSurfaceAdapter & {
+  createConnectAction?(input: {
+    token: string;
+  }): ChatSurfaceConnectAction | Promise<ChatSurfaceConnectAction>;
+};
+
+type ChatSurfaceLinkTokenPayload = {
+  surface: string;
+  adminUserId: AdminUser["pk"];
+  expiresAt: number;
+};
 
 type AgentTurnRunInput = {
   prompt: string;
@@ -91,6 +110,8 @@ const createSessionBodySchema = z.object({
 
 const VEGA_LITE_FENCE_START = "```vega-lite";
 const COMPLETE_VEGA_LITE_BLOCK_RE = /```vega-lite[\s\S]*?```/;
+const DEFAULT_ADMIN_USER_EXTERNAL_USER_ID_FIELD = "externalUserId";
+const CHAT_SURFACE_LINK_TOKEN_TTL_MS = 60 * 1000;
 
 function isAbortError(error: unknown): boolean {
   return (
@@ -107,18 +128,12 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function requireAdminUser(adminUser: AdminUser | undefined): AdminUser {
-  if (!adminUser) {
-    throw new Error("AdminForth Agent endpoint requires an authenticated admin user");
-  }
-
-  return adminUser;
-}
-
 export default class AdminForthAgentPlugin extends AdminForthPlugin {
   options: PluginOptions;
   agentSystemPromptPromise: Promise<string>;
   private checkpointer: BaseCheckpointSaver | null = null;
+  private chatSurfaceLinkTokens = new Map<string, ChatSurfaceLinkTokenPayload>();
+  private chatSurfaceSettingsPageRegistered = false;
   private parseBody<T>(
     schema: z.ZodType<T>,
     body: unknown,
@@ -215,6 +230,12 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     ].filter((resourceId): resourceId is string => Boolean(resourceId));
   }
 
+  private getChatSurfaceConnectActionAdapters() {
+    return (this.options.chatSurfaceAdapters ?? [])
+      .map((adapter) => adapter as ChatSurfaceAdapterWithConnectAction)
+      .filter((adapter) => adapter.createConnectAction);
+  }
+
   constructor(options: PluginOptions) {
     super(options, import.meta.url);
     this.options = options;
@@ -242,6 +263,19 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         hasAudioAdapter: Boolean(this.options.audioAdapter),
       }
     });
+    if (this.getChatSurfaceConnectActionAdapters().length && !this.chatSurfaceSettingsPageRegistered) {
+      if (!this.adminforth.config.auth!.userMenuSettingsPages) {
+        this.adminforth.config.auth!.userMenuSettingsPages = [];
+      }
+      this.adminforth.config.auth!.userMenuSettingsPages.push({
+        icon: "flowbite:link-outline",
+        pageLabel: "Chat Surfaces",
+        slug: "chat-surfaces",
+        component: this.componentPath("ChatSurfaceSettings.vue"),
+        isVisible: () => true,
+      });
+      this.chatSurfaceSettingsPageRegistered = true;
+    }
     if (!this.adminforth.config.customization.customHeadItems) {
       this.adminforth.config.customization.customHeadItems = [];
     }
@@ -576,23 +610,102 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     };
   }
 
+  private createChatSurfaceLinkToken(surface: string, adminUser: AdminUser) {
+    for (const [token, payload] of this.chatSurfaceLinkTokens) {
+      if (payload.expiresAt <= Date.now()) {
+        this.chatSurfaceLinkTokens.delete(token);
+      }
+    }
+
+    const token = randomUUID();
+    this.chatSurfaceLinkTokens.set(token, {
+      surface,
+      adminUserId: adminUser.pk,
+      expiresAt: Date.now() + CHAT_SURFACE_LINK_TOKEN_TTL_MS,
+    });
+
+    return token;
+  }
+
+  private consumeChatSurfaceLinkToken(surface: string, token: string) {
+    const payload = this.chatSurfaceLinkTokens.get(token);
+    this.chatSurfaceLinkTokens.delete(token);
+
+    if (!payload || payload.surface !== surface || payload.expiresAt <= Date.now()) {
+      return null;
+    }
+
+    return payload;
+  }
+
+  private async handleChatSurfaceLink(
+    incoming: ChatSurfaceIncomingMessage,
+    sink: ChatSurfaceEventSink,
+  ) {
+    if (typeof incoming.metadata?.startPayload !== "string") {
+      return false;
+    }
+
+    const payload = this.consumeChatSurfaceLinkToken(incoming.surface, incoming.metadata.startPayload);
+    if (!payload) {
+      await sink.emit({
+        type: "error",
+        message: "This chat surface link is expired or invalid. Please start linking again from AdminForth.",
+      });
+      return true;
+    }
+    const externalUserIdField = this.options.chatExternalIdsField ?? DEFAULT_ADMIN_USER_EXTERNAL_USER_ID_FIELD;
+    const authResourceId = this.adminforth.config.auth!.usersResourceId!;
+    const authResource = this.adminforth.config.resources.find((resource) => resource.resourceId === authResourceId)!;
+    const primaryKeyField = authResource.columns.find((column) => column.primaryKey)!.name!;
+    const adminUserRecord = await this.adminforth.resource(authResourceId).get([
+      Filters.EQ(primaryKeyField, payload.adminUserId),
+    ]);
+
+    await this.adminforth.resource(authResourceId).update(payload.adminUserId, {
+      [externalUserIdField]: {
+        ...(adminUserRecord[externalUserIdField] ?? {}),
+        [incoming.surface]: incoming.externalUserId,
+      },
+    });
+    await sink.emit({
+      type: "done",
+      text: `${incoming.surface} account connected to AdminForth.`,
+    });
+
+    return true;
+  }
+
   private async handleChatSurfaceMessage(
     adapter: ChatSurfaceAdapter,
     incoming: ChatSurfaceIncomingMessage,
     sink: ChatSurfaceEventSink,
   ) {
-    const adminUser = await adapter.resolveAdminUser({
-      adminforth: this.adminforth,
-      incoming,
-    });
+    if (await this.handleChatSurfaceLink(incoming, sink)) {
+      return;
+    }
 
-    if (!adminUser) {
+    const authResourceId = this.adminforth.config.auth!.usersResourceId!;
+    const authResource = this.adminforth.config.resources.find((resource) => resource.resourceId === authResourceId)!;
+    const primaryKeyField = authResource.columns.find((column) => column.primaryKey)!.name!;
+    const externalUserIdField = this.options.chatExternalIdsField ?? DEFAULT_ADMIN_USER_EXTERNAL_USER_ID_FIELD;
+    const adminUserRecord = (
+      await this.adminforth.resource(authResourceId).list(Filters.IS_NOT_EMPTY(externalUserIdField))
+    ).find((user) => user[externalUserIdField]?.[adapter.name] === incoming.externalUserId);
+
+    if (!adminUserRecord) {
       await sink.emit({
         type: "error",
         message: "This chat account is not authorized to use AdminForth Agent.",
       });
       return;
     }
+
+    const adminUser = {
+      pk: adminUserRecord[primaryKeyField],
+      username: adminUserRecord[this.adminforth.config.auth!.usernameField],
+      dbUser: adminUserRecord,
+    };
 
     await this.handleTurn({
       prompt: incoming.prompt,
@@ -607,12 +720,66 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
   }
 
   setupEndpoints(server: IHttpServer) {
+    if (this.getChatSurfaceConnectActionAdapters().length) {
+      server.endpoint({
+        method: "POST",
+        path: "/agent/surfaces/connectable",
+        handler: async ({ adminUser }) => {
+          const externalUserIdField = this.options.chatExternalIdsField ?? DEFAULT_ADMIN_USER_EXTERNAL_USER_ID_FIELD;
+          const externalIds = adminUser.dbUser[externalUserIdField] ?? {};
+
+          return {
+            surfaces: this.getChatSurfaceConnectActionAdapters().map((adapter) => ({
+              name: adapter.name,
+              externalUserId: externalIds[adapter.name] ?? null,
+            })),
+          };
+        },
+      });
+    }
+
     for (const adapter of this.options.chatSurfaceAdapters ?? []) {
+      const connectActionAdapter = adapter as ChatSurfaceAdapterWithConnectAction;
+      if (connectActionAdapter.createConnectAction) {
+        server.endpoint({
+          method: "POST",
+          path: `/agent/surface/${adapter.name}/connect-action`,
+          handler: async ({ adminUser }) => {
+            const token = this.createChatSurfaceLinkToken(adapter.name, adminUser);
+            const action = await connectActionAdapter.createConnectAction!({ token });
+
+            return {
+              action,
+            };
+          },
+        });
+        server.endpoint({
+          method: "POST",
+          path: `/agent/surface/${adapter.name}/disconnect`,
+          handler: async ({ adminUser }) => {
+            const externalUserIdField = this.options.chatExternalIdsField ?? DEFAULT_ADMIN_USER_EXTERNAL_USER_ID_FIELD;
+            const externalIds = {
+              ...(adminUser.dbUser[externalUserIdField] ?? {}),
+            };
+
+            delete externalIds[adapter.name];
+
+            await this.adminforth.resource(this.adminforth.config.auth!.usersResourceId!).update(adminUser.pk, {
+              [externalUserIdField]: externalIds,
+            });
+
+            return {
+              ok: true,
+            };
+          },
+        });
+      }
+
       server.endpoint({
         method: "POST",
         noAuth: true,
         path: `/agent/surface/${adapter.name}/webhook`,
-        handler: async (ctx) => {
+        handler: async (ctx: IAdminForthEndpointHandlerInput) => {
           const surfaceContext = {
             body: ctx.body,
             headers: ctx.headers,
@@ -641,8 +808,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       method: 'POST',
       path: `/agent/get-placeholder-messages`,
       handler: async ({ headers, adminUser }) => {
-        const currentAdminUser = requireAdminUser(adminUser);
-
         if (!this.options.placeholderMessages) {
           return {
             messages: [],
@@ -650,7 +815,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         }
 
         const messages = await this.options.placeholderMessages({
-          adminUser: currentAdminUser,
+          adminUser: adminUser,
           headers,
         });
 
@@ -663,7 +828,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       method: 'POST',
       path: `/agent/response`,
       handler: async ({ body, adminUser, response, _raw_express_res, abortSignal }) => {
-        const currentAdminUser = requireAdminUser(adminUser);
         const data = this.parseBody(agentResponseBodySchema, body, response);
         if (!data) return;
         const emit = createSseEventEmitter(_raw_express_res, {
@@ -678,7 +842,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           userTimeZone: data.timeZone ?? 'UTC',
           currentPage: data.currentPage,
           abortSignal,
-          adminUser: currentAdminUser,
+          adminUser: adminUser,
           emit,
           failureLogMessage: "Agent response streaming failed",
           abortLogMessage: "Agent response streaming aborted by the client",
@@ -691,7 +855,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       path: `/agent/speech-response`,
       target: 'upload',
       handler: async ({ body, adminUser, response, _raw_express_req, _raw_express_res, abortSignal }) => {
-        const currentAdminUser = requireAdminUser(adminUser);
         const req = _raw_express_req as ExpressMulterRequest;
         const audioAdapter = this.options.audioAdapter;
         if (!audioAdapter) {
@@ -761,7 +924,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
           userTimeZone: data.timeZone ?? 'UTC',
           currentPage,
           abortSignal,
-          adminUser: currentAdminUser,
+          adminUser: adminUser,
           emit: async (event) => {
             if (event.type === "tool-call") {
               await emit(event);
@@ -871,10 +1034,9 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       method: 'POST',
       path: `/agent/get-sessions`,
       handler: async ({body, adminUser, response }) => {
-        const currentAdminUser = requireAdminUser(adminUser);
         const data = this.parseBody(getSessionsBodySchema, body, response);
         if (!data) return;
-        const userId = currentAdminUser.pk;
+        const userId = adminUser.pk;
         const limit = data.limit ?? 20;
         const sessions = await this.adminforth.resource(this.options.sessionResource.resourceId).list(
           [Filters.EQ(this.options.sessionResource.askerIdField, userId)], limit, undefined, [Sorts.DESC(this.options.sessionResource.createdAtField)]
@@ -892,13 +1054,12 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       method: 'POST',
       path: `/agent/get-session-info`,
       handler: async ({body, adminUser, response }) => {
-        const currentAdminUser = requireAdminUser(adminUser);
         const parsedBody = sessionIdBodySchema.safeParse(body);
         if (!parsedBody.success) {
           response.setStatus(422, parsedBody.error.message);
           return;
         }
-        const userId = currentAdminUser.pk;
+        const userId = adminUser.pk;
         const sessionId = parsedBody.data.sessionId;
         const session = await this.adminforth.resource(this.options.sessionResource.resourceId).get(
           [Filters.EQ(this.options.sessionResource.idField, sessionId)]
@@ -943,11 +1104,10 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       method: 'POST',
       path: `/agent/create-session`,
       handler: async ({body, adminUser, response }) => {
-        const currentAdminUser = requireAdminUser(adminUser);
         const data = this.parseBody(createSessionBodySchema, body, response);
         if (!data) return;
         const triggerMessage = data.triggerMessage;
-        const userId = currentAdminUser.pk;
+        const userId = adminUser.pk;
         const title = triggerMessage?.slice(0, 40) || "New Session";
         const newSession = {
           [this.options.sessionResource.idField]: randomUUID(),
@@ -967,11 +1127,10 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       method: 'POST',
       path: `/agent/delete-session`,
       handler: async ({body, adminUser, response }) => {
-        const currentAdminUser = requireAdminUser(adminUser);
         const data = this.parseBody(sessionIdBodySchema, body, response);
         if (!data) return;
         const sessionId = data.sessionId;
-        const userId = currentAdminUser.pk;
+        const userId = adminUser.pk;
         const session = await this.adminforth.resource(this.options.sessionResource.resourceId).get(
           [Filters.EQ(this.options.sessionResource.idField, sessionId)]
         );

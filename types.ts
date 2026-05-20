@@ -110,4 +110,9 @@ export interface PluginOptions extends PluginsCommonOptions {
    * Falls back to an in-memory MemorySaver when omitted.
    */
   checkpointResource?: ICheckpointResource;
+
+  /**
+   * Optional field for storing external chat IDs.
+   */
+  chatExternalIdsField?: string;
 }
