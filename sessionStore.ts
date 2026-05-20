@@ -17,7 +17,7 @@ export class AgentSessionStore {
       [this.options.turnResource.idField]: turnId,
       [this.options.turnResource.sessionIdField]: sessionId,
       [this.options.turnResource.promptField]: prompt,
-      [this.options.turnResource.responseField]: response || "not_finished",
+      [this.options.turnResource.responseField]: response ?? "not_finished",
     };
     const newTurn = await this.getAdminforth().resource(this.options.turnResource.resourceId).create(turnRecord);
     return newTurn.createdRecord[this.options.turnResource.idField];

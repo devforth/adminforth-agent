@@ -47,13 +47,10 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
     method: 'POST',
     path: `/agent/get-session-info`,
     handler: async ({body, adminUser, response }) => {
-      const parsedBody = sessionIdBodySchema.safeParse(body);
-      if (!parsedBody.success) {
-        response.setStatus(422, parsedBody.error.message);
-        return;
-      }
+      const data = ctx.parseBody(sessionIdBodySchema, body, response);
+      if (!data) return;
       const userId = adminUser!.pk;
-      const sessionId = parsedBody.data.sessionId;
+      const sessionId = data.sessionId;
       const session = await ctx.adminforth.resource(ctx.options.sessionResource.resourceId).get(
         [Filters.EQ(ctx.options.sessionResource.idField, sessionId)]
       );
@@ -108,11 +105,11 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
         [ctx.options.sessionResource.titleField]: title,
         [ctx.options.sessionResource.askerIdField]: userId,
       };
-      await ctx.adminforth.resource(ctx.options.sessionResource.resourceId).create(newSession);
+      const { createdRecord } = await ctx.adminforth.resource(ctx.options.sessionResource.resourceId).create(newSession);
       return {
-        sessionId: newSession[ctx.options.sessionResource.idField],
-        title: newSession[ctx.options.sessionResource.titleField],
-        timestamp: newSession[ctx.options.sessionResource.createdAtField],
+        sessionId: createdRecord[ctx.options.sessionResource.idField],
+        title: createdRecord[ctx.options.sessionResource.titleField],
+        timestamp: createdRecord[ctx.options.sessionResource.createdAtField],
         messages: []
       };
     }
@@ -155,9 +152,22 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
   server.endpoint({
     method: 'POST',
     path: `/agent/add-system-message-to-turns`,
-    handler: async ({body, response }) => {
+    handler: async ({body, adminUser, response }) => {
       const data = ctx.parseBody(addSystemMessageBodySchema, body, response);
       if (!data) return;
+      const session = await ctx.adminforth.resource(ctx.options.sessionResource.resourceId).get(
+        [Filters.EQ(ctx.options.sessionResource.idField, data.sessionId)]
+      );
+      if (!session) {
+        return {
+          error: 'Session not found'
+        };
+      }
+      if (session[ctx.options.sessionResource.askerIdField] !== adminUser!.pk) {
+        return {
+          error: 'Unauthorized'
+        };
+      }
       await ctx.createNewTurn(data.sessionId, data.systemMessage);
       return {
         ok: true
