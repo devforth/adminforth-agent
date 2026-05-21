@@ -10,7 +10,7 @@ const addSystemMessageBodySchema = z.object({
 }).strict();
 
 const getSessionsBodySchema = z.object({
-  limit: z.number().optional(),
+  limit: z.number().int().min(1).max(100).optional(),
 }).strict();
 
 const sessionIdBodySchema = z.object({
@@ -140,9 +140,7 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
       const turns = await ctx.adminforth.resource(ctx.options.turnResource.resourceId).list(
         [Filters.EQ(ctx.options.turnResource.sessionIdField, sessionId)]
       );
-      for (const turn of turns) {
-        await ctx.adminforth.resource(ctx.options.turnResource.resourceId).delete(turn[ctx.options.turnResource.idField]);
-      }
+      await Promise.all(turns.map(turn => ctx.adminforth.resource(ctx.options.turnResource.resourceId).delete(turn[ctx.options.turnResource.idField])));
       return {
         ok: true
       };
@@ -168,7 +166,6 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
           error: 'Unauthorized'
         };
       }
-      await ctx.createNewTurn(data.sessionId, data.systemMessage);
       return {
         ok: true
       }
