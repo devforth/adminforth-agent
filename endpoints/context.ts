@@ -7,6 +7,7 @@ import type {
 } from "adminforth";
 import type { ZodType } from "zod";
 import type {
+  HandleSpeechTurnInput,
   HandleTurnInput,
   RunAndPersistAgentResponseInput,
   RunAndPersistAgentResponseResult,
@@ -30,6 +31,7 @@ export type AgentEndpointsContext = {
   options: PluginOptions;
   parseBody<T>(schema: ZodType<T>, body: unknown, response: EndpointResponse): T | null;
   handleTurn(input: HandleTurnInput): Promise<RunAndPersistAgentResponseResult>;
+  handleSpeechTurn(input: HandleSpeechTurnInput): Promise<RunAndPersistAgentResponseResult | null>;
   runAndPersistAgentResponse(input: RunAndPersistAgentResponseInput): Promise<RunAndPersistAgentResponseResult>;
   getSessionTurns(sessionId: string): Promise<SessionTurn[]>;
   createNewTurn(sessionId: string, prompt: string, response?: string): Promise<string>;
@@ -45,7 +47,7 @@ export type AgentEndpointsContext = {
 
 export type CoreEndpointsContext = Pick<
   AgentEndpointsContext,
-  "options" | "parseBody" | "handleTurn" | "runAndPersistAgentResponse"
+  "options" | "parseBody" | "handleTurn" | "handleSpeechTurn"
 >;
 
 export type SessionEndpointsContext = Pick<

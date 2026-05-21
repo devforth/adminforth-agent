@@ -159,6 +159,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       options: this.options,
       parseBody: this.parseBody.bind(this),
       handleTurn: this.agentTurnService.handleTurn.bind(this.agentTurnService),
+      handleSpeechTurn: this.agentTurnService.handleSpeechTurn.bind(this.agentTurnService),
       runAndPersistAgentResponse: this.agentTurnService.runAndPersistAgentResponse.bind(this.agentTurnService),
       getSessionTurns: this.sessionStore.getSessionTurns.bind(this.sessionStore),
       createNewTurn: this.sessionStore.createNewTurn.bind(this.sessionStore),
