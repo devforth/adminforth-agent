@@ -77,6 +77,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       this.options,
       this.sessionStore,
       this.agentTurnService.handleTurn.bind(this.agentTurnService),
+      this.agentTurnService.runAndPersistAgentResponse.bind(this.agentTurnService),
     );
     this.agentSystemPromptPromise = Promise.resolve(
       appendCustomSystemPrompt(DEFAULT_AGENT_SYSTEM_PROMPT, this.options.systemPrompt),
