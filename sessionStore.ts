@@ -5,6 +5,8 @@ import type { ChatSurfaceIncomingMessage } from "adminforth";
 import type { PreviousUserMessage } from "./agent/languageDetect.js";
 import type { PluginOptions } from "./types.js";
 
+export const AGENT_SYSTEM_TURN_PROMPT = "__adminforth_system_message__";
+
 export class AgentSessionStore {
   constructor(
     private getAdminforth: () => IAdminForth,
@@ -18,6 +20,18 @@ export class AgentSessionStore {
       [this.options.turnResource.sessionIdField]: sessionId,
       [this.options.turnResource.promptField]: prompt,
       [this.options.turnResource.responseField]: response ?? "not_finished",
+    };
+    const newTurn = await this.getAdminforth().resource(this.options.turnResource.resourceId).create(turnRecord);
+    return newTurn.createdRecord[this.options.turnResource.idField];
+  }
+
+  async createSystemTurn(sessionId: string, systemMessage: string) {
+    const turnId = randomUUID();
+    const turnRecord = {
+      [this.options.turnResource.idField]: turnId,
+      [this.options.turnResource.sessionIdField]: sessionId,
+      [this.options.turnResource.promptField]: AGENT_SYSTEM_TURN_PROMPT,
+      [this.options.turnResource.responseField]: systemMessage,
     };
     const newTurn = await this.getAdminforth().resource(this.options.turnResource.resourceId).create(turnRecord);
     return newTurn.createdRecord[this.options.turnResource.idField];
@@ -45,6 +59,7 @@ export class AgentSessionStore {
     );
     return turns
       .reverse()
+      .filter((turn) => turn[this.options.turnResource.promptField] !== AGENT_SYSTEM_TURN_PROMPT)
       .map((turn): PreviousUserMessage => ({
         text: turn[this.options.turnResource.promptField],
       }));

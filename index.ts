@@ -162,6 +162,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       runAndPersistAgentResponse: this.agentTurnService.runAndPersistAgentResponse.bind(this.agentTurnService),
       getSessionTurns: this.sessionStore.getSessionTurns.bind(this.sessionStore),
       createNewTurn: this.sessionStore.createNewTurn.bind(this.sessionStore),
+      createSystemTurn: this.sessionStore.createSystemTurn.bind(this.sessionStore),
       getChatSurfaceConnectActionAdapters: this.chatSurfaceService.getConnectActionAdapters.bind(this.chatSurfaceService),
       createChatSurfaceLinkToken: this.chatSurfaceService.createLinkToken.bind(this.chatSurfaceService),
       handleChatSurfaceMessage: this.chatSurfaceService.handleMessage.bind(this.chatSurfaceService),

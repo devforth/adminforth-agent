@@ -2,6 +2,7 @@ import type { IHttpServer } from "adminforth";
 import { Filters, Sorts } from "adminforth";
 import { randomUUID } from "crypto";
 import { z } from "zod";
+import { AGENT_SYSTEM_TURN_PROMPT } from "../sessionStore.js";
 import type { SessionEndpointsContext } from "./context.js";
 
 const addSystemMessageBodySchema = z.object({
@@ -71,7 +72,14 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
           title: session[ctx.options.sessionResource.titleField],
           timestamp: session[ctx.options.sessionResource.createdAtField],
           messages: turns.flatMap(turn => {
-            const messages: Array<{ text: string; role: 'user' | 'assistant' }> = [];
+            const messages: Array<{ text: string; role: 'user' | 'assistant' | 'system' }> = [];
+            if (turn.prompt === AGENT_SYSTEM_TURN_PROMPT) {
+              messages.push({
+                text: turn.response,
+                role: 'system',
+              });
+              return messages;
+            }
             if (turn.prompt) {
               messages.push({
                 text: turn.prompt,
@@ -166,6 +174,7 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
           error: 'Unauthorized'
         };
       }
+      await ctx.createSystemTurn(data.sessionId, data.systemMessage);
       return {
         ok: true
       }

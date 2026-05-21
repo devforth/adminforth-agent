@@ -33,6 +33,7 @@ export type AgentEndpointsContext = {
   runAndPersistAgentResponse(input: RunAndPersistAgentResponseInput): Promise<RunAndPersistAgentResponseResult>;
   getSessionTurns(sessionId: string): Promise<SessionTurn[]>;
   createNewTurn(sessionId: string, prompt: string, response?: string): Promise<string>;
+  createSystemTurn(sessionId: string, systemMessage: string): Promise<string>;
   getChatSurfaceConnectActionAdapters(): ChatSurfaceAdapterWithConnectAction[];
   createChatSurfaceLinkToken(surface: string, adminUser: AdminUser): string;
   handleChatSurfaceMessage(
@@ -50,6 +51,7 @@ export type CoreEndpointsContext = Pick<
 export type SessionEndpointsContext = Pick<
   AgentEndpointsContext,
   "adminforth" | "options" | "parseBody" | "getSessionTurns" | "createNewTurn"
+  | "createSystemTurn"
 >;
 
 export type ChatSurfaceEndpointsContext = Pick<
