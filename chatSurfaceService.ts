@@ -6,23 +6,16 @@ import type {
   IAdminForth,
 } from "adminforth";
 import { Filters, logger } from "adminforth";
-import { randomUUID } from "crypto";
 import type { AgentEventEmitter } from "./agentEvents.js";
 import type {
   HandleTurnInput,
   RunAndPersistAgentResponseInput,
   RunAndPersistAgentResponseResult,
 } from "./agentTurnService.js";
-import type { PluginOptions } from "./types.js";
-import type { AgentSessionStore } from "./sessionStore.js";
 import { getErrorMessage, isAbortError } from "./errors.js";
+import type { AgentSessionStore } from "./sessionStore.js";
 import { sanitizeSpeechText } from "./sanitizeSpeechText.js";
-
-type ChatSurfaceConnectAction = {
-  type: "url";
-  label: string;
-  url: string;
-};
+import type { PluginOptions } from "./types.js";
 
 type ChatSurfaceIncomingMessageWithAudio = ChatSurfaceIncomingMessage & {
   audio?: {
@@ -41,24 +34,7 @@ type ChatSurfaceEventSinkWithAudio = ChatSurfaceEventSink & {
   }): void | Promise<void>;
 };
 
-export type ChatSurfaceAdapterWithConnectAction = ChatSurfaceAdapter & {
-  createConnectAction?(input: {
-    token: string;
-  }): ChatSurfaceConnectAction | Promise<ChatSurfaceConnectAction>;
-};
-
-type ChatSurfaceLinkTokenPayload = {
-  surface: string;
-  adminUserId: AdminUser["pk"];
-  expiresAt: number;
-};
-
-const DEFAULT_ADMIN_USER_EXTERNAL_USER_ID_FIELD = "externalUserId";
-const CHAT_SURFACE_LINK_TOKEN_TTL_MS = 60 * 1000;
-
 export class ChatSurfaceService {
-  private linkTokens = new Map<string, ChatSurfaceLinkTokenPayload>();
-
   constructor(
     private getAdminforth: () => IAdminForth,
     private options: PluginOptions,
@@ -68,40 +44,6 @@ export class ChatSurfaceService {
       input: RunAndPersistAgentResponseInput,
     ) => Promise<RunAndPersistAgentResponseResult>,
   ) {}
-
-  getConnectActionAdapters() {
-    return (this.options.chatSurfaceAdapters ?? [])
-      .map((adapter) => adapter as ChatSurfaceAdapterWithConnectAction)
-      .filter((adapter) => adapter.createConnectAction);
-  }
-
-  createLinkToken(surface: string, adminUser: AdminUser) {
-    for (const [token, payload] of this.linkTokens) {
-      if (payload.expiresAt <= Date.now()) {
-        this.linkTokens.delete(token);
-      }
-    }
-
-    const token = randomUUID();
-    this.linkTokens.set(token, {
-      surface,
-      adminUserId: adminUser.pk,
-      expiresAt: Date.now() + CHAT_SURFACE_LINK_TOKEN_TTL_MS,
-    });
-
-    return token;
-  }
-
-  private consumeLinkToken(surface: string, token: string) {
-    const payload = this.linkTokens.get(token);
-    this.linkTokens.delete(token);
-
-    if (!payload || payload.surface !== surface || payload.expiresAt <= Date.now()) {
-      return null;
-    }
-
-    return payload;
-  }
 
   private createEventEmitter(sink: ChatSurfaceEventSink): AgentEventEmitter {
     return async (event) => {
@@ -138,55 +80,10 @@ export class ChatSurfaceService {
       return false;
     }
 
-    const externalUserIdField = this.options.chatExternalIdsField ?? DEFAULT_ADMIN_USER_EXTERNAL_USER_ID_FIELD;
-    const adminforth = this.getAdminforth();
-    const authResourceId = adminforth.config.auth!.usersResourceId!;
-    const authResource = adminforth.config.resources.find((resource) => resource.resourceId === authResourceId)!;
-    const primaryKeyField = authResource.columns.find((column) => column.primaryKey)!.name!;
-    const linkedAdminUserRecord = (
-      await adminforth.resource(authResourceId).list(Filters.IS_NOT_EMPTY(externalUserIdField))
-    ).find((user) => user[externalUserIdField]?.[incoming.surface] === incoming.externalUserId);
-
-    if (linkedAdminUserRecord) {
-      await sink.emit({
-        type: "done",
-        text: `${incoming.surface} account is already connected to AdminForth.`,
-      });
-      return true;
-    }
-
-    if (typeof incoming.metadata?.startPayload !== "string") {
-      await sink.emit({
-        type: "done",
-        text: `Open AdminForth and connect your ${incoming.surface} account from Chat Surfaces settings.`,
-      });
-      return true;
-    }
-
-    const payload = this.consumeLinkToken(incoming.surface, incoming.metadata.startPayload);
-    if (!payload) {
-      await sink.emit({
-        type: "error",
-        message: "This chat surface link is expired or invalid. Please start linking again from AdminForth.",
-      });
-      return true;
-    }
-
-    const adminUserRecord = await adminforth.resource(authResourceId).get([
-      Filters.EQ(primaryKeyField, payload.adminUserId),
-    ]);
-
-    await adminforth.resource(authResourceId).update(payload.adminUserId, {
-      [externalUserIdField]: {
-        ...(adminUserRecord[externalUserIdField] ?? {}),
-        [incoming.surface]: incoming.externalUserId,
-      },
-    });
     await sink.emit({
       type: "done",
-      text: `${incoming.surface} account connected to AdminForth.`,
+      text: `Open AdminForth and connect your ${incoming.surface} account from Connected Accounts settings.`,
     });
-
     return true;
   }
 
@@ -327,6 +224,54 @@ export class ChatSurfaceService {
     return agentResponse;
   }
 
+  private async getAdminUserRecordForChatSurface(
+    adapter: ChatSurfaceAdapter,
+    incoming: ChatSurfaceIncomingMessage,
+  ) {
+    const adminforth = this.getAdminforth();
+    const authResourceId = adminforth.config.auth!.usersResourceId!;
+    const externalIdentityResource = this.options.chatExternalIdentityResource;
+    if (!externalIdentityResource) {
+      return null;
+    }
+
+    const surfaceIdentityConfig = externalIdentityResource.surfaces[adapter.name];
+    if (!surfaceIdentityConfig) {
+      return null;
+    }
+
+    const providerField = externalIdentityResource.providerField ?? 'provider';
+    const subjectField = externalIdentityResource.subjectField ?? 'subject';
+    const adminUserIdField = externalIdentityResource.adminUserIdField ?? 'adminUserId';
+    const externalUserIdField = externalIdentityResource.externalUserIdField ?? 'externalUserId';
+    const identityFilters = [
+      Filters.EQ(providerField, surfaceIdentityConfig.provider),
+      Filters.EQ(externalUserIdField, incoming.externalUserId),
+    ];
+    const identities = await adminforth.resource(externalIdentityResource.resourceId).list(identityFilters);
+    const identity = identities.find((identity) => {
+      if (String(identity[externalUserIdField]) === incoming.externalUserId) {
+        return true;
+      }
+
+      if (String(identity[subjectField]) === incoming.externalUserId) {
+        return true;
+      }
+
+      return false;
+    });
+
+    if (!identity) {
+      return null;
+    }
+
+    const authResource = adminforth.config.resources.find((resource) => resource.resourceId === authResourceId)!;
+    const primaryKeyField = authResource.columns.find((column) => column.primaryKey)!.name!;
+    return adminforth.resource(authResourceId).get([
+      Filters.EQ(primaryKeyField, identity[adminUserIdField]),
+    ]);
+  }
+
   async handleMessage(
     adapter: ChatSurfaceAdapter,
     incoming: ChatSurfaceIncomingMessage,
@@ -340,10 +285,7 @@ export class ChatSurfaceService {
     const authResourceId = adminforth.config.auth!.usersResourceId!;
     const authResource = adminforth.config.resources.find((resource) => resource.resourceId === authResourceId)!;
     const primaryKeyField = authResource.columns.find((column) => column.primaryKey)!.name!;
-    const externalUserIdField = this.options.chatExternalIdsField ?? DEFAULT_ADMIN_USER_EXTERNAL_USER_ID_FIELD;
-    const adminUserRecord = (
-      await adminforth.resource(authResourceId).list(Filters.IS_NOT_EMPTY(externalUserIdField))
-    ).find((user) => user[externalUserIdField]?.[adapter.name] === incoming.externalUserId);
+    const adminUserRecord = await this.getAdminUserRecordForChatSurface(adapter, incoming);
 
     if (!adminUserRecord) {
       await sink.emit({

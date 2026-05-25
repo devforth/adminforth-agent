@@ -1,5 +1,4 @@
 import type {
-  AdminUser,
   ChatSurfaceAdapter,
   ChatSurfaceEventSink,
   ChatSurfaceIncomingMessage,
@@ -12,10 +11,7 @@ import type {
   RunAndPersistAgentResponseInput,
   RunAndPersistAgentResponseResult,
 } from "../agentTurnService.js";
-import type { ChatSurfaceAdapterWithConnectAction } from "../chatSurfaceService.js";
 import type { PluginOptions } from "../types.js";
-
-export type { ChatSurfaceAdapterWithConnectAction } from "../chatSurfaceService.js";
 
 export type EndpointResponse = {
   setStatus: (code: number, message: string) => void;
@@ -36,8 +32,6 @@ export type AgentEndpointsContext = {
   getSessionTurns(sessionId: string): Promise<SessionTurn[]>;
   createNewTurn(sessionId: string, prompt: string, response?: string): Promise<string>;
   createSystemTurn(sessionId: string, systemMessage: string): Promise<string>;
-  getChatSurfaceConnectActionAdapters(): ChatSurfaceAdapterWithConnectAction[];
-  createChatSurfaceLinkToken(surface: string, adminUser: AdminUser): string;
   handleChatSurfaceMessage(
     adapter: ChatSurfaceAdapter,
     incoming: ChatSurfaceIncomingMessage,
@@ -60,7 +54,5 @@ export type ChatSurfaceEndpointsContext = Pick<
   AgentEndpointsContext,
   | "adminforth"
   | "options"
-  | "getChatSurfaceConnectActionAdapters"
-  | "createChatSurfaceLinkToken"
   | "handleChatSurfaceMessage"
 >;

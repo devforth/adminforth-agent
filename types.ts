@@ -112,7 +112,16 @@ export interface PluginOptions extends PluginsCommonOptions {
   checkpointResource?: ICheckpointResource;
 
   /**
-   * Optional field for storing external chat IDs.
+   * Optional resource configuration for resolving chat users through OAuth external identities.
    */
-  chatExternalIdsField?: string;
+  chatExternalIdentityResource?: {
+    resourceId: string;
+    adminUserIdField?: string;
+    providerField?: string;
+    subjectField?: string;
+    externalUserIdField?: string;
+    surfaces: Record<string, {
+      provider: string;
+    }>;
+  };
 }

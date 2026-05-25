@@ -13,7 +13,6 @@ import { AdminForthCheckpointSaver } from "./agent/checkpointer.js";
 import { appendCustomSystemPrompt, buildAgentSystemPrompt, DEFAULT_AGENT_SYSTEM_PROMPT} from "./agent/systemPrompt.js";
 import { setupCoreEndpoints } from "./endpoints/core.js";
 import { setupSessionEndpoints } from "./endpoints/sessions.js";
-import { setupChatSurfaceEndpoints } from "./endpoints/chatSurfaces.js";
 import type { AgentEndpointsContext } from "./endpoints/context.js";
 import { AgentSessionStore } from "./sessionStore.js";
 import { ChatSurfaceService } from "./chatSurfaceService.js";
@@ -28,7 +27,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
   private sessionStore: AgentSessionStore;
   private agentTurnService: AgentTurnService;
   private chatSurfaceService: ChatSurfaceService;
-  private chatSurfaceSettingsPageRegistered = false;
   private parseBody<T>(
     schema: z.ZodType<T>,
     body: unknown,
@@ -103,19 +101,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         hasAudioAdapter: Boolean(this.options.audioAdapter),
       }
     });
-    if (this.chatSurfaceService.getConnectActionAdapters().length && !this.chatSurfaceSettingsPageRegistered) {
-      if (!this.adminforth.config.auth!.userMenuSettingsPages) {
-        this.adminforth.config.auth!.userMenuSettingsPages = [];
-      }
-      this.adminforth.config.auth!.userMenuSettingsPages.push({
-        icon: "flowbite:link-outline",
-        pageLabel: "Chat Surfaces",
-        slug: "chat-surfaces",
-        component: this.componentPath("ChatSurfaceSettings.vue"),
-        isVisible: () => true,
-      });
-      this.chatSurfaceSettingsPageRegistered = true;
-    }
     if (!this.adminforth.config.customization.customHeadItems) {
       this.adminforth.config.customization.customHeadItems = [];
     }
@@ -165,13 +150,10 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       getSessionTurns: this.sessionStore.getSessionTurns.bind(this.sessionStore),
       createNewTurn: this.sessionStore.createNewTurn.bind(this.sessionStore),
       createSystemTurn: this.sessionStore.createSystemTurn.bind(this.sessionStore),
-      getChatSurfaceConnectActionAdapters: this.chatSurfaceService.getConnectActionAdapters.bind(this.chatSurfaceService),
-      createChatSurfaceLinkToken: this.chatSurfaceService.createLinkToken.bind(this.chatSurfaceService),
       handleChatSurfaceMessage: this.chatSurfaceService.handleMessage.bind(this.chatSurfaceService),
     } satisfies AgentEndpointsContext;
 
     setupCoreEndpoints(endpointContext, server);
     setupSessionEndpoints(endpointContext, server);
-    setupChatSurfaceEndpoints(endpointContext, server);
   }
 }
