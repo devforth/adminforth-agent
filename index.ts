@@ -13,6 +13,7 @@ import { AdminForthCheckpointSaver } from "./agent/checkpointer.js";
 import { appendCustomSystemPrompt, buildAgentSystemPrompt, DEFAULT_AGENT_SYSTEM_PROMPT} from "./agent/systemPrompt.js";
 import { setupCoreEndpoints } from "./endpoints/core.js";
 import { setupSessionEndpoints } from "./endpoints/sessions.js";
+import { setupChatSurfaceEndpoints } from "./endpoints/chatSurfaces.js";
 import type { AgentEndpointsContext } from "./endpoints/context.js";
 import { AgentSessionStore } from "./sessionStore.js";
 import { ChatSurfaceService } from "./chatSurfaceService.js";
@@ -155,5 +156,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
 
     setupCoreEndpoints(endpointContext, server);
     setupSessionEndpoints(endpointContext, server);
+    setupChatSurfaceEndpoints(endpointContext, server);
   }
 }
