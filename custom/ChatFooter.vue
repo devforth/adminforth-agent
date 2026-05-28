@@ -35,14 +35,14 @@
             transition-colors duration-200 hover:bg-gray-100 
             dark:text-darkListTableHeadingText dark:bg-gray-700 dark:hover:bg-gray-800"
           :class="isModeMenuOpen ? 'bg-gray-100 dark:bg-gray-700' : ''"
-          :disabled="agentStore.isResponseInProgress"
           title="Select mode"
           type="button"
           @click="toggleModeMenu"
         >
           {{ agentStore.activeModeName }}
           <IconAngleDownOutline 
-            class="w-4 h-4 ml-1" 
+            class="w-4 h-4 ml-1 transition-transform duration-200" 
+            :class="isModeMenuOpen ? '!rotate-180' : '!rotate-0'"
           />
         </button>
 
