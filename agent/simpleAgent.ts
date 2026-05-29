@@ -230,6 +230,7 @@ export async function callAgent(params: {
   adminforth: IAdminForth;
   apiBasedTools: Record<string, ApiBasedTool>;
   customComponentsDir: string;
+  pluginCustomFolderPaths: string[];
   sessionId: string;
   turnId: string;
   currentPage?: CurrentPageContext;
@@ -249,6 +250,7 @@ export async function callAgent(params: {
     adminforth,
     apiBasedTools,
     customComponentsDir,
+    pluginCustomFolderPaths,
     sessionId,
     turnId,
     currentPage,
@@ -258,7 +260,11 @@ export async function callAgent(params: {
     sequenceDebugSink,
   } = params;
 
-  const tools = await createAgentTools(customComponentsDir, apiBasedTools);
+  const tools = await createAgentTools(
+    customComponentsDir,
+    apiBasedTools,
+    pluginCustomFolderPaths,
+  );
   const apiBasedToolsMiddleware = createApiBasedToolsMiddleware(apiBasedTools, adminforth);
   const sequenceDebugMiddleware = createSequenceDebugMiddleware(
     sequenceDebugSink,

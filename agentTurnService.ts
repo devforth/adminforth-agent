@@ -138,6 +138,7 @@ export class AgentTurnService {
       adminforth,
       apiBasedTools,
       customComponentsDir: adminforth.config.customization.customComponentsDir ?? "custom",
+      pluginCustomFolderPaths: adminforth.activatedPlugins.map((plugin) => plugin.customFolderPath),
       sessionId: input.sessionId,
       turnId: input.turnId,
       currentPage: input.currentPage,

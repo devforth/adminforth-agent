@@ -1,16 +1,7 @@
 import { readdir, readFile } from "fs/promises";
 import path from "path";
-import { fileURLToPath } from "url";
 import { parse as parseYaml } from "yaml";
 
-const PLUGIN_SKILLS_DIRECTORY_PATH = fileURLToPath(
-  new URL("../../custom/skills/", import.meta.url),
-);
-const USER_PLUGIN_SKILLS_DIRECTORY_PATH_SEGMENTS = [
-  "plugins",
-  "adminforth-agent",
-  "skills",
-];
 const SKILL_MARKDOWN_FILENAME = "SKILL.md";
 const SKILL_FRONTMATTER_SEPARATOR = "\n---\n";
 
@@ -19,6 +10,13 @@ export interface AgentSkillManifest {
   name: string;
   description: string;
   instructions: string;
+}
+
+function normalizePluginSkillDirectoryPaths(pluginCustomFolderPaths: string[] = []) {
+  return Array.from(new Set(
+    pluginCustomFolderPaths
+      .map((pluginCustomFolderPath) => path.resolve(pluginCustomFolderPath, "skills")),
+  ));
 }
 
 function parseSkillManifest(directoryName: string, markdown: string): AgentSkillManifest {
@@ -83,43 +81,42 @@ export function getProjectSkillsDirectoryPath(customComponentsDir: string) {
   return path.resolve(customComponentsDir, "skills");
 }
 
-export function getProjectPluginSkillsDirectoryPath(customComponentsDir: string) {
-  return path.resolve(
-    customComponentsDir,
-    ...USER_PLUGIN_SKILLS_DIRECTORY_PATH_SEGMENTS,
-  );
-}
-
-function getProjectSkillDirectoryPaths(customComponentsDir: string) {
-  return [
+function getProjectSkillDirectoryPaths(
+  customComponentsDir: string,
+  pluginCustomFolderPaths: string[] = [],
+) {
+  return Array.from(new Set([
     getProjectSkillsDirectoryPath(customComponentsDir),
-    getProjectPluginSkillsDirectoryPath(customComponentsDir),
-  ];
+    ...normalizePluginSkillDirectoryPaths(pluginCustomFolderPaths),
+  ]));
 }
 
-export async function listBundledSkillManifests() {
-  return await listDirectorySkillManifests(PLUGIN_SKILLS_DIRECTORY_PATH);
-}
-
-export async function listProjectSkillManifests(customComponentsDir: string) {
+export async function listProjectSkillManifests(
+  customComponentsDir: string,
+  pluginCustomFolderPaths: string[] = [],
+) {
   return mergeSkillManifests(
     await Promise.all(
-      getProjectSkillDirectoryPaths(customComponentsDir).map(
+      getProjectSkillDirectoryPaths(customComponentsDir, pluginCustomFolderPaths).map(
         listDirectorySkillManifests,
       ),
     ),
   );
 }
 
-export async function listSkillManifests(customComponentsDir: string) {
-  return mergeSkillManifests([
-    await listProjectSkillManifests(customComponentsDir),
-    await listBundledSkillManifests(),
-  ]);
+export async function listSkillManifests(
+  customComponentsDir: string,
+  pluginCustomFolderPaths: string[] = [],
+) {
+  return await listProjectSkillManifests(customComponentsDir, pluginCustomFolderPaths);
 }
 
-export async function loadSkillManifest(skillName: string, customComponentsDir: string) {
-  const manifests = await listSkillManifests(customComponentsDir);
+export async function loadSkillManifest(
+  skillName: string,
+  customComponentsDir: string,
+  pluginCustomFolderPaths: string[] = [],
+) {
+  const manifests = await listSkillManifests(customComponentsDir, pluginCustomFolderPaths);
 
   return (
     manifests.find(
@@ -129,16 +126,23 @@ export async function loadSkillManifest(skillName: string, customComponentsDir: 
   );
 }
 
-export async function loadSkillMarkdown(skillName: string, customComponentsDir: string) {
-  const manifest = await loadSkillManifest(skillName, customComponentsDir);
+export async function loadSkillMarkdown(
+  skillName: string,
+  customComponentsDir: string,
+  pluginCustomFolderPaths: string[] = [],
+) {
+  const manifest = await loadSkillManifest(
+    skillName,
+    customComponentsDir,
+    pluginCustomFolderPaths,
+  );
 
   if (!manifest) {
     return null;
   }
 
   const directories = [
-    ...getProjectSkillDirectoryPaths(customComponentsDir),
-    PLUGIN_SKILLS_DIRECTORY_PATH,
+    ...getProjectSkillDirectoryPaths(customComponentsDir, pluginCustomFolderPaths),
   ];
 
   for (const skillsDirectoryPath of directories) {

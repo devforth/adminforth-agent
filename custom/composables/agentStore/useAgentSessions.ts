@@ -3,7 +3,7 @@ import { callAdminForthApi } from '@/utils';
 import type { Chat } from '../../chat';
 import type { IAgentSession, ISessionsListItem, IPart } from '../../types';
 import { PRE_SESSION_ID } from './constants';
-import { useI18n } from 'vue-i18n';
+import { i18nInstance } from '@/i18n';
 
 type AdminforthLike = {
   confirm(options: { message: string; yes: string; no: string }): Promise<boolean>;
@@ -42,7 +42,10 @@ export function createAgentSessionManager({
     return [...sessionsListToSort].sort((a: ISessionsListItem, b: ISessionsListItem) => b.timestamp.localeCompare(a.timestamp));
   }
 
-  const { t } = useI18n();
+  function t(key: string) {
+    return i18nInstance?.global.t(key) ?? key;
+  }
+
   function saveCurrentSessionInCache() {
     if (currentSession.value) {
       currentSession.value.messages = currentChat.value?.messages.map((m: any) => ({

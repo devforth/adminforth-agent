@@ -66,10 +66,15 @@ export function createApiBasedToolsMiddleware(
       const tools = [...enabledApiToolNames]
         .filter((toolName) => !alwaysAvailableApiToolNames.has(toolName))
         .map((toolName) => dynamicTools[toolName]);
+      const availableTools = [...request.tools, ...tools];
+
+      logger.info(
+        `AdminForth Agent callable tools: ${availableTools.map((tool) => tool.name).join(", ")}`,
+      );
 
       return handler({
         ...request,
-        tools: [...request.tools, ...tools],
+        tools: availableTools,
       });
     },
     async wrapToolCall(request, handler) {

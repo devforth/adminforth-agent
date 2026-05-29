@@ -21,14 +21,24 @@ function serializeSkillManifests(skillManifests: AgentSkillManifest[]) {
   }));
 }
 
-export async function createFetchSkillTool(customComponentsDir: string) {
-  const availableSkills = await listSkillManifests(customComponentsDir);
+export async function createFetchSkillTool(
+  customComponentsDir: string,
+  pluginCustomFolderPaths: string[] = [],
+) {
+  const availableSkills = await listSkillManifests(
+    customComponentsDir,
+    pluginCustomFolderPaths,
+  );
   const availableSkillNames = availableSkills.map((skill) => skill.name);
 
   return tool(
     async ({ skillName }) => {
       try {
-        const skillMarkdown = await loadSkillMarkdown(skillName, customComponentsDir);
+        const skillMarkdown = await loadSkillMarkdown(
+          skillName,
+          customComponentsDir,
+          pluginCustomFolderPaths,
+        );
 
         if (!skillMarkdown) {
           return [

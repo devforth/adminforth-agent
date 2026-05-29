@@ -115,7 +115,11 @@
       return `${window.location.pathname}${window.location.search}${href}`;
     }
 
-    const resolvedUrl = new URL(href, window.location.href);
+    const isAbsoluteWithScheme = /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(href);
+    const baseUrl = isAbsoluteWithScheme
+      ? undefined
+      : `${window.location.origin}/`;
+    const resolvedUrl = new URL(href, baseUrl ?? window.location.href);
     if (resolvedUrl.origin !== window.location.origin) {
       return null;
     }

@@ -10,6 +10,7 @@ export const ALWAYS_AVAILABLE_API_TOOL_NAMES = ["get_resource"] as const;
 export async function createAgentTools(
   customComponentsDir: string,
   apiBasedTools: Record<string, ApiBasedTool>,
+  pluginCustomFolderPaths: string[] = [],
 ): Promise<ClientTool[]> {
   return [
     ...ALWAYS_AVAILABLE_API_TOOL_NAMES.map((toolName) => {
@@ -22,7 +23,7 @@ export async function createAgentTools(
       return createApiTool(toolName, apiBasedTool);
     }),
     createGetUserLocationTool(),
-    await createFetchSkillTool(customComponentsDir),
+    await createFetchSkillTool(customComponentsDir, pluginCustomFolderPaths),
     await createFetchToolSchemaTool(apiBasedTools),
   ];
 }
