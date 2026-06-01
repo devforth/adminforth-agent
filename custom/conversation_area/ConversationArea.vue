@@ -118,10 +118,13 @@ const THRESHOLD_TO_SHOW_BUTTON = 10;
 let messageResizeObserver: ResizeObserver | null = null;
 let observedLastUserMessageElement: HTMLElement | null = null;
 let observedLastAgentMessageElement: HTMLElement | null = null;
+let updateSpacerFrameId: number | null = null;
+let pendingSpacerUpdate: Promise<void> | null = null;
+let spacerUpdateQueued = false;
 
 onMounted(async () => {
   messageResizeObserver = new ResizeObserver(() => {
-    updateSpacerHeight();
+    scheduleSpacerHeightUpdate();
   });
 
   await import('@incremark/theme/styles.css')
@@ -136,6 +139,10 @@ onUnmounted(() => {
 
   stopObservingLastMessages();
   messageResizeObserver?.disconnect();
+  if (updateSpacerFrameId !== null) {
+    cancelAnimationFrame(updateSpacerFrameId);
+    updateSpacerFrameId = null;
+  }
   agentStore.stopPlaceholderAnimation();
 });
 
@@ -219,6 +226,30 @@ async function updateSpacerHeight() {
   const lastAgentMessageHeight = useWaitingForHeight.value ? await waitForRealHeight('assistant') : getHeightOfLastAgentMessage();
 
   spacerHeight.value = Math.max(0, clientHeight - (lastUserMessageHeight + MASK_HEIGHT + lastAgentMessageHeight));
+}
+
+function scheduleSpacerHeightUpdate() {
+  spacerUpdateQueued = true;
+
+  if (updateSpacerFrameId !== null) {
+    return;
+  }
+
+  updateSpacerFrameId = requestAnimationFrame(() => {
+    updateSpacerFrameId = null;
+
+    if (pendingSpacerUpdate) {
+      return;
+    }
+
+    spacerUpdateQueued = false;
+    pendingSpacerUpdate = updateSpacerHeight().finally(() => {
+      pendingSpacerUpdate = null;
+      if (spacerUpdateQueued) {
+        scheduleSpacerHeightUpdate();
+      }
+    });
+  });
 }
 
 function stopObservingLastMessages() {

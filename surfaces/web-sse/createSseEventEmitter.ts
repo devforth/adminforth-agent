@@ -22,6 +22,7 @@ function createAgentEventStream(
 ) {
   let isStreamClosed = false;
   let activeBlock: { type: "text" | "reasoning"; id: string } | null = null;
+  const isAiUiMessageStream = options.vercelAiUiMessageStream === true;
 
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
@@ -124,7 +125,7 @@ function createAgentEventStream(
 
     transcript(text: string, language?: string) {
       stream.send({
-        type: "transcript",
+        type: isAiUiMessageStream ? "data-transcript" : "transcript",
         data: {
           text,
           language,
@@ -134,7 +135,7 @@ function createAgentEventStream(
 
     response(text: string, sessionId: string, turnId: string) {
       stream.send({
-        type: "response",
+        type: isAiUiMessageStream ? "data-response" : "response",
         data: {
           text,
           sessionId,
@@ -150,7 +151,7 @@ function createAgentEventStream(
       turnId: string,
     ) {
       stream.send({
-        type: "speech-response",
+        type: isAiUiMessageStream ? "data-speech-response" : "speech-response",
         data: {
           transcript,
           response,
@@ -168,7 +169,7 @@ function createAgentEventStream(
       bitsPerSample: number,
     ) {
       stream.send({
-        type: "audio-start",
+        type: isAiUiMessageStream ? "data-audio-start" : "audio-start",
         data: {
           mimeType,
           format,
@@ -181,7 +182,7 @@ function createAgentEventStream(
 
     audioDelta(value: Uint8Array) {
       stream.send({
-        type: "audio-delta",
+        type: isAiUiMessageStream ? "data-audio-delta" : "audio-delta",
         data: {
           base64: Buffer.from(value).toString("base64"),
         },
@@ -190,15 +191,21 @@ function createAgentEventStream(
 
     audioDone() {
       stream.send({
-        type: "audio-done",
+        type: isAiUiMessageStream ? "data-audio-done" : "audio-done",
+        ...(isAiUiMessageStream ? { data: {} } : {}),
       });
     },
 
     error(error: string) {
-      stream.send({
-        type: "error",
-        error,
-      });
+      stream.send(isAiUiMessageStream
+        ? {
+            type: "error",
+            errorText: error,
+          }
+        : {
+            type: "error",
+            error,
+          });
     },
 
     end() {
