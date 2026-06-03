@@ -47,70 +47,6 @@ function getEnabledApiToolNames(messages: unknown[]) {
   return enabledToolNames;
 }
 
-const loadedApiToolNamesBySession = new Map<string, Set<string>>();
-
-function getSessionLoadedApiToolNames(sessionId: string) {
-  let toolNames = loadedApiToolNamesBySession.get(sessionId);
-
-  if (!toolNames) {
-    toolNames = new Set<string>();
-    loadedApiToolNamesBySession.set(sessionId, toolNames);
-  }
-
-  return toolNames;
-}
-
-function getEnabledApiToolNamesForSession(messages: unknown[], sessionId?: string) {
-  const enabledToolNames = getEnabledApiToolNames(messages);
-
-  if (!sessionId) {
-    return enabledToolNames;
-  }
-
-  for (const toolName of getSessionLoadedApiToolNames(sessionId)) {
-    enabledToolNames.add(toolName);
-  }
-
-  return enabledToolNames;
-}
-
-function getToolMessageContent(message: unknown) {
-  if (!ToolMessage.isInstance(message)) {
-    return "";
-  }
-
-  return typeof message.content === "string"
-    ? message.content
-    : Array.isArray(message.content)
-      ? message.content
-          .map((block) =>
-            typeof block === "string"
-              ? block
-              : "text" in block
-                ? block.text
-                : "",
-          )
-          .join("")
-      : "";
-}
-
-function rememberLoadedToolFromFetchResult(sessionId: string, result: unknown) {
-  if (!ToolMessage.isInstance(result) || result.name !== "fetch_tool_schema") {
-    return;
-  }
-
-  try {
-    const parsed = JSON.parse(getToolMessageContent(result)) as {
-      status?: number;
-      name?: string;
-    };
-
-    if (parsed.status === 200 && parsed.name) {
-      getSessionLoadedApiToolNames(sessionId).add(parsed.name);
-    }
-  } catch {}
-}
-
 export function createApiBasedToolsMiddleware(
   apiBasedTools: Record<string, ApiBasedTool>,
   adminforth: IAdminForth,
@@ -126,11 +62,7 @@ export function createApiBasedToolsMiddleware(
   return createMiddleware({
     name: "ApiBasedToolsMiddleware",
     async wrapModelCall(request, handler) {
-      const { sessionId } = request.runtime.context as { sessionId?: string };
-      const enabledApiToolNames = getEnabledApiToolNamesForSession(
-        request.state.messages,
-        sessionId,
-      );
+      const enabledApiToolNames = getEnabledApiToolNames(request.state.messages);
       const tools = [...enabledApiToolNames]
         .filter((toolName) => !alwaysAvailableApiToolNames.has(toolName))
         .map((toolName) => dynamicTools[toolName]);
@@ -148,10 +80,9 @@ export function createApiBasedToolsMiddleware(
     async wrapToolCall(request, handler) {
       const startedAt = Date.now();
       const toolInput = JSON.stringify(request.toolCall.args ?? {});
-      const { adminUser, emitToolCallEvent, sessionId, userTimeZone } = request.runtime.context as {
+      const { adminUser, emitToolCallEvent, userTimeZone } = request.runtime.context as {
         adminUser: AdminUser;
         emitToolCallEvent: ToolCallEventSink;
-        sessionId: string;
         userTimeZone: string;
       };
       const toolArgs = (request.toolCall.args ?? {}) as Record<string, unknown>;
@@ -189,10 +120,7 @@ export function createApiBasedToolsMiddleware(
         if (request.tool) {
           result = await handler(request);
         } else {
-          const enabledApiToolNames = getEnabledApiToolNamesForSession(
-            request.state.messages,
-            sessionId,
-          );
+          const enabledApiToolNames = getEnabledApiToolNames(request.state.messages);
 
           if (enabledApiToolNames.has(request.toolCall.name)) {
             result = await handler({
@@ -207,10 +135,6 @@ export function createApiBasedToolsMiddleware(
               status: "error",
             });
           }
-        }
-
-        if (sessionId) {
-          rememberLoadedToolFromFetchResult(sessionId, result);
         }
 
         toolCallTracker.finishSuccess(result);
