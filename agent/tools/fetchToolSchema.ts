@@ -1,9 +1,6 @@
 import { tool } from "langchain";
 import { z } from "zod";
-import {
-  serializeApiBasedTool,
-  type ApiBasedTool,
-} from "../../apiBasedTools.js";
+import type { ApiBasedTool } from "../../apiBasedTools.js";
 
 const fetchToolSchemaSchema = z.object({
   toolName: z
@@ -34,7 +31,7 @@ export async function createFetchToolSchemaTool(
         {
           status: 200,
           name: toolName,
-          ...serializeApiBasedTool(toolDefinition),
+          loaded: true,
         },
         null,
         2,

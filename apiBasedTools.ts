@@ -175,7 +175,6 @@ export type ApiBasedToolCallParams = {
 export type ApiBasedTool = {
   description?: string;
   input_schema?: unknown;
-  output_schema?: unknown;
   call: (params?: ApiBasedToolCallParams) => Promise<string>;
 };
 
@@ -616,7 +615,6 @@ export function prepareApiBasedTools(
     apiBasedTools[toolName] = {
       description: schema.description,
       input_schema: schema.request_schema,
-      output_schema: schema.response_schema,
       call: async ({ adminUser, adminuser, abortSignal, inputs, userTimeZone, acceptLanguage } = {}) => {
         if (isHiddenResourceCall(hiddenResourceIdSet, inputs)) {
           return YAML.stringify({
@@ -651,17 +649,4 @@ export function prepareApiBasedTools(
   }
 
   return apiBasedTools;
-}
-
-export function serializeApiBasedTool(tool: ApiBasedTool | undefined) {
-  if (!tool) {
-    return null;
-  }
-
-  return {
-    description: tool.description,
-    input_schema: tool.input_schema,
-    output_schema: tool.output_schema,
-    call: '[Function]',
-  };
 }
