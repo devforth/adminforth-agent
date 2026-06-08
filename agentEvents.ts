@@ -23,6 +23,10 @@ export type AgentEvent =
       label: string;
     }
   | {
+      type: "open-page";
+      targetPath: string;
+    }
+  | {
       type: "transcript";
       text: string;
       language?: string;

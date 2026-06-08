@@ -123,6 +123,15 @@ function createAgentEventStream(
       });
     },
 
+    openPage(targetPath: string) {
+      stream.send({
+        type: isAiUiMessageStream ? "data-open-page" : "open-page",
+        data: {
+          targetPath,
+        },
+      });
+    },
+
     transcript(text: string, language?: string) {
       stream.send({
         type: isAiUiMessageStream ? "data-transcript" : "transcript",
@@ -249,6 +258,9 @@ export function createSseEventEmitter(
         break;
       case "rendering":
         stream.rendering(event.phase, event.label);
+        break;
+      case "open-page":
+        stream.openPage(event.targetPath);
         break;
       case "transcript":
         stream.transcript(event.text, event.language);

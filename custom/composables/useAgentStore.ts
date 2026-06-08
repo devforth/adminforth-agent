@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { IAgentSession, ISessionsListItem } from '../types';
 import { ref, nextTick, computed, watch, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { useAdminforth } from '@/adminforth';
 import { useCoreStore } from '@/stores/core';
 import { useAgentTransitions } from './useAgentTransitions';
@@ -28,6 +29,7 @@ export const useAgentStore = defineStore('agent', () => {
   const adminforth = useAdminforth();
   const isChatOpen = ref(false);
   const isSessionHistoryOpen = ref(false);
+  const router = useRouter();
   const textInput = ref<HTMLTextAreaElement | null>(null);
   const userMessageInput = ref();
   const trimmedUserMessage = computed(() => userMessageInput.value ? userMessageInput.value.trim() : '');
@@ -54,6 +56,7 @@ export const useAgentStore = defineStore('agent', () => {
   } = createAgentChatManager({
     lastMessage,
     activeModeName,
+    onOpenPage: openAgentPage,
   });
   const {
     userMessagePlaceholder,
@@ -324,6 +327,45 @@ export const useAgentStore = defineStore('agent', () => {
     addSystemMessage(RESERVED_SYSTEM_MESSAGE_CONTENT.AGENT_RESPONSE_ABORTED);
   }
 
+  function resolveInternalRoute(href: string): string | null {
+    if (href.startsWith('#')) {
+      return `${window.location.pathname}${window.location.search}${href}`;
+    }
+
+    if (href.startsWith('//')) {
+      return null;
+    }
+
+    const isAbsoluteWithScheme = /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(href);
+    const baseUrl = isAbsoluteWithScheme
+      ? undefined
+      : `${window.location.origin}/`;
+    const resolvedUrl = new URL(href, baseUrl ?? window.location.href);
+
+    if (resolvedUrl.origin !== window.location.origin) {
+      return null;
+    }
+
+    return `${resolvedUrl.pathname}${resolvedUrl.search}${resolvedUrl.hash}`;
+  }
+
+  function openAgentPage(targetPath: string) {
+    const internalRoute = resolveInternalRoute(targetPath);
+
+    if (internalRoute === null) {
+      console.warn('Ignoring external agent navigation target:', targetPath);
+      return;
+    }
+
+    if (isFullScreen.value && !coreStore.isMobile) {
+      setFullScreen(false);
+    } else if (coreStore.isMobile) {
+      setIsChatOpen(false);
+    }
+
+    void router.push(internalRoute);
+  }
+
   return {
     //_________-Sessions management-_____________
     activeSessionId,
@@ -374,6 +416,7 @@ export const useAgentStore = defineStore('agent', () => {
     addAgentMessage,
     addUserMessage,
     addDataToolCallMessage,
+    openAgentPage,
     setCurrentChatStatus,
     updateLastAgentMessage
   }

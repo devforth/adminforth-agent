@@ -70,12 +70,16 @@ export function buildAgentTurnSystemPrompt(input: {
   adminUser: AdminUser;
   usernameField: string;
   userLanguage: DetectedLanguage | null;
+  chatSurface?: string;
 }) {
   return [
     input.agentSystemPrompt,
     formatAdminUserPrompt(input.adminUser, input.usernameField),
+    input.chatSurface
+      ? `Current chat surface: ${input.chatSurface}. The user is not in the AdminForth web UI, so tools cannot move their browser. When navigate_user returns a link, send that link to the user.`
+      : "",
     formatLanguagePrompt(input.userLanguage),
-  ].join("\n\n");
+  ].filter(Boolean).join("\n\n");
 }
 
 function formatResources(resources: AdminForthResource[]) {
@@ -124,6 +128,7 @@ export async function buildAgentSystemPrompt(
     "When fetch_tool_schema succeeds, that tool becomes available on the next step.",
     "All admin links must be root-relative and start with '/'.",
     "Build record links as '/resource/{resourceId}/show/{primary key}'. Never use bare 'resource/{resourceId}/show/{primary key}' without the leading slash.",
+    "When the user asks to open or show a page in the AdminForth UI, call navigate_user instead of only sending a link.",
     "Try to call as many tools as possible in parallel in one step.",
   ];
 

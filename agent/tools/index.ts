@@ -4,6 +4,7 @@ import { createFetchToolSchemaTool } from "./fetchToolSchema.js";
 import type { ApiBasedTool } from "../../apiBasedTools.js";
 import { createApiTool } from "./apiTool.js";
 import { createGetUserLocationTool } from "./getUserLocation.js";
+import { createNavigateUserTool } from "./navigateUser.js";
 
 export const ALWAYS_AVAILABLE_API_TOOL_NAMES = ["get_resource"] as const;
 
@@ -23,6 +24,7 @@ export async function createAgentTools(
       return createApiTool(toolName, apiBasedTool);
     }),
     createGetUserLocationTool(),
+    createNavigateUserTool(),
     await createFetchSkillTool(customComponentsDir, pluginCustomFolderPaths),
     await createFetchToolSchemaTool(apiBasedTools),
   ];

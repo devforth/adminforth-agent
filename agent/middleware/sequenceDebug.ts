@@ -26,6 +26,9 @@ export type SequenceDebug = {
   reasoningTokens: number;
   text: string;
   textTokens: number;
+  uncachedInputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
   cachedTokens: number;
   responseId: string | null;
   toolCalls: SequenceDebugToolCall[];
@@ -45,6 +48,9 @@ type SequenceDebugModelCall = {
   reasoningTokens: number;
   text: string;
   textTokens: number;
+  uncachedInputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
   cachedTokens: number;
   responseId: string | null;
   resultType: SequenceDebugResultType;
@@ -52,6 +58,7 @@ type SequenceDebugModelCall = {
 
 type OpenAiUsageMetadata = {
   input_tokens?: number;
+  output_tokens?: number;
   input_token_details?: {
     cache_read?: number;
   };
@@ -82,6 +89,9 @@ function createPendingSequenceDebug(sequenceId: number): PendingSequenceDebug {
     reasoningTokens: 0,
     text: "",
     textTokens: 0,
+    uncachedInputTokens: 0,
+    cachedInputTokens: 0,
+    outputTokens: 0,
     cachedTokens: 0,
     responseId: null,
     toolCalls: [],
@@ -112,6 +122,9 @@ function finalizeSequenceDebug(sequence: PendingSequenceDebug): SequenceDebug {
     reasoningTokens: sequence.reasoningTokens,
     text: sequence.text,
     textTokens: sequence.textTokens,
+    uncachedInputTokens: sequence.uncachedInputTokens,
+    cachedInputTokens: sequence.cachedInputTokens,
+    outputTokens: sequence.outputTokens,
     cachedTokens: sequence.cachedTokens,
     responseId: sequence.responseId,
     toolCalls: sequence.toolCalls.map(({ completed: _completed, ...toolCall }) => toolCall),
@@ -131,6 +144,21 @@ type SequenceDebugPromptModel = {
 
 function getDebugModelName(model: SequenceDebugPromptModel) {
   return typeof model.getName === "function" ? model.getName() : undefined;
+}
+
+function getDebugToolName(tool: unknown) {
+  if (!tool || typeof tool !== "object") {
+    return null;
+  }
+
+  const name = (tool as { name?: unknown }).name;
+  return typeof name === "string" ? name : null;
+}
+
+function formatToolsForDebug(tools: unknown[]) {
+  return tools.map((tool) => ({
+    name: getDebugToolName(tool),
+  }));
 }
 
 function stringifyPromptForDebug(params: {
@@ -160,7 +188,7 @@ function stringifyPromptForDebug(params: {
     },
     systemMessage,
     messages,
-    ...(tools.length > 0 ? { tools } : {}),
+    ...(tools.length > 0 ? { tools: formatToolsForDebug(tools) } : {}),
     ...(toolChoice !== undefined ? { toolChoice } : {}),
     ...(modelSettings ? { modelSettings } : {}),
     ...(invocationParams ? { invocationParams } : {}),
@@ -219,6 +247,9 @@ async function countTokens(model: unknown, content: string) {
 }
 
 function extractSequenceResponseDebug(message: AIMessage): SequenceDebugModelCall {
+  const usageMetadata = message.usage_metadata as OpenAiUsageMetadata | undefined;
+  const promptTokens = usageMetadata?.input_tokens ?? 0;
+  const cachedInputTokens = usageMetadata?.input_token_details?.cache_read ?? 0;
   const blocks = getMessageBlocks(message);
   const reasoning = blocks
     .filter((block: any) => block?.type === "reasoning")
@@ -230,16 +261,15 @@ function extractSequenceResponseDebug(message: AIMessage): SequenceDebugModelCal
     .join("");
 
   return {
-    promptTokens:
-      (message.usage_metadata as OpenAiUsageMetadata | undefined)?.input_tokens ??
-      0,
+    promptTokens,
     reasoning,
     reasoningTokens: 0,
     text: textFromBlocks || (typeof message.content === "string" ? message.content : ""),
     textTokens: 0,
-    cachedTokens:
-      (message.usage_metadata as OpenAiUsageMetadata | undefined)
-        ?.input_token_details?.cache_read ?? 0,
+    uncachedInputTokens: Math.max(promptTokens - cachedInputTokens, 0),
+    cachedInputTokens,
+    outputTokens: usageMetadata?.output_tokens ?? 0,
+    cachedTokens: cachedInputTokens,
     responseId:
       (message.response_metadata as OpenAiResponseMetadata | undefined)?.id ??
       null,
@@ -290,6 +320,9 @@ export function createSequenceDebugCollector(): SequenceDebugCollector {
       sequenceDebug.reasoningTokens = params.reasoningTokens;
       sequenceDebug.text = params.text;
       sequenceDebug.textTokens = params.textTokens;
+      sequenceDebug.uncachedInputTokens = params.uncachedInputTokens;
+      sequenceDebug.cachedInputTokens = params.cachedInputTokens;
+      sequenceDebug.outputTokens = params.outputTokens;
       sequenceDebug.cachedTokens = params.cachedTokens;
       sequenceDebug.responseId = params.responseId;
       sequenceDebug.resultType = params.resultType;
@@ -387,6 +420,8 @@ export function createSequenceDebugMiddleware(
         promptTokens,
         reasoningTokens,
         textTokens,
+        uncachedInputTokens: debug.promptTokens ? debug.uncachedInputTokens : promptTokens,
+        outputTokens: debug.outputTokens || reasoningTokens + textTokens,
       });
       return response;
     },

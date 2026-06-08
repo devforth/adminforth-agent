@@ -13,11 +13,13 @@ type AgentImportMeta = ImportMeta & {
 type CreateAgentChatManagerOptions = {
   lastMessage: Ref<string>;
   activeModeName: Ref<string | null>;
+  onOpenPage: (targetPath: string) => void;
 };
 
 export function createAgentChatManager({
   lastMessage,
   activeModeName,
+  onOpenPage,
 }: CreateAgentChatManagerOptions) {
   const chats = new Map<string, Chat<any>>();
   const currentChat = shallowRef<Chat<any> | null>();
@@ -51,6 +53,11 @@ export function createAgentChatManager({
         }),
         onError(error: unknown) {
           console.error('Chat error:', error);
+        },
+        onData(dataPart: any) {
+          if (dataPart?.type === 'data-open-page' && typeof dataPart.data?.targetPath === 'string') {
+            onOpenPage(dataPart.data.targetPath);
+          }
         },
       });
       chats.set(sessionId, newChat);

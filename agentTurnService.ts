@@ -23,6 +23,8 @@ type AgentTurnRunInput = {
   modeName?: string | null;
   userTimeZone: string;
   currentPage?: CurrentPageContext;
+  chatSurface?: string;
+  adminPublicOrigin?: string;
   abortSignal?: AbortSignal;
   adminUser: AdminUser;
   sequenceDebugCollector: ReturnType<typeof createSequenceDebugCollector>;
@@ -35,6 +37,8 @@ export type RunAndPersistAgentResponseInput = {
   modeName?: string | null;
   userTimeZone: string;
   currentPage?: CurrentPageContext;
+  chatSurface?: string;
+  adminPublicOrigin?: string;
   abortSignal?: AbortSignal;
   adminUser: AdminUser;
   emit?: AgentEventEmitter;
@@ -118,6 +122,7 @@ export class AgentTurnService {
       adminUser: input.adminUser,
       usernameField: adminforth.config.auth!.usernameField,
       userLanguage,
+      chatSurface: input.chatSurface,
     });
     const apiBasedTools = buildApiBasedTools(
       adminforth,
@@ -142,6 +147,8 @@ export class AgentTurnService {
       sessionId: input.sessionId,
       turnId: input.turnId,
       currentPage: input.currentPage,
+      chatSurface: input.chatSurface,
+      adminPublicOrigin: input.adminPublicOrigin,
       userTimeZone: input.userTimeZone,
       abortSignal: input.abortSignal,
       emitToolCallEvent: (event) => {
@@ -151,6 +158,7 @@ export class AgentTurnService {
           data: event,
         });
       },
+      emitAgentEvent: input.emit,
       sequenceDebugSink: input.sequenceDebugCollector,
     });
 
@@ -278,6 +286,8 @@ export class AgentTurnService {
         modeName: input.modeName,
         userTimeZone: input.userTimeZone,
         currentPage: input.currentPage,
+        chatSurface: input.chatSurface,
+        adminPublicOrigin: input.adminPublicOrigin,
         abortSignal: input.abortSignal,
         adminUser: input.adminUser,
         sequenceDebugCollector,
@@ -326,6 +336,8 @@ export class AgentTurnService {
       modeName: input.modeName,
       userTimeZone: input.userTimeZone,
       currentPage: input.currentPage,
+      chatSurface: input.chatSurface,
+      adminPublicOrigin: input.adminPublicOrigin,
       abortSignal: input.abortSignal,
       adminUser: input.adminUser,
       emit: input.emit,
@@ -408,6 +420,8 @@ export class AgentTurnService {
       modeName: input.modeName,
       userTimeZone: input.userTimeZone,
       currentPage: input.currentPage,
+      chatSurface: input.chatSurface,
+      adminPublicOrigin: input.adminPublicOrigin,
       abortSignal: input.abortSignal,
       adminUser: input.adminUser,
       emit: async (event) => {

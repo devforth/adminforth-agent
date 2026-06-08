@@ -19,6 +19,7 @@ import {
 import type { ApiBasedTool } from "../apiBasedTools.js";
 import type { ToolCallEventSink } from "./toolCallEvents.js";
 import type { CurrentPageContext } from "./tools/getUserLocation.js";
+import type { AgentEventEmitter } from "../agentEvents.js";
 
 export const contextSchema = z.object({
   adminUser: z.custom<AdminUser>(),
@@ -27,7 +28,11 @@ export const contextSchema = z.object({
   turnId: z.string(),
   abortSignal: z.custom<AbortSignal>().optional(),
   currentPage: z.custom<CurrentPageContext>().optional(),
+  chatSurface: z.string().optional(),
+  adminBaseUrl: z.string().optional(),
+  adminPublicOrigin: z.string().optional(),
   emitToolCallEvent: z.custom<ToolCallEventSink>(),
+  emitAgentEvent: z.custom<AgentEventEmitter>().optional(),
 });
 
 export type AgentChatModel = BaseChatModel<any, any>;
@@ -234,9 +239,12 @@ export async function callAgent(params: {
   sessionId: string;
   turnId: string;
   currentPage?: CurrentPageContext;
+  chatSurface?: string;
+  adminPublicOrigin?: string;
   userTimeZone: string;
   abortSignal?: AbortSignal;
   emitToolCallEvent: ToolCallEventSink;
+  emitAgentEvent?: AgentEventEmitter;
   sequenceDebugSink: SequenceDebugModelCallSink;
 }) {
   const {
@@ -254,9 +262,12 @@ export async function callAgent(params: {
     sessionId,
     turnId,
     currentPage,
+    chatSurface,
+    adminPublicOrigin,
     userTimeZone,
     abortSignal,
     emitToolCallEvent,
+    emitAgentEvent,
     sequenceDebugSink,
   } = params;
 
@@ -305,7 +316,11 @@ export async function callAgent(params: {
       turnId,
       abortSignal,
       currentPage,
+      chatSurface,
+      adminBaseUrl: adminforth.config.baseUrlSlashed,
+      adminPublicOrigin,
       emitToolCallEvent,
+      emitAgentEvent,
     },
   });
 }

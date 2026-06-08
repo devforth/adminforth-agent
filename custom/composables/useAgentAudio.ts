@@ -187,6 +187,11 @@ export const useAgentAudio = defineStore('agentAudio', () => {
         playStandByAudio();
       }
       agentStore.addDataToolCallMessage(event.data);
+      return;
+    }
+
+    if (event.type === 'open-page') {
+      agentStore.openAgentPage(event.data.targetPath);
     }
   }
 
