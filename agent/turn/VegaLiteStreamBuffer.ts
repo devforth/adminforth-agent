@@ -1,7 +1,7 @@
 import type { AgentEventEmitter } from "../../agentEvents.js";
 
 const VEGA_LITE_FENCE_START = "```vega-lite";
-const COMPLETE_VEGA_LITE_BLOCK_RE = /```vega-lite[\s\S]*?```/;
+const FENCE_END = "```";
 
 export class VegaLiteStreamBuffer {
   private bufferedTextDelta = "";
@@ -11,8 +11,7 @@ export class VegaLiteStreamBuffer {
     this.bufferedTextDelta += textDelta;
 
     if (
-      this.bufferedTextDelta.includes(VEGA_LITE_FENCE_START) &&
-      !COMPLETE_VEGA_LITE_BLOCK_RE.test(this.bufferedTextDelta)
+      hasUnclosedLatestVegaLiteBlock(this.bufferedTextDelta)
     ) {
       if (!this.isRenderingVegaLite) {
         this.isRenderingVegaLite = true;
@@ -67,6 +66,17 @@ export class VegaLiteStreamBuffer {
       this.bufferedTextDelta = "";
     }
   }
+}
+
+function hasUnclosedLatestVegaLiteBlock(text: string): boolean {
+  const latestBlockStart = text.lastIndexOf(VEGA_LITE_FENCE_START);
+
+  if (latestBlockStart === -1) {
+    return false;
+  }
+
+  const blockContentStart = latestBlockStart + VEGA_LITE_FENCE_START.length;
+  return text.indexOf(FENCE_END, blockContentStart) === -1;
 }
 
 function getPartialVegaLiteFenceStartLength(text: string): number {
