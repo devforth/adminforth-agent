@@ -1,39 +1,13 @@
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { createAgent, summarizationMiddleware } from "langchain";
 import {
   logger,
-  type AdminUser,
   type CompletionAdapter,
-  type IAdminForth,
 } from "adminforth";
 import { BaseCallbackHandler } from "@langchain/core/callbacks/base";
-import {type BaseCheckpointSaver, type Messages } from "@langchain/langgraph";
 import type { LLMResult } from "@langchain/core/outputs";
-import { z } from "zod";
-import { createAgentTools } from "./tools/index.js";
-import { createApiBasedToolsMiddleware } from "./middleware/apiBasedTools.js";
 import {
   createSequenceDebugMiddleware,
-  type SequenceDebugModelCallSink,
 } from "./middleware/sequenceDebug.js";
-import type { ApiBasedTool } from "../apiBasedTools.js";
-import type { ToolCallEventSink } from "./toolCallEvents.js";
-import type { CurrentPageContext } from "./tools/getUserLocation.js";
-import type { AgentEventEmitter } from "../agentEvents.js";
-
-export const contextSchema = z.object({
-  adminUser: z.custom<AdminUser>(),
-  userTimeZone: z.string(),
-  sessionId: z.string(),
-  turnId: z.string(),
-  abortSignal: z.custom<AbortSignal>().optional(),
-  currentPage: z.custom<CurrentPageContext>().optional(),
-  chatSurface: z.string().optional(),
-  adminBaseUrl: z.string().optional(),
-  adminPublicOrigin: z.string().optional(),
-  emitToolCallEvent: z.custom<ToolCallEventSink>(),
-  emitAgentEvent: z.custom<AgentEventEmitter>().optional(),
-});
 
 export type AgentChatModel = BaseChatModel<any, any>;
 export type AgentModelPurpose = "primary" | "summary";
@@ -50,7 +24,7 @@ export type AgentModeCompletionAdapter = CompletionAdapter & {
   };
 };
 
-type AgentMiddleware = ReturnType<typeof createSequenceDebugMiddleware>;
+export type AgentMiddleware = ReturnType<typeof createSequenceDebugMiddleware>;
 
 type AgentChatModelSpec = {
   model: AgentChatModel;
@@ -202,7 +176,7 @@ class AgentLlmMetricsLogger extends BaseCallbackHandler {
   }
 }
 
-function createAgentLlmMetricsLogger() {
+export function createAgentLlmMetricsLogger() {
   return new AgentLlmMetricsLogger();
 }
 
@@ -221,106 +195,5 @@ export async function createAgentChatModel(params: {
     adapter: params.adapter,
     maxTokens: params.maxTokens,
     purpose: params.purpose,
-  });
-}
-
-export async function callAgent(params: {
-  name: string;
-  model: AgentChatModel;
-  summaryModel: AgentChatModel;
-  modelMiddleware?: AgentMiddleware[];
-  checkpointer?: BaseCheckpointSaver;
-  messages: Messages;
-  adminUser: AdminUser;
-  adminforth: IAdminForth;
-  apiBasedTools: Record<string, ApiBasedTool>;
-  customComponentsDir: string;
-  pluginCustomFolderPaths: string[];
-  sessionId: string;
-  turnId: string;
-  currentPage?: CurrentPageContext;
-  chatSurface?: string;
-  adminPublicOrigin?: string;
-  userTimeZone: string;
-  abortSignal?: AbortSignal;
-  emitToolCallEvent: ToolCallEventSink;
-  emitAgentEvent?: AgentEventEmitter;
-  sequenceDebugSink: SequenceDebugModelCallSink;
-}) {
-  const {
-    name,
-    model,
-    summaryModel,
-    modelMiddleware = [],
-    checkpointer,
-    messages,
-    adminUser,
-    adminforth,
-    apiBasedTools,
-    customComponentsDir,
-    pluginCustomFolderPaths,
-    sessionId,
-    turnId,
-    currentPage,
-    chatSurface,
-    adminPublicOrigin,
-    userTimeZone,
-    abortSignal,
-    emitToolCallEvent,
-    emitAgentEvent,
-    sequenceDebugSink,
-  } = params;
-
-  const tools = await createAgentTools(
-    customComponentsDir,
-    apiBasedTools,
-    pluginCustomFolderPaths,
-  );
-  const apiBasedToolsMiddleware = createApiBasedToolsMiddleware(apiBasedTools, adminforth);
-  const sequenceDebugMiddleware = createSequenceDebugMiddleware(
-    sequenceDebugSink,
-  );
-
-  const middleware = [
-    apiBasedToolsMiddleware,
-    ...modelMiddleware,
-    sequenceDebugMiddleware,
-    summarizationMiddleware({
-      model: summaryModel,
-      trigger: { tokens: 1024 * 64 },
-      keep: { messages: 10 },
-    }),
-  ] as const;
-
-  const agent = createAgent<undefined, typeof contextSchema, typeof middleware>({
-    name,
-    model,
-    checkpointer,
-    tools,
-    contextSchema,
-    middleware,
-  });
-
-  return await agent.stream({ messages } as any, {
-    streamMode: "messages",
-    recursionLimit: 100,
-    callbacks: [createAgentLlmMetricsLogger()],
-    signal: abortSignal,
-    configurable: {
-      thread_id: sessionId,
-    },
-    context: {
-      adminUser,
-      userTimeZone,
-      sessionId,
-      turnId,
-      abortSignal,
-      currentPage,
-      chatSurface,
-      adminBaseUrl: adminforth.config.baseUrlSlashed,
-      adminPublicOrigin,
-      emitToolCallEvent,
-      emitAgentEvent,
-    },
   });
 }

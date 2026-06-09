@@ -11,6 +11,8 @@ import {
 } from "../toolCallEvents.js";
 import { ALWAYS_AVAILABLE_API_TOOL_NAMES } from "../tools/index.js";
 import { createApiTool } from "../tools/apiTool.js";
+import type { AgentEventEmitter } from "../../agentEvents.js";
+import type { SequenceDebugCollector } from "./sequenceDebug.js";
 
 function getEnabledApiToolNames(messages: unknown[]) {
   const enabledToolNames = new Set<string>();
@@ -80,10 +82,18 @@ export function createApiBasedToolsMiddleware(
     async wrapToolCall(request, handler) {
       const startedAt = Date.now();
       const toolInput = JSON.stringify(request.toolCall.args ?? {});
-      const { adminUser, emitToolCallEvent, userTimeZone } = request.runtime.context as {
+      const { adminUser, emit, sequenceDebugSink, userTimeZone } = request.runtime.context as {
         adminUser: AdminUser;
-        emitToolCallEvent: ToolCallEventSink;
+        emit?: AgentEventEmitter;
+        sequenceDebugSink: SequenceDebugCollector;
         userTimeZone: string;
+      };
+      const emitToolCall: ToolCallEventSink = (event) => {
+        sequenceDebugSink.handleToolCallEvent(event);
+        void emit?.({
+          type: "tool-call",
+          data: event,
+        });
       };
       const toolArgs = (request.toolCall.args ?? {}) as Record<string, unknown>;
       let toolInfo: string | undefined;
@@ -102,7 +112,7 @@ export function createApiBasedToolsMiddleware(
         });
       }
       const toolCallTracker = createToolCallTracker({
-        emit: emitToolCallEvent,
+        emit: emitToolCall,
         toolCallId: request.toolCall.id,
         toolName: request.toolCall.name,
         toolInfo,

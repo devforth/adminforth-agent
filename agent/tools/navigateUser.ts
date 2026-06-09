@@ -159,7 +159,7 @@ export function createNavigateUserTool() {
         chatSurface?: string;
         adminBaseUrl?: string;
         adminPublicOrigin?: string;
-        emitAgentEvent?: AgentEventEmitter;
+        emit?: AgentEventEmitter;
       };
       const currentPage = context.currentPage;
       const basePath = input.targetPath
@@ -184,7 +184,7 @@ export function createNavigateUserTool() {
         );
       }
 
-      await context.emitAgentEvent?.({
+      await context.emit?.({
         type: "open-page",
         targetPath,
       });
