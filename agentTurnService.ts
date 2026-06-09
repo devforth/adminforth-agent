@@ -1,28 +1,21 @@
 import { logger } from "adminforth";
 import { randomUUID } from "crypto";
-import type { IAdminForth } from "adminforth";
-import type { BaseCheckpointSaver } from "@langchain/langgraph";
 import { AgentModelFactory } from "./agent/models/AgentModelFactory.js";
 import { AgentModeResolver } from "./agent/models/AgentModeResolver.js";
 import { createSequenceDebugCollector } from "./agent/middleware/sequenceDebug.js";
-import { AgentRuntimeFactory } from "./agent/runtime/AgentRuntimeFactory.js";
-import { AgentToolProvider } from "./agent/tools/AgentToolProvider.js";
+import { AgentRuntime } from "./agent/runtime/AgentRuntime.js";
+import { TurnContextBuilder } from "./agent/turn/TurnContextBuilder.js";
 import { TurnLifecycleService } from "./agent/turn/TurnLifecycleService.js";
-import { TurnPersistenceService } from "./agent/turn/TurnPersistenceService.js";
 import { TurnPromptBuilder } from "./agent/turn/TurnPromptBuilder.js";
 import { TurnStreamConsumer } from "./agent/turn/TurnStreamConsumer.js";
 import type {
   BaseAgentTurnInput,
-  HandleSpeechTurnInput,
   HandleTurnInput,
   PreparedAgentTurn,
   RunAndPersistAgentResponseInput,
   RunAndPersistAgentResponseResult,
 } from "./agent/turn/turnTypes.js";
 import { getErrorMessage, isAbortError } from "./errors.js";
-import type { AgentSessionStore } from "./sessionStore.js";
-import { SpeechTurnService } from "./agent/speech/SpeechTurnService.js";
-import type { PluginOptions } from "./types.js";
 
 export type {
   BaseAgentTurnInput,
@@ -32,56 +25,24 @@ export type {
   RunAndPersistAgentResponseResult,
 } from "./agent/turn/turnTypes.js";
 
-type AgentTurnServiceOptions = {
-  getAdminforth: () => IAdminForth;
-  getPluginInstanceId: () => string;
-  options: PluginOptions;
-  sessionStore: AgentSessionStore;
-  getCheckpointer: () => BaseCheckpointSaver;
-  getInternalAgentResourceIds: () => string[];
-  getAgentSystemPrompt: () => Promise<string>;
-};
-
 export class AgentTurnService {
-  private readonly modeResolver: AgentModeResolver;
-  private readonly modelFactory: AgentModelFactory;
-  private readonly runtimeFactory: AgentRuntimeFactory;
-  private readonly lifecycle: TurnLifecycleService;
-  private readonly promptBuilder: TurnPromptBuilder;
-  private readonly streamConsumer = new TurnStreamConsumer();
-  private readonly speechTurnService: SpeechTurnService;
-
-  constructor(private readonly serviceOptions: AgentTurnServiceOptions) {
-    const toolProvider = new AgentToolProvider(
-      serviceOptions.getAdminforth,
-      serviceOptions.getInternalAgentResourceIds,
-    );
-    const persistence = new TurnPersistenceService(
-      serviceOptions.getAdminforth,
-      serviceOptions.options,
-    );
-
-    this.modeResolver = new AgentModeResolver(serviceOptions.options);
-    this.modelFactory = new AgentModelFactory(serviceOptions.options.maxTokens ?? 1000);
-    this.runtimeFactory = new AgentRuntimeFactory(
-      serviceOptions.getAdminforth,
-      serviceOptions.getCheckpointer,
-      toolProvider,
-      () => `adminforth-agent-${serviceOptions.getPluginInstanceId()}`,
-    );
-    this.lifecycle = new TurnLifecycleService(serviceOptions.sessionStore, persistence);
-    this.promptBuilder = new TurnPromptBuilder({
-      getAdminforth: serviceOptions.getAdminforth,
-      getAgentSystemPrompt: serviceOptions.getAgentSystemPrompt,
-    });
-    this.speechTurnService = new SpeechTurnService(
-      this.runAndPersistAgentResponse.bind(this),
-    );
-  }
+  constructor(
+    private readonly lifecycle: TurnLifecycleService,
+    private readonly contextBuilder: TurnContextBuilder,
+    private readonly modeResolver: AgentModeResolver,
+    private readonly modelFactory: AgentModelFactory,
+    private readonly promptBuilder: TurnPromptBuilder,
+    private readonly runtime: AgentRuntime,
+    private readonly streamConsumer: TurnStreamConsumer,
+  ) {}
 
   private async prepareTurn(input: BaseAgentTurnInput): Promise<PreparedAgentTurn> {
     const sequenceDebugCollector = createSequenceDebugCollector();
     const { turnId, previousUserMessages } = await this.lifecycle.start(input);
+    const context = await this.contextBuilder.build({
+      base: input,
+      turnId,
+    });
 
     return {
       prompt: input.prompt,
@@ -89,16 +50,7 @@ export class AgentTurnService {
       turnId,
       previousUserMessages,
       modeName: input.modeName,
-      context: {
-        adminUser: input.adminUser,
-        userTimeZone: input.userTimeZone,
-        sessionId: input.sessionId,
-        turnId,
-        abortSignal: input.abortSignal,
-        currentPage: input.currentPage,
-        chatSurface: input.chatSurface,
-        adminPublicOrigin: input.adminPublicOrigin,
-      },
+      context,
       observability: {
         emit: undefined,
         sequenceDebugSink: sequenceDebugCollector,
@@ -119,8 +71,7 @@ export class AgentTurnService {
         abortSignal: input.context.abortSignal,
       }),
     ]);
-    const runtime = this.runtimeFactory.create();
-    const stream = await runtime.stream({
+    const stream = await this.runtime.stream({
       models,
       messages,
       context: input.context,
@@ -213,9 +164,5 @@ export class AgentTurnService {
     });
 
     return agentResponse;
-  }
-
-  async handleSpeechTurn(input: HandleSpeechTurnInput) {
-    return this.speechTurnService.handle(input);
   }
 }

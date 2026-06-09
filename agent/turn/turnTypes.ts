@@ -10,7 +10,7 @@ export type BaseAgentTurnInput = {
   prompt: string;
   sessionId: string;
   modeName?: string | null;
-  userTimeZone: string;
+  userTimeZone?: string;
   currentPage?: CurrentPageContext;
   chatSurface?: string;
   adminPublicOrigin?: string;

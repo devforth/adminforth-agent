@@ -16,12 +16,12 @@ export class AgentToolProvider {
     );
   }
 
-  async getTools() {
+  async getTools(apiBasedTools: Record<string, ApiBasedTool>) {
     const adminforth = this.getAdminforth();
 
     return createAgentTools(
       adminforth.config.customization.customComponentsDir ?? "custom",
-      this.getApiBasedTools(),
+      apiBasedTools,
       adminforth.activatedPlugins.map((plugin) => plugin.customFolderPath),
     );
   }

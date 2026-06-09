@@ -10,8 +10,8 @@ import { contextSchema, toLangchainAgentContext } from "./AgentContext.js";
 
 export type AgentRuntimeOptions = {
   name: string;
-  adminforth: IAdminForth;
-  checkpointer: BaseCheckpointSaver;
+  getAdminforth: () => IAdminForth;
+  getCheckpointer: () => BaseCheckpointSaver;
   toolProvider: AgentToolProvider;
 };
 
@@ -19,11 +19,12 @@ export class AgentRuntime {
   constructor(private readonly options: AgentRuntimeOptions) {}
 
   async stream(input: AgentRuntimeRunInput) {
-    const tools = await this.options.toolProvider.getTools();
     const apiBasedTools = this.options.toolProvider.getApiBasedTools();
+    const tools = await this.options.toolProvider.getTools(apiBasedTools);
+    const adminforth = this.options.getAdminforth();
     const apiBasedToolsMiddleware = createApiBasedToolsMiddleware(
       apiBasedTools,
-      this.options.adminforth,
+      adminforth,
     );
     const sequenceDebugMiddleware = createSequenceDebugMiddleware(
       input.observability.sequenceDebugSink,
@@ -42,7 +43,7 @@ export class AgentRuntime {
     const agent = createAgent({
       name: this.options.name,
       model: input.models.model,
-      checkpointer: this.options.checkpointer,
+      checkpointer: this.options.getCheckpointer(),
       tools,
       contextSchema,
       middleware,
@@ -58,7 +59,7 @@ export class AgentRuntime {
       },
       context: toLangchainAgentContext({
         ...input.context,
-        adminBaseUrl: this.options.adminforth.config.baseUrlSlashed,
+        adminBaseUrl: adminforth.config.baseUrlSlashed,
         emit: input.observability.emit,
         sequenceDebugSink: input.observability.sequenceDebugSink,
       }),
