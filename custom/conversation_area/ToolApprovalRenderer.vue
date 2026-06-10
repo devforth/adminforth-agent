@@ -1,16 +1,18 @@
 <template>
-  <div class="mx-4 my-3 max-w-[min(34rem,calc(100%-2rem))] rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-950 shadow-sm dark:border-amber-700/80 dark:bg-amber-950/30 dark:text-amber-100">
+  <div class="mx-4 my-3 max-w-[min(34rem,calc(100%-2rem))] rounded-lg border border-lightPrimary/30 bg-lightNavbar p-4 text-lightListTableHeadingText shadow-sm dark:border-darkPrimary/40 dark:bg-darkNavbar dark:text-darkListTableHeadingText">
     <div class="flex items-start gap-3">
-      <IconExclamationCircleOutline class="mt-0.5 h-5 w-5 shrink-0 text-amber-700 dark:text-amber-300" />
+      <div class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-lightPrimary/10 text-lightPrimary dark:bg-darkPrimary/15 dark:text-darkPrimary">
+        <IconExclamationCircleOutline class="h-5 w-5" />
+      </div>
       <div class="min-w-0 flex-1">
         <h3 class="text-sm font-semibold leading-5">{{ $t('Approval required') }}</h3>
-        <p class="mt-1 text-sm leading-5 text-amber-900/90 dark:text-amber-100/90">
+        <p class="mt-1 text-sm leading-5 text-lightListTableText dark:text-darkListTableText">
           {{ $t('Review the agent message before continuing.') }}
         </p>
         <button
           v-if="data.messages?.length"
           type="button"
-          class="mt-3 inline-flex items-center gap-2 text-sm font-medium text-amber-900 transition hover:text-amber-700 dark:text-amber-100 dark:hover:text-amber-200"
+          class="mt-3 inline-flex items-center gap-2 text-sm font-medium text-lightListTableHeadingText transition hover:opacity-80 dark:text-darkListTableHeadingText"
           @click="isExpanded = !isExpanded"
         >
           <IconChevronDownOutline
@@ -18,20 +20,20 @@
             :class="isExpanded ? 'rotate-180' : ''"
           />
           {{ isExpanded ? $t('Hide details') : $t('Show details') }}
-          <span class="text-amber-800/80 dark:text-amber-100/80">
+          <span class="rounded-full bg-lightListTableText/10 px-2 py-0.5 text-xs text-lightListTableHeadingText dark:bg-darkListTableText/10 dark:text-darkListTableHeadingText">
             {{ data.messages.length }}
           </span>
         </button>
         <ul
           v-if="isExpanded && data.messages?.length"
-          class="mt-3 space-y-1 text-sm leading-5 text-amber-950 dark:text-amber-50"
+          class="mt-3 space-y-1 text-sm leading-5 text-lightListTableHeadingText dark:text-darkListTableHeadingText"
         >
           <li
             v-for="message in data.messages"
             :key="message"
             class="flex gap-2"
           >
-            <span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-600 dark:bg-amber-300" />
+            <span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-lightListTableHeadingText dark:bg-darkListTableHeadingText" />
             <span>{{ message }}</span>
           </li>
         </ul>
@@ -39,7 +41,7 @@
           <template v-if="data.status === 'pending'">
             <button
               type="button"
-              class="inline-flex h-9 items-center gap-2 rounded-md bg-lightPrimary px-3 text-sm font-medium text-white transition hover:opacity-90 dark:bg-darkPrimary"
+              class="inline-flex h-9 items-center gap-2 rounded-md border border-lightButtonsBorder bg-lightButtonsBackground px-3 text-sm font-medium text-lightButtonsText transition hover:bg-lightButtonsHover dark:border-darkButtonsBorder dark:bg-darkButtonsBackground dark:text-darkButtonsText dark:hover:bg-darkButtonsHover"
               @click="submit('approve')"
             >
               <IconCheckOutline class="h-4 w-4" />
@@ -47,7 +49,7 @@
             </button>
             <button
               type="button"
-              class="inline-flex h-9 items-center gap-2 rounded-md border border-amber-300 bg-white px-3 text-sm font-medium text-amber-950 transition hover:bg-amber-100 dark:border-amber-700 dark:bg-transparent dark:text-amber-100 dark:hover:bg-amber-900/40"
+              class="inline-flex h-9 items-center gap-2 rounded-md border border-lightListTableText/20 bg-transparent px-3 text-sm font-medium text-lightListTableHeadingText transition hover:bg-lightListTableText/10 dark:border-darkListTableText/20 dark:text-darkListTableHeadingText dark:hover:bg-darkListTableText/10"
               @click="submit('reject')"
             >
               <IconCloseOutline class="h-4 w-4" />
@@ -56,12 +58,12 @@
           </template>
           <span
             v-else
-            class="inline-flex h-8 items-center gap-2 rounded-md px-2.5 text-sm font-medium"
+            class="inline-flex h-8 items-center gap-2 rounded-md border px-2.5 text-sm font-medium"
             :class="data.status === 'processing'
-              ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200'
+              ? 'border-lightListTableText/20 bg-lightListTableText/10 text-lightListTableHeadingText dark:border-darkListTableText/20 dark:bg-darkListTableText/10 dark:text-darkListTableHeadingText'
               : data.status === 'approved'
-              ? 'bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-200'
-              : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'"
+              ? 'border-lightListTableText/20 bg-lightListTableText/10 text-lightListTableHeadingText dark:border-darkListTableText/20 dark:bg-darkListTableText/10 dark:text-darkListTableHeadingText'
+              : 'border-lightListTableText/20 bg-lightListTableText/10 text-lightListTableHeadingText dark:border-darkListTableText/20 dark:bg-darkListTableText/10 dark:text-darkListTableHeadingText'"
           >
             <IconCheckOutline v-if="data.status === 'approved'" class="h-4 w-4" />
             <IconCloseOutline v-else-if="data.status === 'rejected'" class="h-4 w-4" />
