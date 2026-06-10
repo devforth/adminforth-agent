@@ -89,7 +89,18 @@ export function createAgentChatManager({
     replaceLastMessage(assistantMessage);
   }
 
-  function handleAgentStreamPart(dataPart: any) {
+  function handleRealtimeChatData(dataPart: any) {
+    if (dataPart?.type === 'data-open-page' && typeof dataPart.data?.targetPath === 'string') {
+      onOpenPage(dataPart.data.targetPath);
+      return;
+    }
+
+    if (dataPart?.type === 'data-interrupt' && typeof dataPart.data?.sessionId === 'string') {
+      onToolApprovalRequest(dataPart.data.sessionId, dataPart.data.interrupt);
+    }
+  }
+
+  function handleManualApprovalStreamPart(dataPart: any) {
     if (dataPart?.type === 'text-delta' && typeof dataPart.delta === 'string') {
       appendTextDelta(dataPart.delta);
       return;
@@ -152,7 +163,7 @@ export function createAgentChatManager({
           continue;
         }
 
-        handleAgentStreamPart(JSON.parse(data));
+        handleManualApprovalStreamPart(JSON.parse(data));
       }
     }
   }
@@ -187,14 +198,7 @@ export function createAgentChatManager({
         onError(error: unknown) {
           console.error('Chat error:', error);
         },
-        onData(dataPart: any) {
-          if (dataPart?.type === 'data-open-page' && typeof dataPart.data?.targetPath === 'string') {
-            onOpenPage(dataPart.data.targetPath);
-          }
-          if (dataPart?.type === 'data-interrupt' && typeof dataPart.data?.sessionId === 'string') {
-            onToolApprovalRequest(dataPart.data.sessionId, dataPart.data.interrupt);
-          }
-        },
+        onData: handleRealtimeChatData,
       });
       chats.set(sessionId, newChat);
       currentChat.value = newChat;

@@ -90,7 +90,6 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
       await ctx.handleTurn({
         prompt: "",
         sessionId: data.sessionId,
-        userTimeZone: 'UTC',
         approvalDecision: data.decision,
         abortSignal,
         adminUser: adminUser!,

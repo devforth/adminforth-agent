@@ -20,7 +20,8 @@
           'min-h-12 px-4 pt-4 rounded-xl w-full resize-none overflow-hidden text-lightInputText dark:text-darkInputText rounded-md bg-transparent text-sm bg-gray-50 dark:bg-gray-700 dark:border-gray-600 focus:outline-none',
           { '!text-base': coreStore.isIos }
         ]"
-        :placeholder="agentStore.userMessagePlaceholder"
+        :placeholder="agentStore.hasPendingToolApproval ? 'Approve or reject the pending action to continue' : agentStore.userMessagePlaceholder"
+        :disabled="agentStore.isMessageInputBlocked"
         @keydown.enter.exact.prevent="sendMessage"
       />
       <div
@@ -70,7 +71,7 @@
           v-if="!agentStore.isResponseInProgress"
           class="absolute right-4 bottom-2 !p-0 h-9 w-9 transition-opacity duration-200"                    
           @click="sendMessage" 
-          :disabled="!agentStore.trimmedUserMessage || agentStore.isResponseInProgress"
+          :disabled="!agentStore.trimmedUserMessage || agentStore.isMessageInputBlocked"
         >
           <IconArrowUpOutline 
             class="w-8 h-8 p-1

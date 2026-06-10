@@ -1,4 +1,5 @@
 import { ToolMessage } from "@langchain/core/messages";
+import { isGraphInterrupt } from "@langchain/langgraph";
 import { createMiddleware } from "langchain";
 import { logger, type AdminUser, type IAdminForth } from "adminforth";
 import {
@@ -13,6 +14,7 @@ import { ALWAYS_AVAILABLE_API_TOOL_NAMES } from "../tools/index.js";
 import { createApiTool } from "../tools/apiTool.js";
 import type { AgentEventEmitter } from "../../agentEvents.js";
 import type { SequenceDebugCollector } from "./sequenceDebug.js";
+import { isAbortError } from "../../errors.js";
 
 function getEnabledApiToolNames(messages: unknown[]) {
   const enabledToolNames = new Set<string>();
@@ -82,9 +84,14 @@ export function createApiBasedToolsMiddleware(
     async wrapToolCall(request, handler) {
       const startedAt = Date.now();
       const toolInput = JSON.stringify(request.toolCall.args ?? {});
-      const toolCallId = request.toolCall.id as string;
-      const { adminUser, emit, sequenceDebugSink, userTimeZone } = request.runtime.context as {
+      if (!request.toolCall.id) {
+        throw new Error(`Tool call "${request.toolCall.name}" has no id.`);
+      }
+
+      const toolCallId = request.toolCall.id;
+      const { adminUser, abortSignal, emit, sequenceDebugSink, userTimeZone } = request.runtime.context as {
         adminUser: AdminUser;
+        abortSignal?: AbortSignal;
         emit?: AgentEventEmitter;
         sequenceDebugSink: SequenceDebugCollector;
         userTimeZone: string;
@@ -137,17 +144,25 @@ export function createApiBasedToolsMiddleware(
         toolCallTracker.finishSuccess(result);
         return result;
       } catch (error) {
+        if (
+          isGraphInterrupt(error)
+          || abortSignal?.aborted
+          || isAbortError(error)
+        ) {
+          throw error;
+        }
+
+        const message = error instanceof Error ? error.message : String(error);
+
         logger.error(
           `Error calling tool "${request.toolCall.name}": ${error instanceof Error ? error.stack ?? error.message : String(error)}`,
         );
-        toolCallTracker.finishError(`Error: ${error instanceof Error ? error.message : String(error)}`);
+        toolCallTracker.finishError(`Error: ${message}`);
         return new ToolMessage({
           name: request.toolCall.name,
           tool_call_id: toolCallId,
           status: "error",
-          content: `Error: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
+          content: `Error: ${message}`,
         })
       } finally {
         logger.info(

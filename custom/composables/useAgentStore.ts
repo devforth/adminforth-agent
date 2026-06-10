@@ -152,10 +152,17 @@ export const useAgentStore = defineStore('agent', () => {
       approvalPart.data.status = 'processing';
     }
 
-    await submitToolApprovalResponse(sessionId, decision);
+    try {
+      await submitToolApprovalResponse(sessionId, decision);
 
-    if (approvalPart?.data) {
-      approvalPart.data.status = decision === 'approve' ? 'approved' : 'rejected';
+      if (approvalPart?.data) {
+        approvalPart.data.status = decision === 'approve' ? 'approved' : 'rejected';
+      }
+    } catch (error) {
+      if (approvalPart?.data) {
+        approvalPart.data.status = 'pending';
+      }
+      console.error('Error submitting tool approval', error);
     }
   }
 
@@ -171,6 +178,18 @@ export const useAgentStore = defineStore('agent', () => {
   const isResponseInProgress = computed( () => {
     return currentChat.value?.status === 'streaming';
   });
+  const hasPendingToolApproval = computed(() => (
+    currentChat.value?.messages.some((message: any) => (
+      message.role === 'assistant'
+      && message.parts.some((part: any) => (
+        part.type === 'data-tool-approval'
+        && (part.data?.status === 'pending' || part.data?.status === 'processing')
+      ))
+    )) ?? false
+  ));
+  const isMessageInputBlocked = computed(() => (
+    isResponseInProgress.value || hasPendingToolApproval.value
+  ));
   const blockCloseOfChat = ref(false);
   const {
     sendMessage,
@@ -193,6 +212,7 @@ export const useAgentStore = defineStore('agent', () => {
     currentChat,
     trimmedUserMessage,
     isResponseInProgress,
+    isMessageInputBlocked,
     userMessageInput,
     lastMessage,
     blockCloseOfChat,
@@ -455,6 +475,8 @@ export const useAgentStore = defineStore('agent', () => {
     chatMessages: computed(() => currentChat.value?.messages || []),
     trimmedUserMessage,
     isResponseInProgress,
+    hasPendingToolApproval,
+    isMessageInputBlocked,
     isTeleportedToBody,
     setIsTeleportedToBody,
     chatWidth,

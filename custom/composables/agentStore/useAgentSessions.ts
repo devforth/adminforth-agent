@@ -17,6 +17,7 @@ type CreateAgentSessionManagerOptions = {
   currentChat: ShallowRef<Chat<any> | null | undefined>;
   trimmedUserMessage: ComputedRef<string>;
   isResponseInProgress: ComputedRef<boolean>;
+  isMessageInputBlocked: ComputedRef<boolean>;
   userMessageInput: Ref<any>;
   lastMessage: Ref<string>;
   blockCloseOfChat: Ref<boolean>;
@@ -32,6 +33,7 @@ export function createAgentSessionManager({
   currentChat,
   trimmedUserMessage,
   isResponseInProgress,
+  isMessageInputBlocked,
   userMessageInput,
   lastMessage,
   blockCloseOfChat,
@@ -130,7 +132,7 @@ export function createAgentSessionManager({
 
   async function sendMessage() {
     const message = trimmedUserMessage.value;
-    if (!message || isResponseInProgress.value) {
+    if (!message || isMessageInputBlocked.value) {
       return;
     }
     if (!currentSession.value || currentSession.value.sessionId === PRE_SESSION_ID) {

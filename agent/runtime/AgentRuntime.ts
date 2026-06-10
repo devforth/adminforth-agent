@@ -51,9 +51,9 @@ export class AgentRuntime {
     });
     const middleware = [
       apiBasedToolsMiddleware,
+      hitlMiddleware,
       ...(input.models.modelMiddleware ?? []),
       sequenceDebugMiddleware,
-      hitlMiddleware,
       summarizationMiddleware({
         model: input.models.summaryModel,
         trigger: { tokens: 1024 * 64 },

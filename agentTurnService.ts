@@ -129,6 +129,9 @@ export class AgentTurnService {
     const approvalDecision = getApprovalDecision(input);
     const shouldResume = Boolean(approvalDecision);
     const pendingInterrupts = this.pendingInterrupts.get(input.sessionId);
+    if (shouldResume && (!pendingInterrupts || pendingInterrupts.length === 0)) {
+      throw new Error(`No pending approval interrupt found for session "${input.sessionId}".`);
+    }
     const lifecycleTurn = shouldResume
       ? await this.lifecycle.resume(input)
       : await this.lifecycle.start(input);
