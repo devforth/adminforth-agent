@@ -23,6 +23,11 @@ export type AgentEvent =
       label: string;
     }
   | {
+      type: "interrupt";
+      sessionId: string;
+      interrupt: unknown;
+    }
+  | {
       type: "open-page";
       targetPath: string;
     }

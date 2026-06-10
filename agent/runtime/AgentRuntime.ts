@@ -1,5 +1,5 @@
 import type { IAdminForth } from "adminforth";
-import { createAgent, summarizationMiddleware } from "langchain";
+import { createAgent, summarizationMiddleware, humanInTheLoopMiddleware } from "langchain";
 import type { BaseCheckpointSaver } from "@langchain/langgraph";
 import { createApiBasedToolsMiddleware } from "../middleware/apiBasedTools.js";
 import { createSequenceDebugMiddleware } from "../middleware/sequenceDebug.js";
@@ -7,6 +7,22 @@ import { createAgentLlmMetricsLogger } from "../simpleAgent.js";
 import type { AgentToolProvider } from "../tools/AgentToolProvider.js";
 import type { AgentRuntimeRunInput } from "../turn/turnTypes.js";
 import { contextSchema, toLangchainAgentContext } from "./AgentContext.js";
+import type { ApiBasedTool } from "../../apiBasedTools.js";
+
+function createHumanInTheLoopInterrupts(
+  apiBasedTools: Record<string, ApiBasedTool>,
+): Record<string, { allowedDecisions: ("approve" | "reject" | "edit")[] }> {
+  return Object.fromEntries(
+    Object.entries(apiBasedTools)
+      .filter(([, apiBasedTool]) => apiBasedTool.agent?.isDangerous === true)
+      .map(([toolName]) => [
+        toolName,
+        {
+          allowedDecisions: ["approve", "reject"],
+        },
+      ]),
+  );
+}
 
 export type AgentRuntimeOptions = {
   name: string;
@@ -29,10 +45,15 @@ export class AgentRuntime {
     const sequenceDebugMiddleware = createSequenceDebugMiddleware(
       input.observability.sequenceDebugSink,
     );
+    const hitlMiddleware = humanInTheLoopMiddleware({
+      interruptOn: createHumanInTheLoopInterrupts(apiBasedTools),
+      descriptionPrefix: "Tool execution pending approval",
+    });
     const middleware = [
       apiBasedToolsMiddleware,
       ...(input.models.modelMiddleware ?? []),
       sequenceDebugMiddleware,
+      hitlMiddleware,
       summarizationMiddleware({
         model: input.models.summaryModel,
         trigger: { tokens: 1024 * 64 },
@@ -49,8 +70,8 @@ export class AgentRuntime {
       middleware,
     });
 
-    return agent.stream({ messages: input.messages } as any, {
-      streamMode: "messages",
+    return agent.stream(input.input as any, {
+      streamMode: ["messages", "updates"],
       recursionLimit: 100,
       callbacks: [createAgentLlmMetricsLogger()],
       signal: input.context.abortSignal,

@@ -65,6 +65,17 @@ export class AgentSessionStore {
       }));
   }
 
+  async getLatestTurn(sessionId: string) {
+    const turns = await this.getAdminforth().resource(this.options.turnResource.resourceId).list(
+      [Filters.EQ(this.options.turnResource.sessionIdField, sessionId)],
+      1,
+      undefined,
+      [Sorts.DESC(this.options.turnResource.createdAtField)]
+    );
+
+    return turns[0];
+  }
+
   getChatSurfaceSessionId(incoming: ChatSurfaceIncomingMessage) {
     return `${incoming.surface}:${incoming.externalConversationId}`;
   }

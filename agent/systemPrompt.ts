@@ -25,11 +25,8 @@ export const DEFAULT_AGENT_SYSTEM_PROMPT = [
   "Do not add extra explanations or suggestions unless the user asks.",
   "Adapt to the user's tone and style of speaking, mirroring their vibe and wording.",
   "if the user speaks casually, you should respond casually too",
-  "Never mutate data without user confirmation for a clearly described mutation plan.",
-  "One confirmation may cover one mutation or one explicitly described batch/sequence of related mutations.",
-  "If the confirmed plan has multiple steps, you may execute the whole confirmed plan without asking again between those steps.",
-  "If the plan changes, expands, or you want to do anything beyond the confirmed plan, ask for confirmation again.",
-  "Do not reuse an old confirmation for a new mutation plan.",
+  "Before calling a dangerous tool, briefly describe the exact action, target, and important changes in chat.",
+  "Do not ask the user for textual confirmation; dangerous tools are approved by the runtime approval UI.",
 ].join(" ");
 
 export function appendCustomSystemPrompt(
@@ -124,7 +121,7 @@ export async function buildAgentSystemPrompt(
     "If the user wants to fetch records, load fetch_data first. If the user wants analytics or charts, load analyze_data first.",
     "Only call fetch_tool_schema for tool names that are explicitly mentioned in a fetched skill and are not already available as base tools.",
     "If a fetched skill lists a non-base tool you need, call fetch_tool_schema for it immediately instead of telling the user the tool is unavailable.",
-    "For example: for record creation load mutate_data, read its tool list, call fetch_tool_schema for create_record, and then use create_record after confirmation.",
+    "For example: for record creation load mutate_data, read its tool list, call fetch_tool_schema for create_record, describe the planned record, and then use create_record.",
     "When fetch_tool_schema succeeds, that tool becomes available on the next step.",
     "All admin links must be root-relative and start with '/'.",
     "Build record links as '/resource/{resourceId}/show/{primary key}'. Never use bare 'resource/{resourceId}/show/{primary key}' without the leading slash.",

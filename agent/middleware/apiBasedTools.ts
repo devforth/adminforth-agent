@@ -82,6 +82,7 @@ export function createApiBasedToolsMiddleware(
     async wrapToolCall(request, handler) {
       const startedAt = Date.now();
       const toolInput = JSON.stringify(request.toolCall.args ?? {});
+      const toolCallId = request.toolCall.id as string;
       const { adminUser, emit, sequenceDebugSink, userTimeZone } = request.runtime.context as {
         adminUser: AdminUser;
         emit?: AgentEventEmitter;
@@ -113,7 +114,7 @@ export function createApiBasedToolsMiddleware(
       }
       const toolCallTracker = createToolCallTracker({
         emit: emitToolCall,
-        toolCallId: request.toolCall.id,
+        toolCallId,
         toolName: request.toolCall.name,
         toolInfo,
         input: toolArgs,
@@ -125,39 +126,29 @@ export function createApiBasedToolsMiddleware(
       );
 
       try {
-        let result;
 
-        if (request.tool) {
-          result = await handler(request);
-        } else {
-          const enabledApiToolNames = getEnabledApiToolNames(request.state.messages);
-
-          if (enabledApiToolNames.has(request.toolCall.name)) {
-            result = await handler({
+        const result = getEnabledApiToolNames(request.state.messages).has(request.toolCall.name)
+          ? await handler({
               ...request,
               tool: dynamicTools[request.toolCall.name],
-            });
-          } else {
-            result = new ToolMessage({
-              content: `Tool "${request.toolCall.name}" is not loaded. Call fetch_tool_schema first.`,
-              tool_call_id: request.toolCall.id ?? "",
-              name: request.toolCall.name,
-              status: "error",
-            });
-          }
-        }
+            })
+          : await handler(request);
 
         toolCallTracker.finishSuccess(result);
         return result;
       } catch (error) {
-        const errorDetails =
-          error instanceof Error ? error.stack ?? error.message : String(error);
-
         logger.error(
-          `Tool "${request.toolCall.name}" failed after ${Date.now() - startedAt}ms with input: ${toolInput}\n${errorDetails}`,
+          `Error calling tool "${request.toolCall.name}": ${error instanceof Error ? error.stack ?? error.message : String(error)}`,
         );
-        toolCallTracker.finishError(error);
-        throw error;
+        toolCallTracker.finishError(`Error: ${error instanceof Error ? error.message : String(error)}`);
+        return new ToolMessage({
+          name: request.toolCall.name,
+          tool_call_id: toolCallId,
+          status: "error",
+          content: `Error: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        })
       } finally {
         logger.info(
           `Tool "${request.toolCall.name}" finished in ${Date.now() - startedAt}ms`,

@@ -1,15 +1,18 @@
 export interface IPartData {
   toolCallId?: string;
   toolName?: string;
+  sessionId?: string;
   phase?: 'start' | 'end';
   label?: string;
   input?: any;
   output?: any;
   durationMs?: number;
   toolInfo?: string;
+  status?: 'pending' | 'processing' | 'approved' | 'rejected';
+  messages?: string[];
 }
 export interface IPart {
-  type: 'reasoning' | 'data-tool-call' | 'data-rendering' | 'text';
+  type: 'reasoning' | 'data-tool-call' | 'data-rendering' | 'data-tool-approval' | 'text';
   text?: string;
   state?: 'started' | 'thinking' | 'processing' | 'streaming' | 'done';
   data?: IPartData;

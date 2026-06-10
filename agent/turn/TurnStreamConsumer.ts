@@ -3,19 +3,27 @@ import { VegaLiteStreamBuffer } from "./VegaLiteStreamBuffer.js";
 
 export class TurnStreamConsumer {
   async consume(input: {
-    stream: AsyncIterable<[any, any]>;
+    stream: AsyncIterable<["messages", [any, any]] | ["updates", Record<string, any>]>;
     abortSignal?: AbortSignal;
     emit?: AgentEventEmitter;
+    onInterrupt?: (interrupt: unknown) => void | Promise<void>;
   }) {
     let fullResponse = "";
     const textBuffer = new VegaLiteStreamBuffer();
 
-    for await (const rawChunk of input.stream) {
+    for await (const [mode, chunk] of input.stream) {
       if (input.abortSignal?.aborted) {
         throw new DOMException("This operation was aborted", "AbortError");
       }
 
-      const [token, metadata] = rawChunk;
+      if (mode === "updates") {
+        if ("__interrupt__" in chunk) {
+          await input.onInterrupt?.(chunk.__interrupt__);
+        }
+        continue;
+      }
+
+      const [token, metadata] = chunk;
       const nodeName =
         typeof metadata?.langgraph_node === "string"
           ? metadata.langgraph_node

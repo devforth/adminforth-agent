@@ -1,5 +1,6 @@
 import type { AdminUser, AudioAdapter } from "adminforth";
 import type { Messages } from "@langchain/langgraph";
+import type { Command } from "@langchain/langgraph";
 import type { AgentChatModel, AgentMiddleware } from "../simpleAgent.js";
 import type { SequenceDebugCollector } from "../middleware/sequenceDebug.js";
 import type { PreviousUserMessage } from "../languageDetect.js";
@@ -20,6 +21,7 @@ export type BaseAgentTurnInput = {
 
 export type TextAgentTurnInput = BaseAgentTurnInput & {
   emit: AgentEventEmitter;
+  approvalDecision?: "approve" | "reject";
   failureLogMessage?: string;
   abortLogMessage?: string;
 };
@@ -60,6 +62,11 @@ export type PreparedAgentTurn = {
   modeName?: string | null;
   context: AgentTurnContext;
   observability: AgentTurnObservability;
+  resume?: {
+    decision: "approve" | "reject";
+    interrupts?: { id: string; count: number }[];
+  };
+  initialResponse?: string;
 };
 
 export type AgentTurnModels = {
@@ -70,13 +77,14 @@ export type AgentTurnModels = {
 
 export type AgentRuntimeRunInput = {
   models: AgentTurnModels;
-  messages: Messages;
+  input: { messages: Messages } | Command;
   context: AgentTurnContext;
   observability: AgentTurnObservability;
 };
 
 export type RunAndPersistAgentResponseInput = BaseAgentTurnInput & {
   emit?: AgentEventEmitter;
+  approvalDecision?: "approve" | "reject";
   failureLogMessage: string;
   abortLogMessage: string;
 };

@@ -53,10 +53,12 @@ export const useAgentStore = defineStore('agent', () => {
     currentChat,
     setCurrentChat,
     abortCurrentChatRequest,
+    submitToolApproval: submitToolApprovalResponse,
   } = createAgentChatManager({
     lastMessage,
     activeModeName,
     onOpenPage: openAgentPage,
+    onToolApprovalRequest: addToolApprovalMessage,
   });
   const {
     userMessagePlaceholder,
@@ -93,6 +95,68 @@ export const useAgentStore = defineStore('agent', () => {
 
   function setIsAudioChatMode(isAudioChat: boolean) {
     isAudioChatMode.value = isAudioChat;
+  }
+
+  function getToolApprovalMessages(interrupt: unknown): string[] {
+    const interrupts = Array.isArray(interrupt) ? interrupt : [interrupt];
+
+    return interrupts.flatMap((item: any) => {
+      const value = item?.value ?? item;
+      const actionRequests = Array.isArray(value?.actionRequests) ? value.actionRequests : [];
+
+      return actionRequests.map((actionRequest: any) => (
+        typeof actionRequest?.description === 'string'
+          ? actionRequest.description
+          : String(actionRequest?.name ?? 'Tool execution pending approval')
+      ));
+    });
+  }
+
+  function addToolApprovalMessage(sessionId: string, interrupt: unknown) {
+    const approvalPart = {
+      type: 'data-tool-approval' as const,
+      data: {
+        sessionId,
+        status: 'pending' as const,
+        messages: getToolApprovalMessages(interrupt),
+      },
+    };
+    const lastChatMessage = currentChat.value?.lastMessage;
+
+    if (lastChatMessage?.role === 'assistant') {
+      lastChatMessage.parts.push(approvalPart);
+      currentChat.value?.messages.splice(currentChat.value.messages.length - 1, 1, lastChatMessage);
+      return;
+    }
+
+    currentChat.value?.messages.push({
+      role: 'assistant',
+      parts: [approvalPart],
+    });
+  }
+
+  async function submitToolApproval(sessionId: string, decision: 'approve' | 'reject') {
+    const message = currentChat.value?.messages
+      .findLast(candidate => candidate.role === 'assistant' && candidate.parts.some(part => {
+        return part.type === 'data-tool-approval'
+          && part.data?.sessionId === sessionId
+          && part.data?.status === 'pending';
+      }));
+    const approvalPart = message?.parts.find(part => {
+      return part.type === 'data-tool-approval'
+        && part.data?.sessionId === sessionId
+        && part.data?.status === 'pending';
+    });
+
+    if (approvalPart?.data) {
+      approvalPart.data.status = 'processing';
+    }
+
+    await submitToolApprovalResponse(sessionId, decision);
+
+    if (approvalPart?.data) {
+      approvalPart.data.status = decision === 'approve' ? 'approved' : 'rejected';
+    }
   }
 
   watch(isAudioChatMode, (newVal: boolean) => {
@@ -385,6 +449,7 @@ export const useAgentStore = defineStore('agent', () => {
     isSessionHistoryOpen,
     setSessionHistoryOpen,
     sendMessage,
+    submitToolApproval,
     userMessageInput,
     userMessagePlaceholder,
     chatMessages: computed(() => currentChat.value?.messages || []),

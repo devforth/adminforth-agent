@@ -13,8 +13,12 @@
       :role="props.message.role" 
       :state="part.state ?? (props.message.role === 'user' ? 'done' : undefined)"
     />
+    <ToolApprovalRenderer
+      v-else-if="part.type === 'data-tool-approval'"
+      :data="part.data ?? {}"
+    />
     <SystemMessageRenderer 
-      v-else
+      v-else-if="part.type === 'text'"
       :message="part.text" 
     />
   </template>
@@ -30,6 +34,7 @@
   import { getMessageParts } from '../utils';
   import ProcessingTimeline from './ProcessingTimeline.vue';
   import SystemMessageRenderer from './SystemMessageRenderer.vue';
+  import ToolApprovalRenderer from './ToolApprovalRenderer.vue';
   import { RESERVED_SYSTEM_MESSAGE_CONTENT } from '../composables/agentStore/constants';
 
   const props = defineProps<{ 

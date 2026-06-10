@@ -39,9 +39,14 @@ type GetResourceDataToolResponse = {
 type DateTimeColumnType = AdminForthDataTypes.DATETIME | AdminForthDataTypes.TIME;
 type RegisteredApiToolSchema = IRegisteredApiSchema & {
   handler: (input: unknown) => void | Promise<unknown>;
+  agent?: AgentToolMeta;
 };
 
 const DEFAULT_USER_TIME_ZONE = 'UTC';
+
+type AgentToolMeta = {
+  isDangerous?: boolean;
+};
 
 function hasRegisteredApiToolHandler(schema: IRegisteredApiSchema): schema is RegisteredApiToolSchema {
   return typeof (schema as { handler?: unknown }).handler === 'function';
@@ -175,6 +180,7 @@ export type ApiBasedToolCallParams = {
 export type ApiBasedTool = {
   description?: string;
   input_schema?: unknown;
+  agent?: AgentToolMeta;
   call: (params?: ApiBasedToolCallParams) => Promise<string>;
 };
 
@@ -615,6 +621,7 @@ export function prepareApiBasedTools(
     apiBasedTools[toolName] = {
       description: schema.description,
       input_schema: schema.request_schema,
+      agent: schema.agent,
       call: async ({ adminUser, adminuser, abortSignal, inputs, userTimeZone, acceptLanguage } = {}) => {
         if (isHiddenResourceCall(hiddenResourceIdSet, inputs)) {
           return YAML.stringify({

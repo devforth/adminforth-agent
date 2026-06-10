@@ -85,7 +85,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     });
     const persistence = new TurnPersistenceService(() => this.adminforth, this.options);
     this.agentTurnService = new AgentTurnService(
-      new TurnLifecycleService(this.sessionStore, persistence),
+      new TurnLifecycleService(this.sessionStore, persistence, this.options),
       new TurnContextBuilder(() => this.adminforth),
       new AgentModeResolver(this.options),
       new AgentModelFactory(this.options.maxTokens ?? 1000),

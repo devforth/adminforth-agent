@@ -20,6 +20,11 @@ const agentResponseBodySchema = z.object({
   currentPage: z.custom<CurrentPageContext>().optional(),
 }).strict();
 
+const agentApprovalBodySchema = z.object({
+  sessionId: z.string(),
+  decision: z.enum(["approve", "reject"]),
+}).strict();
+
 const agentSpeechResponseBodySchema = agentResponseBodySchema.omit({ message: true });
 
 export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServer) {
@@ -66,6 +71,32 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
         emit,
         failureLogMessage: "Agent response streaming failed",
         abortLogMessage: "Agent response streaming aborted by the client",
+      });
+      return null;
+    }
+  });
+
+  server.endpoint({
+    method: 'POST',
+    path: `/agent/approval`,
+    handler: async ({ body, adminUser, response, _raw_express_res, abortSignal }) => {
+      const data = ctx.parseBody(agentApprovalBodySchema, body, response);
+      if (!data) return;
+      const emit = createSseEventEmitter(_raw_express_res, {
+        vercelAiUiMessageStream: true,
+        closeActiveBlockOnToolStart: true,
+      });
+
+      await ctx.handleTurn({
+        prompt: "",
+        sessionId: data.sessionId,
+        userTimeZone: 'UTC',
+        approvalDecision: data.decision,
+        abortSignal,
+        adminUser: adminUser!,
+        emit,
+        failureLogMessage: "Agent approval response streaming failed",
+        abortLogMessage: "Agent approval response streaming aborted by the client",
       });
       return null;
     }

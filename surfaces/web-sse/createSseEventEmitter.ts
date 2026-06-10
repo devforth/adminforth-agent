@@ -123,6 +123,17 @@ function createAgentEventStream(
       });
     },
 
+    interrupt(sessionId: string, interrupt: unknown) {
+      stream.endActiveBlock();
+      stream.send({
+        type: isAiUiMessageStream ? "data-interrupt" : "interrupt",
+        data: {
+          sessionId,
+          interrupt,
+        },
+      });
+    },
+
     openPage(targetPath: string) {
       stream.send({
         type: isAiUiMessageStream ? "data-open-page" : "open-page",
@@ -258,6 +269,9 @@ export function createSseEventEmitter(
         break;
       case "rendering":
         stream.rendering(event.phase, event.label);
+        break;
+      case "interrupt":
+        stream.interrupt(event.sessionId, event.interrupt);
         break;
       case "open-page":
         stream.openPage(event.targetPath);
