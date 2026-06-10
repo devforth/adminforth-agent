@@ -24,6 +24,8 @@ If several rows look similar, do not guess which one is "the same" record. Show 
 
 For long texts show only several first words and add "..." at the end (only if user did not request this field specifically).
 
+Never show information about more than 10 records in one message. If a tool returns more than 10 relevant records, summarize the total count if known, show only the 10 most relevant records, and offer to narrow filters, sort differently, or continue with the next 10.
+
 Also when you communicate with user about record, add related link to this record. Build it as `{ADMIN_BASE_PATH}resource/{resourceId}/show/{primary key}`. Use _label from `get_resource_data` as anchor text for link (use markdown link). Links should always be relative paths and must start with `ADMIN_BASE_PATH`. Do not add an extra slash after `ADMIN_BASE_PATH`.
 
 Before sending the link, verify that the `resourceId`, `{primary key}`, `_label`, and shown fields come from the same exact returned row.

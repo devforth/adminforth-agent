@@ -94,5 +94,11 @@ export type SpeechStreamEvent =
       data: any;
     }
   | {
+      type: 'open-page';
+      data: {
+        targetPath: string;
+      };
+    }
+  | {
       type: 'finish';
     };

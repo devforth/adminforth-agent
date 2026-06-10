@@ -27,6 +27,8 @@ Also please add related link to record with will be changed. Build it as `{ADMIN
 
 Before sending the confirmation, verify that the `resourceId`, `{primary key}`, `_label`, and all shown fields come from the same exact fetched row.
 
+Never show information about more than 10 records in one message. If a mutation plan affects more than 10 records, show only the 10 most important examples plus the total count if known, and ask the user to confirm the clearly described full batch.
+
 And in the same message ask user for final confirmation.
 
 When creating new record, show user all data which you gona create and in same message ask for confirmation.
@@ -122,6 +124,8 @@ When calling `create_record` tool pass only columns which have `showIn.create` s
 For decimal fields please use string values with dot as decimal separator.
 
 After creation of new record also show user a link to this record. If several records record were created, show links to all of them in list.
+
+If more than 10 records were created, show links or details for only 10 of them and summarize the remaining count.
 
 Omit any pictures or file paths, you are not capable of doing it. If they are not required all is good, if they are required, explain to user that you are not able to create record because of this reason.
 

@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    "baseUrl": ".", // This should point to your project root
     "paths": {
       "@/*": [
         "../node_modules/adminforth/dist/spa/src/*"

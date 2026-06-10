@@ -18,7 +18,17 @@ import type { AgentEndpointsContext } from "./endpoints/context.js";
 import { AgentSessionStore } from "./sessionStore.js";
 import { ChatSurfaceService } from "./chatSurfaceService.js";
 import { AgentTurnService } from "./agentTurnService.js";
- 
+import { AgentModelFactory } from "./agent/models/AgentModelFactory.js";
+import { AgentModeResolver } from "./agent/models/AgentModeResolver.js";
+import { AgentRuntime } from "./agent/runtime/AgentRuntime.js";
+import { SpeechTurnService } from "./agent/speech/SpeechTurnService.js";
+import { AgentToolProvider } from "./agent/tools/AgentToolProvider.js";
+import { TurnContextBuilder } from "./agent/turn/TurnContextBuilder.js";
+import { TurnLifecycleService } from "./agent/turn/TurnLifecycleService.js";
+import { TurnPersistenceService } from "./agent/turn/TurnPersistenceService.js";
+import { TurnPromptBuilder } from "./agent/turn/TurnPromptBuilder.js";
+import { TurnStreamConsumer } from "./agent/turn/TurnStreamConsumer.js";
+
 export type { AgentEvent, AgentEventEmitter } from "./agentEvents.js";
 
 export default class AdminForthAgentPlugin extends AdminForthPlugin {
@@ -27,6 +37,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
   private checkpointer: BaseCheckpointSaver | null = null;
   private sessionStore: AgentSessionStore;
   private agentTurnService: AgentTurnService;
+  private speechTurnService: SpeechTurnService;
   private chatSurfaceService: ChatSurfaceService;
   private parseBody<T>(
     schema: z.ZodType<T>,
@@ -62,15 +73,32 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     super(options, import.meta.url);
     this.options = options;
     this.sessionStore = new AgentSessionStore(() => this.adminforth, this.options);
-    this.agentTurnService = new AgentTurnService({
+    const toolProvider = new AgentToolProvider(
+      () => this.adminforth,
+      this.getInternalAgentResourceIds.bind(this),
+    );
+    const runtime = new AgentRuntime({
+      name: `adminforth-agent-${this.pluginInstanceId}`,
       getAdminforth: () => this.adminforth,
-      getPluginInstanceId: () => this.pluginInstanceId,
-      options: this.options,
-      sessionStore: this.sessionStore,
       getCheckpointer: this.getCheckpointer.bind(this),
-      getInternalAgentResourceIds: this.getInternalAgentResourceIds.bind(this),
-      getAgentSystemPrompt: () => this.agentSystemPromptPromise,
+      toolProvider,
     });
+    const persistence = new TurnPersistenceService(() => this.adminforth, this.options);
+    this.agentTurnService = new AgentTurnService(
+      new TurnLifecycleService(this.sessionStore, persistence),
+      new TurnContextBuilder(() => this.adminforth),
+      new AgentModeResolver(this.options),
+      new AgentModelFactory(this.options.maxTokens ?? 1000),
+      new TurnPromptBuilder({
+        getAdminforth: () => this.adminforth,
+        getAgentSystemPrompt: () => this.agentSystemPromptPromise,
+      }),
+      runtime,
+      new TurnStreamConsumer(),
+    );
+    this.speechTurnService = new SpeechTurnService(
+      this.agentTurnService.runAndPersistAgentResponse.bind(this.agentTurnService),
+    );
     this.chatSurfaceService = new ChatSurfaceService(
       () => this.adminforth,
       this.options,
@@ -146,7 +174,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       options: this.options,
       parseBody: this.parseBody.bind(this),
       handleTurn: this.agentTurnService.handleTurn.bind(this.agentTurnService),
-      handleSpeechTurn: this.agentTurnService.handleSpeechTurn.bind(this.agentTurnService),
+      handleSpeechTurn: this.speechTurnService.handle.bind(this.speechTurnService),
       runAndPersistAgentResponse: this.agentTurnService.runAndPersistAgentResponse.bind(this.agentTurnService),
       getSessionTurns: this.sessionStore.getSessionTurns.bind(this.sessionStore),
       createNewTurn: this.sessionStore.createNewTurn.bind(this.sessionStore),

@@ -184,6 +184,9 @@ export class ChatSurfaceService {
     options?: { emitDone?: boolean },
   ) {
     const emitDone = options?.emitDone ?? true;
+    const adminPublicOrigin = typeof incoming.metadata?.adminPublicOrigin === "string"
+      ? incoming.metadata.adminPublicOrigin
+      : undefined;
     const sessionId = await this.sessionStore.getOrCreateChatSurfaceSession(
       { ...incoming, prompt },
       adminUser,
@@ -195,6 +198,8 @@ export class ChatSurfaceService {
         sessionId,
         modeName: incoming.modeName,
         userTimeZone: incoming.userTimeZone ?? "UTC",
+        chatSurface: incoming.surface,
+        adminPublicOrigin,
         adminUser,
         emit: this.createEventEmitter(sink),
         failureLogMessage: `Agent ${incoming.surface} surface response failed`,
@@ -208,6 +213,8 @@ export class ChatSurfaceService {
       sessionId,
       modeName: incoming.modeName,
       userTimeZone: incoming.userTimeZone ?? "UTC",
+      chatSurface: incoming.surface,
+      adminPublicOrigin,
       adminUser,
       emit: this.createEventEmitter(sink),
       failureLogMessage: `Agent ${incoming.surface} surface response failed`,
