@@ -160,6 +160,7 @@
         input: part.data.input,
         output: finishedPart?.data?.output,
         toolInfo: part.data.toolInfo,
+        error: finishedPart?.data?.error,
       }
     };
   };

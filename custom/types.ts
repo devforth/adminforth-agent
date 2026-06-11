@@ -10,6 +10,7 @@ export interface IPartData {
   toolInfo?: string;
   status?: 'pending' | 'processing' | 'approved' | 'rejected';
   messages?: string[];
+  error?: string;
 }
 export interface IPart {
   type: 'reasoning' | 'data-tool-call' | 'data-rendering' | 'data-tool-approval' | 'text';

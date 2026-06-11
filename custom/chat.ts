@@ -17,7 +17,7 @@ import type {
   ChatStatus,
   UIMessage,
 } from 'ai';
-import {   AbstractChat, } from 'ai'
+import { AbstractChat } from 'ai'
 import { Ref, ref } from 'vue';
 
 class VueChatState<

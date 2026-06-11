@@ -13,7 +13,11 @@
       </h3>
       <div class="flex flex-wrap">
         <template v-for="group in props.toolGroup" :key="group.title">
-          <ToolRenderer v-for="part in group.groupedTools" :key="part.toolInfo.toolCallId" :data="part"/>
+          <ToolRenderer 
+            v-for="part in group.groupedTools" 
+            :key="part.toolInfo.toolCallId" 
+            :data="part"
+          />
         </template> 
       </div>
     </li>

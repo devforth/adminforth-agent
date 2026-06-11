@@ -20,7 +20,8 @@
     >
       <div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-lightNavbar dark:bg-darkNavbar">
         <Spinner v-if="isRunning" class="h-4 w-4" />
-        <IconCheckOutline v-else class="h-4 w-4 text-lightPrimary dark:text-darkPrimary" />
+        <IconCheckOutline v-else-if="!props.data.toolInfo.error" class="h-4 w-4 text-lightPrimary dark:text-darkPrimary" />
+        <IconCloseOutline v-else class="h-4 w-4 text-red-500" />
       </div>
 
       <div class="min-w-0">
@@ -61,7 +62,7 @@
   import { computed, ref, watch, onMounted } from 'vue';
   import { type IFormattedToolCallPart } from '../types';
   import { Spinner } from '@/afcl';
-  import { IconAngleDownOutline, IconCheckOutline } from '@iconify-prerendered/vue-flowbite';
+  import { IconAngleDownOutline, IconCheckOutline, IconCloseOutline } from '@iconify-prerendered/vue-flowbite';
 
   const props = defineProps<{
     data: IFormattedToolCallPart
