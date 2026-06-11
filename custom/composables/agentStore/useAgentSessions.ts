@@ -6,7 +6,7 @@ import { PRE_SESSION_ID } from './constants';
 import { i18nInstance } from '@/i18n';
 
 type AdminforthLike = {
-  confirm(options: { message: string; yes: string; no: string }): Promise<boolean>;
+  confirm(options: { title?: string; message?: string; yes?: string; no?: string; dangerous?: boolean }): Promise<boolean>;
 };
 
 type CreateAgentSessionManagerOptions = {
@@ -175,7 +175,7 @@ export function createAgentSessionManager({
       return;
     }
     blockCloseOfChat.value = true;
-    const isConfirmed = await adminforth.confirm({title: t('Are you sure, that you want to delete this session?'), message: t('This process is irreversible.'), yes: 'Yes', no: 'No'});
+    const isConfirmed = await adminforth.confirm({title: t('Are you sure, that you want to delete this session?'), message: t('This process is irreversible.'), yes: 'Yes', no: 'No', dangerous: true});
     blockCloseOfChat.value = false;
     if (!isConfirmed) {
       return;
