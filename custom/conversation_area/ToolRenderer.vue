@@ -59,7 +59,7 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, ref, watch, onMounted } from 'vue';
+  import { computed, ref, watch, onMounted, nextTick } from 'vue';
   import { type IFormattedToolCallPart } from '../types';
   import { Spinner } from '@/afcl';
   import { IconAngleDownOutline, IconCheckOutline, IconCloseOutline } from '@iconify-prerendered/vue-flowbite';
@@ -109,7 +109,8 @@
   });
   const hasToolSections = computed(() => toolSections.value.length > 0);
 
-  onMounted(() => {
+  onMounted(async () => {
+    await nextTick();
     if (toolRendererRef.value && props.data.toolInfo) {
       toolRendererInitialWidth.value = toolRendererRef.value.offsetWidth;
     }

@@ -13,7 +13,8 @@
       </h3>
       <div class="flex flex-wrap">
         <template v-for="group in props.toolGroup" :key="group.title">
-          <ToolRenderer 
+          <ToolRenderer
+            v-if="isExpanded" 
             v-for="part in group.groupedTools" 
             :key="part.toolInfo.toolCallId" 
             :data="part"
@@ -31,6 +32,7 @@ import { IconWrenchSolid } from '@iconify-prerendered/vue-heroicons';
 
 const props = defineProps<{
   toolGroup: IToolGroup[]
+  isExpanded: boolean
 }>();
 
 </script>
