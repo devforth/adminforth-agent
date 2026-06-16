@@ -480,6 +480,15 @@ function normalizeDateTimeInputsToUtc(
 }
 
 const METHODS_WITHOUT_REQUEST_BODY = new Set<string>(['GET', 'HEAD']);
+const TOOL_HANDLER_TIMEOUT_MS = 15_000;
+const EMPTY_HANDLER_RESPONSE_ERROR = {
+  error: 'EMPTY_HANDLER_RESPONSE',
+  message: 'Tool handler completed without returning a response.',
+};
+const TOOL_HANDLER_TIMEOUT_ERROR = {
+  error: 'TOOL_HANDLER_TIMEOUT',
+  message: `Tool handler timed out after ${TOOL_HANDLER_TIMEOUT_MS / 1000} seconds.`,
+};
 
 function createDirectToolResponse(): IAdminForthHttpResponse & {
   headers: Array<[string, string]>;
@@ -512,6 +521,30 @@ function validationErrorResponse(
     error,
     details,
   };
+}
+
+async function withToolHandlerTimeout<T>(callback: (abortSignal: AbortSignal) => T | Promise<T>, abortSignal?: AbortSignal) {
+  const controller = new AbortController();
+  const abortHandler = () => controller.abort();
+  let timeout: ReturnType<typeof setTimeout>;
+  const timeoutPromise = new Promise<typeof TOOL_HANDLER_TIMEOUT_ERROR>((resolve) => {
+    timeout = setTimeout(() => {
+      controller.abort();
+      resolve(TOOL_HANDLER_TIMEOUT_ERROR);
+    }, TOOL_HANDLER_TIMEOUT_MS);
+  });
+
+  abortSignal?.addEventListener('abort', abortHandler, { once: true });
+
+  try {
+    return await Promise.race([
+      callback(controller.signal),
+      timeoutPromise,
+    ]);
+  } finally {
+    clearTimeout(timeout!);
+    abortSignal?.removeEventListener('abort', abortHandler);
+  }
 }
 
 async function callOpenApiSchema(params: {
@@ -549,19 +582,21 @@ async function callOpenApiSchema(params: {
     trParams: unknown,
     pluralizationNumber?: number,
   ) => adminforth.tr(msg, category, lang, trParams, pluralizationNumber);
-  const output = await schema.handler({
-    body,
-    query,
-    headers: {},
-    cookies: [],
-    adminUser,
-    response,
-    requestUrl: schema.path,
-    abortSignal: abortSignal ?? new AbortController().signal,
-    _raw_express_req: undefined as never,
-    _raw_express_res: undefined as never,
-    tr,
-  });
+  const output = await withToolHandlerTimeout((handlerAbortSignal) => schema.handler({
+      body,
+      query,
+      headers: {},
+      cookies: [],
+      adminUser,
+      response,
+      requestUrl: schema.path,
+      abortSignal: handlerAbortSignal,
+      _raw_express_req: undefined as never,
+      _raw_express_res: undefined as never,
+      tr,
+    }),
+    abortSignal,
+  );
 
   if (response.message) {
     return response.status >= 400
@@ -571,6 +606,10 @@ async function callOpenApiSchema(params: {
         response: response.message,
       }
       : response.message;
+  }
+
+  if (output === undefined) {
+    return EMPTY_HANDLER_RESPONSE_ERROR;
   }
 
   if (output === null) {
@@ -590,6 +629,10 @@ async function callOpenApiSchema(params: {
       response: output,
     }
     : output;
+}
+
+function stringifyToolOutput(output: unknown): string {
+  return YAML.stringify(output === undefined ? EMPTY_HANDLER_RESPONSE_ERROR : output);
 }
 
 export function prepareApiBasedTools(
@@ -624,7 +667,7 @@ export function prepareApiBasedTools(
       agent: schema.agent,
       call: async ({ adminUser, adminuser, abortSignal, inputs, userTimeZone, acceptLanguage } = {}) => {
         if (isHiddenResourceCall(hiddenResourceIdSet, inputs)) {
-          return YAML.stringify({
+          return stringifyToolOutput({
             error: 'RESOURCE_NOT_AVAILABLE',
             message: 'This resource is not available to the agent.',
           });
@@ -650,7 +693,7 @@ export function prepareApiBasedTools(
           userTimeZone,
         });
 
-        return YAML.stringify(processedOutput);
+        return stringifyToolOutput(processedOutput);
       },
     };
   }
