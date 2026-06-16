@@ -197,6 +197,7 @@ export function createAgentChatManager({
         }),
         onError(error: unknown) {
           console.error('Chat error:', error);
+          appendTextDelta(`Error: ${error instanceof Error ? error.message : String(error)}`);
         },
         onData: handleRealtimeChatData,
       });

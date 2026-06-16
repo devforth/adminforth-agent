@@ -1,7 +1,8 @@
 <template>
   <template v-if="ToolOrReasoningParts.length > 0 || inProgress">
     <div 
-      class="shine-text-container ml-2 px-4 flex items-center gap-1 cursor-pointer select-none hover:opacity-80 tracking-wide font-medium text-sm text-listTableHeadingText dark:text-darkListTableHeadingText"
+      class="shine-text-container ml-2 px-4 flex items-center gap-1 select-none hover:opacity-80 tracking-wide font-medium text-sm text-listTableHeadingText dark:text-darkListTableHeadingText"
+      :class="[ToolOrReasoningParts.length > 0 ? 'cursor-pointer' : '']"
       @click="isExpanded = !isExpanded"
     >
       <p 
@@ -13,11 +14,12 @@
             ` 
           : '']"
       >
-        {{ $t('Thoughts') }} 
+        {{ inProgress ? $t('Thinking') : $t('Thoughts') }} 
       </p>
+      
       <span v-if="thinkingDuration > 0">({{ (thinkingDuration/1000).toFixed(2) }} s)</span>
-      <!-- <ThreeDotsAnimation v-if="inProgress" /> -->
       <IconAngleDownOutline 
+        v-if="ToolOrReasoningParts.length > 0"
         :class="isExpanded ? 'rotate-180' : 'rotate-0'"
         class="transition-transform duration-200"
       />
@@ -38,7 +40,7 @@
         <ol class="ml-8 my-2 relative border-l border-l-2 border-black border-default border-listTableHeadingText dark:border-darkListTableHeadingText">
           <template v-for="(part, index) in ToolOrReasoningParts" :key="index">
             <ReasoningRenderer v-if="part.type === 'reasoning'" :state="part.state" :text="part.text" />
-            <ToolsGroup v-else-if="part.type==='data-tool-call'" :toolGroup="groupToolCallParts(message, part)" />
+            <ToolsGroup v-else-if="part.type==='data-tool-call'" :toolGroup="groupToolCallParts(message, part)" :isExpanded="isExpanded" />
             <li v-else-if="part.type === 'data-rendering'" class="mb-6 mx-2 mt-2 px-2 z-50 overflow-hidden">
               <span class="bg-lightNavbar dark:bg-darkNavbar absolute flex items-center text-listTableHeadingText dark:text-darkListTableHeadingText justify-center w-5 h-5 rounded-full -start-[0.68rem] ring-4 ring-lightNavbar dark:ring-darkNavbar">
                 <div class="w-2 h-2 rounded-full bg-current animate-pulse"></div>
