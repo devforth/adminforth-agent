@@ -1,7 +1,8 @@
 <template>
   <template v-if="ToolOrReasoningParts.length > 0 || inProgress">
     <div 
-      class="shine-text-container ml-2 px-4 flex items-center gap-1 cursor-pointer select-none hover:opacity-80 tracking-wide font-medium text-sm text-listTableHeadingText dark:text-darkListTableHeadingText"
+      class="shine-text-container ml-2 px-4 flex items-center gap-1 select-none hover:opacity-80 tracking-wide font-medium text-sm text-listTableHeadingText dark:text-darkListTableHeadingText"
+      :class="[ToolOrReasoningParts.length > 0 ? 'cursor-pointer' : '']"
       @click="isExpanded = !isExpanded"
     >
       <p 
@@ -13,11 +14,12 @@
             ` 
           : '']"
       >
-        {{ $t('Thoughts') }} 
+        {{ inProgress ? $t('Thinking') : $t('Thoughts') }} 
       </p>
       <span v-if="thinkingDuration > 0">({{ (thinkingDuration/1000).toFixed(2) }} s)</span>
       <!-- <ThreeDotsAnimation v-if="inProgress" /> -->
       <IconAngleDownOutline 
+        v-if="ToolOrReasoningParts.length > 0"
         :class="isExpanded ? 'rotate-180' : 'rotate-0'"
         class="transition-transform duration-200"
       />
