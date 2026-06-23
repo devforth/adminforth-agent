@@ -10,7 +10,7 @@
     <div 
       class="w-full border rounded-lg pb-8"
       :class="agentStore.isAudioChatMode ? 'border-none mt-8' : 'border dark:bg-gray-700'"  
-    >
+    > 
       <textarea
         v-if="!agentStore.isAudioChatMode"
         v-model="agentStore.userMessageInput"
