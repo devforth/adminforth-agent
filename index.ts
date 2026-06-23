@@ -34,6 +34,7 @@ export type { AgentEvent, AgentEventEmitter } from "./agentEvents.js";
 export default class AdminForthAgentPlugin extends AdminForthPlugin {
   options: PluginOptions;
   agentSystemPromptPromise: Promise<string>;
+  pluginsScope: "resource" | "global" = "global";
   private checkpointer: BaseCheckpointSaver | null = null;
   private sessionStore: AgentSessionStore;
   private agentTurnService: AgentTurnService;
@@ -112,8 +113,8 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     this.shouldHaveSingleInstancePerWholeApp = () => false;
   }
 
-  async modifyResourceConfig(adminforth: IAdminForth, resourceConfig: AdminForthResource) {
-    super.modifyResourceConfig(adminforth, resourceConfig);
+  async modifyGlobalConfig(adminforth: IAdminForth) {
+    super.modifyGlobalConfig(adminforth);
     if (!this.options.modes?.length) {
       throw new Error("modes is required for AdminForthAgentPlugin");
     }
