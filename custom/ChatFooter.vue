@@ -7,6 +7,7 @@
       transition: `transform ${agentTransitions.TRANSITION_DURATION}ms ease-in-out`
     }"            
   >
+  
     <div 
       class="w-full border rounded-lg pb-8"
       :class="agentStore.isAudioChatMode ? 'border-none mt-8' : 'border dark:bg-gray-700'"  
