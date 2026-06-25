@@ -40,8 +40,8 @@ importers:
         specifier: latest
         version: 26.0.0
       adminforth:
-        specifier: ^3.5.0
-        version: 3.5.0(@adminforth/connector-qdrant@1.0.4)(@types/node@26.0.0)
+        specifier: ^3.6.2
+        version: 3.6.2(@adminforth/connector-qdrant@1.0.4)(@types/node@26.0.0)
       semantic-release:
         specifier: ^24.2.1
         version: 24.2.9(typescript@5.9.3)
@@ -516,8 +516,8 @@ packages:
     resolution: {integrity: sha512-PYAthTa2m2VKxuvSD3DPC/Gy+U+sOA1LAuT8mkmRuvw+NACSaeXEQ+NHcVF7rONl6qcaxV3Uuemwawk+7+SJLw==}
     engines: {node: '>= 0.6'}
 
-  adminforth@3.5.0:
-    resolution: {integrity: sha512-+D9RBKq5UIpdRH2o5eyTx7oN8ZjpHC0ZSEK0p/Xs6iVBBS8BbK1EJiKNoeYz6BOx4IgN1bqowStrROCeT2/QkA==}
+  adminforth@3.6.2:
+    resolution: {integrity: sha512-/HF3s0+6bkxyAqrkmkGxEn+Zvrrv8q3Sr6q55oVmHlcGI3Tamo9z10XvRRsS+KrBVUzt53BxFRmA2Z2EKjRiTg==}
     hasBin: true
     peerDependencies:
       '@adminforth/connector-clickhouse': ^1.0.4
@@ -2570,10 +2570,10 @@ packages:
 
 snapshots:
 
-  '@adminforth/connector-qdrant@1.0.4(adminforth@3.5.0)(typescript@5.9.3)':
+  '@adminforth/connector-qdrant@1.0.4(adminforth@3.6.2)(typescript@5.9.3)':
     dependencies:
       '@qdrant/js-client-rest': 1.18.0(typescript@5.9.3)
-      adminforth: 3.5.0(@adminforth/connector-qdrant@1.0.4)(@types/node@26.0.0)
+      adminforth: 3.6.2(@adminforth/connector-qdrant@1.0.4)(@types/node@26.0.0)
       dayjs: 1.11.21
     transitivePeerDependencies:
       - typescript
@@ -3109,9 +3109,9 @@ snapshots:
       mime-types: 2.1.35
       negotiator: 0.6.3
 
-  adminforth@3.5.0(@adminforth/connector-qdrant@1.0.4)(@types/node@26.0.0):
+  adminforth@3.6.2(@adminforth/connector-qdrant@1.0.4)(@types/node@26.0.0):
     dependencies:
-      '@adminforth/connector-qdrant': 1.0.4(adminforth@3.5.0)(typescript@5.9.3)
+      '@adminforth/connector-qdrant': 1.0.4(adminforth@3.6.2)(typescript@5.9.3)
       '@babel/parser': 7.29.2
       '@faker-js/faker': 9.9.0
       '@inquirer/prompts': 7.10.1(@types/node@26.0.0)
