@@ -93,22 +93,14 @@ const agentTransitions = useAgentTransitions();
 const showScrollContainer = ref(true);
 const chatContainerRef = ref<HTMLElement | null>(null);
 const messagesRefs = ref<Array<HTMLElement | null>>([]);
-const useWaitingForHeight = ref(false);
-
 /*
 * Whenever user sends a message, it adds a bottom spacer, that takes the remaining height
 * without last user and last agent message. 
 * 
 * On send message, happens the following logic: 
 * 1) showBottomSpacer is set to true
-* 2) useWaitingForHeight is set to true and in 1000s set back to false
-*   Why do we do this?
-*   - When we want to read height of last user message, incremark shows text with some small delay
-*   - so when we read height of last user message, we actully getting height of the box without text ~18px
-*   - so for the initial period while useWaitingForHeight is true, we are waiting for real height to be bigger than 18px
-*   - and then we can read in normally, until new message is sent, then we need to wait again
-* 3) updateSpacerHeight is called, which calculates the height for spacer based on scroll container height and messages height
-* 4) Spacer moves text up  
+* 2) updateSpacerHeight is called, which calculates the height for spacer based on scroll container height and messages height
+* 3) Spacer moves text up  
 */
 const showBottomSpacer = ref(false);
 const spacerHeight = ref(0);
@@ -197,20 +189,6 @@ function getScrollClientHeight() {
   return scrollContainer.value?.container.scrollEl.clientHeight ?? scrollContainer.value?.scrollParams.clientHeight ?? 0;
 }
 
-async function waitForRealHeight(role: 'user' | 'assistant'): Promise<number> {
-  const realHeightWeCanApprove = role === 'user' ? EMPTY_MESSAGE_HEIGHT : 0;
-  return new Promise((resolve) => {
-    const interval = setInterval(() => {
-      const height = role === 'user' ? getHeightOfLastUserMessage() : getHeightOfLastAgentMessage();
-
-      if (height > realHeightWeCanApprove) {
-        clearInterval(interval);
-        resolve(height);
-      }
-    }, 50);
-  });
-}
-
 async function updateSpacerHeight() {
   if (!showBottomSpacer.value) {
     return;
@@ -222,8 +200,8 @@ async function updateSpacerHeight() {
     return;
   }
 
-  const lastUserMessageHeight = useWaitingForHeight.value ? await waitForRealHeight('user') : getHeightOfLastUserMessage();
-  const lastAgentMessageHeight = useWaitingForHeight.value ? await waitForRealHeight('assistant') : getHeightOfLastAgentMessage();
+  const lastUserMessageHeight = getHeightOfLastUserMessage();
+  const lastAgentMessageHeight = getHeightOfLastAgentMessage();
 
   spacerHeight.value = Math.max(0, clientHeight - (lastUserMessageHeight + MASK_HEIGHT + lastAgentMessageHeight));
 }
@@ -245,6 +223,14 @@ function scheduleSpacerHeightUpdate() {
     spacerUpdateQueued = false;
     pendingSpacerUpdate = updateSpacerHeight().finally(() => {
       pendingSpacerUpdate = null;
+
+      // Auto-scroll to bottom if response generation is in progress
+      if (agentStore.isResponseInProgress) {
+        nextTick(() => {
+          scrollContainer.value?.scrollToBottom();
+        });
+      }
+
       if (spacerUpdateQueued) {
         scheduleSpacerHeightUpdate();
       }
@@ -298,10 +284,6 @@ async function handleSendMessage() {
 
   if (clientHeight) {
     showBottomSpacer.value = true;
-    useWaitingForHeight.value = true;
-    setTimeout(() => {
-      useWaitingForHeight.value = false;
-    }, 1000);
     await updateSpacerHeight();
     await nextTick();
     scrollContainer.value?.scrollToBottom();

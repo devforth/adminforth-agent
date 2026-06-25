@@ -35,6 +35,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
   options: PluginOptions;
   agentSystemPromptPromise: Promise<string>;
   pluginsScope: "resource" | "global" = "global";
+  private agentSystemPrompt: string | null = null;
   private checkpointer: BaseCheckpointSaver | null = null;
   private sessionStore: AgentSessionStore;
   private agentTurnService: AgentTurnService;
@@ -92,7 +93,18 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       new AgentModelFactory(this.options.maxTokens ?? 1000),
       new TurnPromptBuilder({
         getAdminforth: () => this.adminforth,
-        getAgentSystemPrompt: () => this.agentSystemPromptPromise,
+        getAgentSystemPrompt: async () => {
+          if (!this.agentSystemPrompt) {
+            const systemPrompt = await buildAgentSystemPrompt(
+              this.adminforth,
+              this.getInternalAgentResourceIds(),
+            ).catch((err) => {
+              return DEFAULT_AGENT_SYSTEM_PROMPT;
+            });
+            this.agentSystemPrompt = appendCustomSystemPrompt(systemPrompt, this.options.systemPrompt);
+          }
+          return this.agentSystemPrompt;
+        },
       }),
       runtime,
       new TurnStreamConsumer(),
@@ -162,7 +174,11 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       adminforth,
       this.getInternalAgentResourceIds(),
     )
-      .then((systemPrompt) => appendCustomSystemPrompt(systemPrompt, this.options.systemPrompt));
+      .then((systemPrompt) => {
+        const finalPrompt = appendCustomSystemPrompt(systemPrompt, this.options.systemPrompt);
+        this.agentSystemPrompt = finalPrompt;
+        return finalPrompt;
+      });
   }
 
   instanceUniqueRepresentation(pluginOptions: any) : string {
