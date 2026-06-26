@@ -1,10 +1,10 @@
 <template>
   <div
     ref="toolRendererRef" 
-    class="py-1 inline-flex justify-center m-2 
-      flex-col gap-3 rounded-xl px-2 text-lightListTableHeadingText 
+    class="py-1 inline-flex justify-center m-2 max-w-full min-w-0
+      flex-col gap-3 rounded-xl px-2 text-lightListTableHeadingText
       dark:text-darkListTableHeadingText select-none
-    "         
+    "
     :class="[
       isInputOutputExpanded ? 'items-start border-none' : '', 
       activateShrinkedStyle ? 'border items-center' : '',
@@ -25,7 +25,7 @@
       </div>
 
       <div class="min-w-0">
-        <p class="break-all font-mono text-sm leading-5 text-nowrap">
+        <p class="break-words font-mono text-sm leading-5">
           {{ props.data?.toolInfo?.toolInfo ? props.data.toolInfo.toolInfo : props.data?.toolInfo?.toolName}}
         </p>
       </div>
@@ -33,7 +33,7 @@
         v-if="hasToolSections"
         :class="isInputOutputExpanded ? 'rotate-180' : 'rotate-0'"
         @transitionend="finishTransition()"
-        class="cursor-pointer transition-transform duration-300 hover:scale-105"
+        class="shrink-0 cursor-pointer transition-transform duration-300 hover:scale-105"
       />
     </div>
     <transition name="expand">
@@ -112,9 +112,11 @@
   onMounted(async () => {
     await nextTick();
     if (toolRendererRef.value && props.data.toolInfo) {
-      toolRendererInitialWidth.value = toolRendererRef.value.offsetWidth;
+      const contentWidth = Math.ceil(toolRendererRef.value.getBoundingClientRect().width);
+      const parentWidth = toolRendererRef.value.parentElement?.clientWidth ?? Infinity;
+      toolRendererInitialWidth.value = Math.min(contentWidth, parentWidth);
     }
-  });  
+  });
 
   watch(isInputOutputExpanded, (newValue) => {
     if (newValue) {
