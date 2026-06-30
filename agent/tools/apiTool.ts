@@ -60,6 +60,7 @@ export function createApiTool(toolName: string, apiBasedTool: ApiBasedTool) {
       name: toolName,
       description: apiBasedTool.description ?? `${toolName} tool`,
       schema: normalizeToolInputSchema(apiBasedTool.input_schema),
+      verboseParsingErrors: true,
     },
   );
 }
