@@ -4,7 +4,6 @@ import type {
   ChatSurfaceIncomingMessage,
   IAdminForth,
 } from "adminforth";
-import type { ZodType } from "zod";
 import type {
   HandleSpeechTurnInput,
   HandleTurnInput,
@@ -12,10 +11,6 @@ import type {
   RunAndPersistAgentResponseResult,
 } from "../agentTurnService.js";
 import type { PluginOptions } from "../types.js";
-
-export type EndpointResponse = {
-  setStatus: (code: number, message: string) => void;
-};
 
 export type SessionTurn = {
   prompt: string;
@@ -25,7 +20,6 @@ export type SessionTurn = {
 export type AgentEndpointsContext = {
   adminforth: IAdminForth;
   options: PluginOptions;
-  parseBody<T>(schema: ZodType<T>, body: unknown, response: EndpointResponse): T | null;
   handleTurn(input: HandleTurnInput): Promise<RunAndPersistAgentResponseResult>;
   handleSpeechTurn(input: HandleSpeechTurnInput): Promise<RunAndPersistAgentResponseResult | null>;
   runAndPersistAgentResponse(input: RunAndPersistAgentResponseInput): Promise<RunAndPersistAgentResponseResult>;
@@ -41,12 +35,12 @@ export type AgentEndpointsContext = {
 
 export type CoreEndpointsContext = Pick<
   AgentEndpointsContext,
-  "options" | "parseBody" | "handleTurn" | "handleSpeechTurn"
+  "options" | "handleTurn" | "handleSpeechTurn"
 >;
 
 export type SessionEndpointsContext = Pick<
   AgentEndpointsContext,
-  "adminforth" | "options" | "parseBody" | "getSessionTurns" | "createNewTurn"
+  "adminforth" | "options" | "getSessionTurns" | "createNewTurn"
   | "createSystemTurn"
 >;
 

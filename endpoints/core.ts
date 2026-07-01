@@ -12,12 +12,19 @@ type MulterFile = {
 
 type ExpressMulterRequest = { file?: MulterFile };
 
+const currentPageContextSchema = z.object({
+  path: z.string(),
+  fullPath: z.string(),
+  title: z.string(),
+  url: z.string(),
+}).strict() satisfies z.ZodType<CurrentPageContext>;
+
 const agentResponseBodySchema = z.object({
   message: z.string(),
   sessionId: z.string(),
   mode: z.string().nullish(),
   timeZone: z.string().optional(),
-  currentPage: z.custom<CurrentPageContext>().optional(),
+  currentPage: currentPageContextSchema.optional(),
 }).strict();
 
 const agentApprovalBodySchema = z.object({
@@ -25,7 +32,33 @@ const agentApprovalBodySchema = z.object({
   decision: z.enum(["approve", "reject"]),
 }).strict();
 
-const agentSpeechResponseBodySchema = agentResponseBodySchema.omit({ message: true });
+// Sent as multipart/form-data (via multer), so every field arrives as a plain string on the wire.
+// `currentPage` is JSON.stringify'd by the client into a form field and must be parsed back into
+// an object. Zod -> JSON-Schema conversion cannot represent `.transform()` at all (it throws), so
+// `agentSpeechResponseShapeSchema` (plain strings, no transform) is what's passed as request_schema
+// for the AJV pre-check, while `agentSpeechResponseBodySchema` (with the transform) is used via an
+// inline safeParse in the handler to actually parse `currentPage` into an object.
+const agentSpeechResponseShapeSchema = z.object({
+  sessionId: z.string(),
+  mode: z.string().nullish(),
+  timeZone: z.string().optional(),
+  currentPage: z.string().optional(),
+}).strict();
+
+const agentSpeechResponseBodySchema = agentSpeechResponseShapeSchema.extend({
+  currentPage: z.string().optional().transform((value, ctx) => {
+    if (value === undefined) return undefined;
+    try {
+      return currentPageContextSchema.parse(JSON.parse(value));
+    } catch (err) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `currentPage must be a JSON-encoded object matching CurrentPageContext: ${err instanceof Error ? err.message : String(err)}`,
+      });
+      return z.NEVER;
+    }
+  }),
+});
 
 export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServer) {
   server.endpoint({
@@ -52,9 +85,9 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
   server.endpoint({
     method: 'POST',
     path: `/agent/response`,
+    request_schema: agentResponseBodySchema,
     handler: async ({ body, adminUser, response, _raw_express_res, abortSignal }) => {
-      const data = ctx.parseBody(agentResponseBodySchema, body, response);
-      if (!data) return;
+      const data = body as z.infer<typeof agentResponseBodySchema>;
       const emit = createSseEventEmitter(_raw_express_res, {
         vercelAiUiMessageStream: true,
         closeActiveBlockOnToolStart: true,
@@ -79,9 +112,9 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
   server.endpoint({
     method: 'POST',
     path: `/agent/approval`,
+    request_schema: agentApprovalBodySchema,
     handler: async ({ body, adminUser, response, _raw_express_res, abortSignal }) => {
-      const data = ctx.parseBody(agentApprovalBodySchema, body, response);
-      if (!data) return;
+      const data = body as z.infer<typeof agentApprovalBodySchema>;
       const emit = createSseEventEmitter(_raw_express_res, {
         vercelAiUiMessageStream: true,
         closeActiveBlockOnToolStart: true,
@@ -105,6 +138,7 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
     method: 'POST',
     path: `/agent/speech-response`,
     target: 'upload',
+    request_schema: agentSpeechResponseShapeSchema,
     handler: async ({ body, adminUser, response, _raw_express_req, _raw_express_res, abortSignal }) => {
       const req = _raw_express_req as ExpressMulterRequest;
       const audioAdapter = ctx.options.audioAdapter;
@@ -112,8 +146,12 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
         response.setStatus(400, "Audio adapter is not configured for AdminForth Agent");
         return { error: "Audio adapter is not configured for AdminForth Agent" };
       }
-      const data = ctx.parseBody(agentSpeechResponseBodySchema, body, response);
-      if (!data) return;
+      const parsed = agentSpeechResponseBodySchema.safeParse(body);
+      if (!parsed.success) {
+        response.setStatus(400, 'Request body validation failed');
+        return { error: 'Request body validation failed', details: parsed.error.issues };
+      }
+      const data = parsed.data;
       if (!req.file) {
         response.setStatus(400, "Audio file is required");
         return { error: "Audio file is required" };

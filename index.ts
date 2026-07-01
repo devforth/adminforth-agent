@@ -8,7 +8,6 @@ import { AdminForthPlugin } from "adminforth";
 
 import type { PluginOptions } from './types.js';
 import { MemorySaver, type BaseCheckpointSaver } from "@langchain/langgraph";
-import { z } from "zod";
 import { AdminForthCheckpointSaver } from "./agent/checkpointer.js";
 import { appendCustomSystemPrompt, buildAgentSystemPrompt, DEFAULT_AGENT_SYSTEM_PROMPT} from "./agent/systemPrompt.js";
 import { setupCoreEndpoints } from "./endpoints/core.js";
@@ -41,18 +40,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
   private agentTurnService: AgentTurnService;
   private speechTurnService: SpeechTurnService;
   private chatSurfaceService: ChatSurfaceService;
-  private parseBody<T>(
-    schema: z.ZodType<T>,
-    body: unknown,
-    response: { setStatus: (code: number, message: string) => void },
-  ): T | null {
-    const parsed = schema.safeParse(body ?? {});
-    if (!parsed.success) {
-      response.setStatus(422, parsed.error.message);
-      return null;
-    }
-    return parsed.data;
-  }
   private getCheckpointer() {
     if (this.checkpointer) return this.checkpointer;
 
@@ -189,7 +176,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     const endpointContext = {
       adminforth: this.adminforth,
       options: this.options,
-      parseBody: this.parseBody.bind(this),
       handleTurn: this.agentTurnService.handleTurn.bind(this.agentTurnService),
       handleSpeechTurn: this.speechTurnService.handle.bind(this.speechTurnService),
       runAndPersistAgentResponse: this.agentTurnService.runAndPersistAgentResponse.bind(this.agentTurnService),

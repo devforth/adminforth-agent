@@ -26,9 +26,9 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
   server.endpoint({
     method: 'POST',
     path: `/agent/get-sessions`,
+    request_schema: getSessionsBodySchema,
     handler: async ({body, adminUser, response }) => {
-      const data = ctx.parseBody(getSessionsBodySchema, body, response);
-      if (!data) return;
+      const data = body as z.infer<typeof getSessionsBodySchema>;
       const userId = adminUser!.pk;
       const limit = data.limit ?? 20;
       const sessions = await ctx.adminforth.resource(ctx.options.sessionResource.resourceId).list(
@@ -47,9 +47,9 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
   server.endpoint({
     method: 'POST',
     path: `/agent/get-session-info`,
+    request_schema: sessionIdBodySchema,
     handler: async ({body, adminUser, response }) => {
-      const data = ctx.parseBody(sessionIdBodySchema, body, response);
-      if (!data) return;
+      const data = body as z.infer<typeof sessionIdBodySchema>;
       const userId = adminUser!.pk;
       const sessionId = data.sessionId;
       const session = await ctx.adminforth.resource(ctx.options.sessionResource.resourceId).get(
@@ -102,9 +102,9 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
   server.endpoint({
     method: 'POST',
     path: `/agent/create-session`,
+    request_schema: createSessionBodySchema,
     handler: async ({body, adminUser, response }) => {
-      const data = ctx.parseBody(createSessionBodySchema, body, response);
-      if (!data) return;
+      const data = body as z.infer<typeof createSessionBodySchema>;
       const triggerMessage = data.triggerMessage;
       const userId = adminUser!.pk;
       const title = triggerMessage?.slice(0, 40) || "New Session";
@@ -126,9 +126,9 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
   server.endpoint({
     method: 'POST',
     path: `/agent/delete-session`,
+    request_schema: sessionIdBodySchema,
     handler: async ({body, adminUser, response }) => {
-      const data = ctx.parseBody(sessionIdBodySchema, body, response);
-      if (!data) return;
+      const data = body as z.infer<typeof sessionIdBodySchema>;
       const sessionId = data.sessionId;
       const userId = adminUser!.pk;
       const session = await ctx.adminforth.resource(ctx.options.sessionResource.resourceId).get(
@@ -158,9 +158,9 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
   server.endpoint({
     method: 'POST',
     path: `/agent/add-system-message-to-turns`,
+    request_schema: addSystemMessageBodySchema,
     handler: async ({body, adminUser, response }) => {
-      const data = ctx.parseBody(addSystemMessageBodySchema, body, response);
-      if (!data) return;
+      const data = body as z.infer<typeof addSystemMessageBodySchema>;
       const session = await ctx.adminforth.resource(ctx.options.sessionResource.resourceId).get(
         [Filters.EQ(ctx.options.sessionResource.idField, data.sessionId)]
       );
