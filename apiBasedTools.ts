@@ -635,6 +635,14 @@ function stringifyToolOutput(output: unknown): string {
   return YAML.stringify(output === undefined ? EMPTY_HANDLER_RESPONSE_ERROR : output);
 }
 
+function attachDurationMs(output: unknown, durationMs: number): unknown {
+  if (output !== null && typeof output === 'object' && !Array.isArray(output)) {
+    return { ...output, durationMs };
+  }
+
+  return { result: output, durationMs };
+}
+
 export function prepareApiBasedTools(
   adminforth: IAdminForth,
   hiddenResourceIds: Iterable<string> = [],
@@ -666,11 +674,13 @@ export function prepareApiBasedTools(
       input_schema: schema.request_schema,
       agent: schema.agent,
       call: async ({ adminUser, adminuser, abortSignal, inputs, userTimeZone, acceptLanguage } = {}) => {
+        const startedAt = Date.now();
+
         if (isHiddenResourceCall(hiddenResourceIdSet, inputs)) {
-          return stringifyToolOutput({
+          return stringifyToolOutput(attachDurationMs({
             error: 'RESOURCE_NOT_AVAILABLE',
             message: 'This resource is not available to the agent.',
-          });
+          }, Date.now() - startedAt));
         }
 
         const output = await callOpenApiSchema({
@@ -693,7 +703,7 @@ export function prepareApiBasedTools(
           userTimeZone,
         });
 
-        return stringifyToolOutput(processedOutput);
+        return stringifyToolOutput(attachDurationMs(processedOutput, Date.now() - startedAt));
       },
     };
   }
