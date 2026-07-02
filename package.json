@@ -4,12 +4,18 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "homepage": "https://adminforth.dev/docs/tutorial/Plugins/agent/",
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "tsc && rsync -av --exclude 'node_modules' custom dist/"
+    "build": "tsc && rsync -av --exclude 'node_modules' custom dist/",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand"
   },
   "keywords": [
     "adminforth",
@@ -24,10 +30,13 @@
   "license": "MIT",
   "description": "AI agent plugin for AdminForth with tool-based workflows and persistent chat sessions",
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/node": "latest",
     "adminforth": "^3.8.2",
+    "jest": "^30.3.0",
     "semantic-release": "^24.2.1",
     "semantic-release-slack-bot": "^4.0.2",
+    "ts-jest": "^29.4.6",
     "typescript": "^5.7.3"
   },
   "dependencies": {
