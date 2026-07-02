@@ -42,9 +42,23 @@ describe('parseRawStreamChunk', () => {
     expect(out).toEqual([]);
   });
 
-  it('surfaces interrupts from update entries', () => {
+  it('surfaces interrupts from update entries with normalized descriptors', () => {
+    const out = parseRawStreamChunk([
+      'updates',
+      { __interrupt__: [{ id: 'i1', value: { actionRequests: [{}, {}] } }] },
+    ]);
+    expect(out).toEqual([
+      {
+        kind: 'interrupt',
+        interrupt: [{ id: 'i1', value: { actionRequests: [{}, {}] } }],
+        descriptors: [{ id: 'i1', count: 2 }],
+      },
+    ]);
+  });
+
+  it('yields empty descriptors when the interrupt has no actionRequests', () => {
     const out = parseRawStreamChunk(['updates', { __interrupt__: [{ id: 'i1' }] }]);
-    expect(out).toEqual([{ kind: 'interrupt', interrupt: [{ id: 'i1' }] }]);
+    expect(out).toEqual([{ kind: 'interrupt', interrupt: [{ id: 'i1' }], descriptors: [] }]);
   });
 
   it('ignores non-interrupt update entries', () => {

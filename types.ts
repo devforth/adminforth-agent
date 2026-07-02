@@ -5,7 +5,7 @@ import {
   type AudioAdapter,
   type ChatSurfaceAdapter,
 } from "adminforth";
-import type { AgentModeCompletionAdapter } from "./llm/agentModels.js";
+import type { AgentModeCompletionAdapter } from "./application/ports.js";
 
 interface ISessionResource {
   resourceId: string;

@@ -1,11 +1,26 @@
-import type { AgentModeCompletionAdapter } from "../llm/agentModels.js";
+import type { CompletionAdapter } from "adminforth";
 import type { DetectedLanguage, PreviousUserMessage } from "../domain/languageDetect.js";
 import type {
   AgentMessage,
   AgentStreamChunk,
   AgentTurnContext,
   AgentTurnObservability,
+  PendingInterrupt,
 } from "../domain/turnTypes.js";
+
+export type AgentModelPurpose = "primary" | "summary";
+
+/**
+ * The LLM provider adapter contract (the "provider port"). Extends AdminForth's
+ * CompletionAdapter with the agent-spec factory. Declared in the application layer
+ * so the infrastructure (llm/) depends on this contract — not the other way around.
+ */
+export type AgentModeCompletionAdapter = CompletionAdapter & {
+  getLangChainAgentSpec(params: {
+    maxTokens: number;
+    purpose: AgentModelPurpose;
+  }): Promise<{ model: unknown; middleware?: unknown[] }> | { model: unknown; middleware?: unknown[] };
+};
 
 /**
  * Input for a single streamed agent turn. Either a fresh set of messages, or a
@@ -21,9 +36,8 @@ export type LlmStreamInput = {
 /**
  * The boundary between the application layer and the concrete LLM runtime
  * (LangChain / LangGraph). Everything provider-specific — model construction,
- * the agent graph, middleware, and the raw stream shape — lives behind this
- * port. The application layer depends only on this interface, so the turn
- * orchestration is testable with a scripted fake and reusable across providers.
+ * the agent graph, middleware, the raw stream shape, and the LangGraph interrupt
+ * shape — lives behind this port and is normalized before crossing it.
  */
 export interface LlmPort {
   /**
@@ -42,12 +56,13 @@ export interface LlmPort {
 
   /**
    * Rebuild the pending human-in-the-loop interrupts for a session from persisted
-   * state (the checkpointer). Used as a fallback when the in-process interrupt
-   * cache is empty — e.g. after a restart or on a second instance — so approvals
-   * survive process boundaries. Returns raw interrupt objects (LangGraph shape).
+   * checkpoint state (used when the in-process cache is empty — after a restart or
+   * on another instance). Returns already-normalized descriptors; the LangGraph
+   * interrupt shape never leaves the llm layer. Throws on a checkpoint/runtime
+   * failure (the caller must not treat that as "no pending interrupt").
    */
   getPendingInterrupts(input: {
     completionAdapter: AgentModeCompletionAdapter;
     sessionId: string;
-  }): Promise<unknown[]>;
+  }): Promise<PendingInterrupt[]>;
 }

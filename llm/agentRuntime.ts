@@ -2,10 +2,10 @@ import type { IAdminForth } from "adminforth";
 import { createAgent, summarizationMiddleware, humanInTheLoopMiddleware } from "langchain";
 import type { BaseCheckpointSaver } from "@langchain/langgraph";
 import { createApiBasedToolsMiddleware } from "./middleware/apiToolsMiddleware.js";
-import { createSequenceDebugMiddleware } from "./middleware/sequenceDebug.js";
+import { createSequenceDebugMiddleware, type SequenceDebugCollector } from "./middleware/sequenceDebug.js";
 import { createAgentLlmMetricsLogger } from "./agentModels.js";
 import type { AgentToolProvider } from "../tools/agentToolProvider.js";
-import type { AgentRuntimeRunInput, AgentTurnModels } from "../domain/turnTypes.js";
+import type { AgentRuntimeRunInput, AgentTurnModels } from "./agentModels.js";
 import { contextSchema, toLangchainAgentContext } from "./agentContext.js";
 import type { ApiBasedTool } from "../tools/apiBasedTools.js";
 
@@ -42,9 +42,10 @@ export class AgentRuntime {
       apiBasedTools,
       adminforth,
     );
-    const sequenceDebugMiddleware = createSequenceDebugMiddleware(
-      input.observability.sequenceDebugSink,
-    );
+    // The domain exposes only the narrow DebugSink; the concrete collector (with the
+    // model-call hooks the debug middleware needs) is an llm-layer detail.
+    const sequenceDebugSink = input.observability.sequenceDebugSink as SequenceDebugCollector;
+    const sequenceDebugMiddleware = createSequenceDebugMiddleware(sequenceDebugSink);
     const hitlMiddleware = humanInTheLoopMiddleware({
       interruptOn: createHumanInTheLoopInterrupts(apiBasedTools),
       descriptionPrefix: "Tool execution pending approval",
@@ -82,7 +83,7 @@ export class AgentRuntime {
         ...input.context,
         adminBaseUrl: adminforth.config.baseUrlSlashed,
         emit: input.observability.emit,
-        sequenceDebugSink: input.observability.sequenceDebugSink,
+        sequenceDebugSink,
       }),
     });
   }

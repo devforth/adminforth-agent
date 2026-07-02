@@ -5,26 +5,30 @@ import {
 } from "adminforth";
 import { BaseCallbackHandler } from "@langchain/core/callbacks/base";
 import type { LLMResult } from "@langchain/core/outputs";
+import type { Messages, Command } from "@langchain/langgraph";
 import {
   createSequenceDebugMiddleware,
 } from "./middleware/sequenceDebug.js";
+import type { AgentModeCompletionAdapter, AgentModelPurpose } from "../application/ports.js";
+import type { AgentTurnContext, AgentTurnObservability } from "../domain/turnTypes.js";
+
+export type { AgentModeCompletionAdapter, AgentModelPurpose } from "../application/ports.js";
 
 export type AgentChatModel = BaseChatModel<any, any>;
-export type AgentModelPurpose = "primary" | "summary";
-export type AgentModeCompletionAdapter = CompletionAdapter & {
-  getLangChainAgentSpec(params: {
-    maxTokens: number;
-    purpose: AgentModelPurpose;
-  }): Promise<{
-    model: unknown;
-    middleware?: unknown[];
-  }> | {
-    model: unknown;
-    middleware?: unknown[];
-  };
+export type AgentMiddleware = ReturnType<typeof createSequenceDebugMiddleware>;
+
+export type AgentTurnModels = {
+  model: AgentChatModel;
+  summaryModel: AgentChatModel;
+  modelMiddleware?: AgentMiddleware[];
 };
 
-export type AgentMiddleware = ReturnType<typeof createSequenceDebugMiddleware>;
+export type AgentRuntimeRunInput = {
+  models: AgentTurnModels;
+  input: { messages: Messages } | Command;
+  context: AgentTurnContext;
+  observability: AgentTurnObservability;
+};
 
 type AgentChatModelSpec = {
   model: AgentChatModel;

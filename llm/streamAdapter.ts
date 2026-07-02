@@ -1,8 +1,34 @@
-import type { AgentStreamChunk } from "../domain/turnTypes.js";
+import type { AgentStreamChunk, PendingInterrupt } from "../domain/turnTypes.js";
 
 // Only tokens emitted by the model node(s) are surfaced to the user; other
 // graph nodes (tools, summarization, etc.) are internal.
 const STREAMABLE_NODES = ["model", "model_request"];
+
+function getInterruptItems(interrupt: unknown): unknown[] {
+  return Array.isArray(interrupt) ? interrupt : [interrupt];
+}
+
+/**
+ * Normalize raw LangGraph interrupt object(s) into provider-agnostic descriptors.
+ * Kept in the llm layer so the LangGraph interrupt shape never reaches the app.
+ */
+export function normalizeInterrupts(interrupt: unknown): PendingInterrupt[] {
+  return getInterruptItems(interrupt).flatMap((item) => {
+    const value = item && typeof item === "object" && "value" in item
+      ? (item as { value: unknown }).value
+      : item;
+    const actionRequests = value && typeof value === "object"
+      ? (value as { actionRequests?: unknown }).actionRequests
+      : undefined;
+    const interruptId = item && typeof item === "object"
+      ? (item as { id?: unknown }).id
+      : undefined;
+
+    return typeof interruptId === "string" && Array.isArray(actionRequests)
+      ? [{ id: interruptId, count: actionRequests.length }]
+      : [];
+  });
+}
 
 type RawStreamEntry =
   | ["messages", [any, any]]
@@ -27,7 +53,8 @@ export function parseRawStreamChunk(entry: RawStreamEntry): AgentStreamChunk[] {
 
   if (mode === "updates") {
     if (chunk && typeof chunk === "object" && "__interrupt__" in chunk) {
-      return [{ kind: "interrupt", interrupt: (chunk as Record<string, unknown>).__interrupt__ }];
+      const interrupt = (chunk as Record<string, unknown>).__interrupt__;
+      return [{ kind: "interrupt", interrupt, descriptors: normalizeInterrupts(interrupt) }];
     }
     return [];
   }

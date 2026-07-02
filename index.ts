@@ -17,6 +17,7 @@ import type { AgentEndpointsContext } from "./transport/http/context.js";
 import { AgentSessionStore } from "./persistence/sessionStore.js";
 import { ChatSurfaceService } from "./transport/surfaces/chatSurfaceService.js";
 import { RunTurnUseCase } from "./application/runTurnUseCase.js";
+import { createSequenceDebugCollector } from "./llm/middleware/sequenceDebug.js";
 import { LangGraphLlm } from "./llm/langGraphLlm.js";
 import { AgentModelFactory } from "./llm/modelFactory.js";
 import { AgentRuntime } from "./llm/agentRuntime.js";
@@ -94,6 +95,8 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       modes: this.options.modes,
       getAdminforth: () => this.adminforth,
       getAgentSystemPrompt: this.getAgentSystemPrompt.bind(this),
+      hasPersistentCheckpointer: Boolean(this.options.checkpointResource),
+      createDebugSink: createSequenceDebugCollector,
     });
     this.speechTurnService = new SpeechTurnService(
       this.runTurnUseCase.runAndPersistAgentResponse.bind(this.runTurnUseCase),

@@ -15,12 +15,16 @@ async function* streamOf(...chunks: AgentStreamChunk[]) {
 
 const text = (delta: string): AgentStreamChunk => ({ kind: 'text', delta });
 const reasoning = (delta: string): AgentStreamChunk => ({ kind: 'reasoning', delta });
-const interrupt = (value: unknown): AgentStreamChunk => ({ kind: 'interrupt', interrupt: value });
+const interrupt = (
+  value: unknown,
+  descriptors: Array<{ id: string; count: number }> = [{ id: 'int-1', count: 1 }],
+): AgentStreamChunk => ({ kind: 'interrupt', interrupt: value, descriptors });
 
 function fakeLlm(
   opts: {
     streamFor?: (call: number, input: any) => AsyncIterable<AgentStreamChunk>;
-    pendingInterrupts?: unknown[];
+    pendingInterrupts?: Array<{ id: string; count: number }>;
+    pendingInterruptsError?: Error;
   } = {},
 ) {
   const calls: any[] = [];
@@ -38,6 +42,9 @@ function fakeLlm(
     },
     async getPendingInterrupts(input: any) {
       getPendingInterruptsCalls.push(input);
+      if (opts.pendingInterruptsError) {
+        throw opts.pendingInterruptsError;
+      }
       return opts.pendingInterrupts ?? [];
     },
   };
@@ -75,9 +82,15 @@ function fakeSessions(opts: { initialResponse?: string } = {}) {
 function buildUseCase(opts: {
   streamFor?: (call: number, input: any) => AsyncIterable<AgentStreamChunk>;
   initialResponse?: string;
-  pendingInterrupts?: unknown[];
+  pendingInterrupts?: Array<{ id: string; count: number }>;
+  pendingInterruptsError?: Error;
+  hasPersistentCheckpointer?: boolean;
 } = {}) {
-  const llm = fakeLlm({ streamFor: opts.streamFor, pendingInterrupts: opts.pendingInterrupts });
+  const llm = fakeLlm({
+    streamFor: opts.streamFor,
+    pendingInterrupts: opts.pendingInterrupts,
+    pendingInterruptsError: opts.pendingInterruptsError,
+  });
   const sessions = fakeSessions({ initialResponse: opts.initialResponse });
   const useCase = new RunTurnUseCase({
     llm: llm as any,
@@ -85,6 +98,8 @@ function buildUseCase(opts: {
     modes: [{ name: 'default', completionAdapter: {} as any }],
     getAdminforth: () => ({ config: { auth: { usernameField: 'email' }, baseUrlSlashed: '/admin/' } }) as any,
     getAgentSystemPrompt: async () => 'SYS',
+    hasPersistentCheckpointer: opts.hasPersistentCheckpointer ?? false,
+    createDebugSink: () => ({ flush() {}, getHistory: () => [] }),
   });
   return { useCase, llm, sessions };
 }
@@ -214,13 +229,14 @@ describe('RunTurnUseCase.handleTurn', () => {
     expect(second.events.find((e) => e.type === 'response').text).toBe('prev Done');
   });
 
-  it('rebuilds pending interrupts from persisted state when the in-process cache is empty (restart)', async () => {
+  it('with a persistent checkpointer, resumes from checkpoint state (ignoring the local cache)', async () => {
     const { useCase, llm } = buildUseCase({
+      hasPersistentCheckpointer: true,
       initialResponse: 'prev ',
-      pendingInterrupts: [{ id: 'int-1', value: { actionRequests: [{ name: 'del', description: 'd' }] } }],
+      pendingInterrupts: [{ id: 'int-1', count: 1 }],
       streamFor: () => streamOf(text('Resumed')),
     });
-    // No interrupt was cached in this process (simulating a restart); approval must still resume.
+    // No interrupt cached in this process (restart / other instance); the checkpoint is authoritative.
     const { input } = makeInput({ prompt: '', approvalDecision: 'approve' });
     const result = await useCase.handleTurn(input as any);
 
@@ -228,6 +244,18 @@ describe('RunTurnUseCase.handleTurn', () => {
     expect(llm.calls).toHaveLength(1);
     expect('resume' in llm.calls[0].input).toBe(true);
     expect(result.text).toBe('prev Resumed');
+  });
+
+  it('surfaces a checkpoint read failure as a real error, not "no pending approval"', async () => {
+    const { useCase } = buildUseCase({
+      hasPersistentCheckpointer: true,
+      pendingInterruptsError: new Error('checkpoint DB unavailable'),
+    });
+    const { input } = makeInput({ prompt: '', approvalDecision: 'approve' });
+
+    // The infra error must propagate, NOT be masked as a missing interrupt.
+    await expect(useCase.handleTurn(input as any)).rejects.toThrow('checkpoint DB unavailable');
+    await expect(useCase.handleTurn(input as any)).rejects.not.toThrow('No pending approval');
   });
 
   it('rejects (does not swallow) an approval with no pending interrupt, after emitting turn-started', async () => {

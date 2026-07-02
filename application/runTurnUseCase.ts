@@ -1,6 +1,5 @@
 import { logger, type IAdminForth } from "adminforth";
 import { randomUUID } from "crypto";
-import { createSequenceDebugCollector } from "../llm/middleware/sequenceDebug.js";
 import { VegaLiteStreamBuffer } from "../domain/vegaLiteStreamBuffer.js";
 import { buildAgentTurnSystemPrompt } from "../domain/systemPrompt.js";
 import { getErrorMessage, isAbortError } from "../shared/errors.js";
@@ -13,14 +12,14 @@ import type {
   AgentTurnContext,
   AgentTurnObservability,
   BaseAgentTurnInput,
+  DebugSink,
   HandleTurnInput,
+  PendingInterrupt,
   RunAndPersistAgentResponseInput,
   RunAndPersistAgentResponseResult,
 } from "../domain/turnTypes.js";
 
 type AgentMode = PluginOptions["modes"][number];
-
-type PendingInterrupt = { id: string; count: number };
 
 type PreparedTurn = {
   prompt: string;
@@ -39,28 +38,6 @@ function getApprovalDecision(input: BaseAgentTurnInput) {
     && (input.approvalDecision === "approve" || input.approvalDecision === "reject")
     ? input.approvalDecision
     : undefined;
-}
-
-function getInterruptItems(interrupt: unknown): unknown[] {
-  return Array.isArray(interrupt) ? interrupt : [interrupt];
-}
-
-function getHitlInterrupts(interrupt: unknown): PendingInterrupt[] {
-  return getInterruptItems(interrupt).flatMap((item) => {
-    const value = item && typeof item === "object" && "value" in item
-      ? (item as { value: unknown }).value
-      : item;
-    const actionRequests = value && typeof value === "object"
-      ? (value as { actionRequests?: unknown }).actionRequests
-      : undefined;
-    const interruptId = item && typeof item === "object"
-      ? (item as { id?: unknown }).id
-      : undefined;
-
-    return typeof interruptId === "string" && Array.isArray(actionRequests)
-      ? [{ id: interruptId, count: actionRequests.length }]
-      : [];
-  });
 }
 
 function buildHitlDecision(decision: "approve" | "reject", prompt?: string) {
@@ -129,6 +106,10 @@ export type RunTurnUseCaseDeps = {
   modes: PluginOptions["modes"];
   getAdminforth: () => IAdminForth;
   getAgentSystemPrompt: () => Promise<string>;
+  /** True when a persistent checkpointer is configured (not the in-memory MemorySaver). */
+  hasPersistentCheckpointer: boolean;
+  /** Factory for the per-turn debug sink; the concrete impl lives in the llm layer. */
+  createDebugSink: () => DebugSink;
 };
 
 /**
@@ -161,23 +142,32 @@ export class RunTurnUseCase {
   }
 
   /**
-   * Resolve the pending HITL interrupts for a resume. Prefers the in-process cache
-   * (populated when the interrupt fired this run) and falls back to the persisted
-   * checkpoint via the LLM port when the cache is empty (restart / other instance).
+   * Resolve the pending HITL interrupts for a resume. With a persistent checkpointer the
+   * checkpoint is authoritative (correct across instances and restarts); with the in-memory
+   * MemorySaver the in-process cache is authoritative (single process, cannot be stale).
    */
   private async resolvePendingInterrupts(sessionId: string, mode: AgentMode): Promise<PendingInterrupt[]> {
-    const cached = this.pendingInterrupts.get(sessionId);
-    if (cached && cached.length > 0) {
-      return cached;
+    if (this.deps.hasPersistentCheckpointer) {
+      // The in-process cache can be stale after a cross-instance resume, so it is intentionally
+      // NOT consulted here. A failure to read the checkpoint is surfaced as a real error — never
+      // masked as "no pending approval".
+      try {
+        return await this.deps.llm.getPendingInterrupts({
+          completionAdapter: mode.completionAdapter,
+          sessionId,
+        });
+      } catch (error) {
+        logger.error(
+          `Failed to read pending approval state from checkpoint for session "${sessionId}": ${getErrorMessage(error)}`,
+        );
+        throw error;
+      }
     }
-    const raw = await this.deps.llm
-      .getPendingInterrupts({ completionAdapter: mode.completionAdapter, sessionId })
-      .catch(() => [] as unknown[]);
-    return getHitlInterrupts(raw);
+    return this.pendingInterrupts.get(sessionId) ?? [];
   }
 
   private async prepareTurn(input: RunAndPersistAgentResponseInput): Promise<PreparedTurn> {
-    const sequenceDebugSink = createSequenceDebugCollector();
+    const sequenceDebugSink = this.deps.createDebugSink();
     const mode = this.resolveMode(input.modeName);
     const approvalDecision = getApprovalDecision(input);
     const shouldResume = Boolean(approvalDecision);
@@ -249,11 +239,14 @@ export class RunTurnUseCase {
     ];
   }
 
-  private async handleInterrupt(prepared: PreparedTurn, interrupt: unknown) {
-    const interrupts = getHitlInterrupts(interrupt);
+  private async handleInterrupt(
+    prepared: PreparedTurn,
+    interrupt: unknown,
+    descriptors: PendingInterrupt[],
+  ) {
     const existing = this.pendingInterrupts.get(prepared.sessionId) ?? [];
     const merged = new Map(existing.map((item) => [item.id, item.count]));
-    for (const item of interrupts) {
+    for (const item of descriptors) {
       merged.set(item.id, item.count);
     }
     this.pendingInterrupts.set(
@@ -299,7 +292,7 @@ export class RunTurnUseCase {
 
         if (chunk.kind === "interrupt") {
           interrupted = true;
-          await this.handleInterrupt(prepared, chunk.interrupt);
+          await this.handleInterrupt(prepared, chunk.interrupt, chunk.descriptors);
           continue;
         }
 

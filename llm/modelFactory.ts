@@ -1,6 +1,5 @@
 import type { CompletionAdapter } from "adminforth";
-import { createAgentChatModel } from "./agentModels.js";
-import type { AgentTurnModels } from "../domain/turnTypes.js";
+import { createAgentChatModel, type AgentTurnModels } from "./agentModels.js";
 
 export class AgentModelFactory {
   constructor(private readonly maxTokens: number) {}

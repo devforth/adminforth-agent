@@ -1,11 +1,24 @@
 import type { AdminUser, AudioAdapter } from "adminforth";
-import type { Messages } from "@langchain/langgraph";
-import type { Command } from "@langchain/langgraph";
-import type { AgentChatModel, AgentMiddleware } from "../llm/agentModels.js";
-import type { SequenceDebugCollector } from "../llm/middleware/sequenceDebug.js";
 import type { PreviousUserMessage } from "./languageDetect.js";
 import type { CurrentPageContext } from "../tools/getUserLocation.js";
 import type { AgentEventEmitter } from "./agentEvents.js";
+
+/**
+ * Minimal sink the application layer uses to persist per-turn debug traces. The
+ * concrete implementation (the sequence-debug collector) lives in the llm layer;
+ * the domain/application layers depend only on this narrow interface, so the
+ * dependency direction stays llm -> application/domain.
+ */
+export type DebugSink = {
+  flush(): void;
+  getHistory(): unknown[];
+};
+
+/** A pending human-in-the-loop approval, normalized (provider-agnostic). */
+export type PendingInterrupt = {
+  id: string;
+  count: number;
+};
 
 export type BaseAgentTurnInput = {
   prompt: string;
@@ -51,35 +64,7 @@ export type AgentTurnContext = {
 
 export type AgentTurnObservability = {
   emit?: AgentEventEmitter;
-  sequenceDebugSink: SequenceDebugCollector;
-};
-
-export type PreparedAgentTurn = {
-  prompt: string;
-  sessionId: string;
-  turnId: string;
-  previousUserMessages: PreviousUserMessage[];
-  modeName?: string | null;
-  context: AgentTurnContext;
-  observability: AgentTurnObservability;
-  resume?: {
-    decision: "approve" | "reject";
-    interrupts?: { id: string; count: number }[];
-  };
-  initialResponse?: string;
-};
-
-export type AgentTurnModels = {
-  model: AgentChatModel;
-  summaryModel: AgentChatModel;
-  modelMiddleware?: AgentMiddleware[];
-};
-
-export type AgentRuntimeRunInput = {
-  models: AgentTurnModels;
-  input: { messages: Messages } | Command;
-  context: AgentTurnContext;
-  observability: AgentTurnObservability;
+  sequenceDebugSink: DebugSink;
 };
 
 export type RunAndPersistAgentResponseInput = BaseAgentTurnInput & {
@@ -116,4 +101,4 @@ export type AgentMessage = {
 export type AgentStreamChunk =
   | { kind: "text"; delta: string }
   | { kind: "reasoning"; delta: string }
-  | { kind: "interrupt"; interrupt: unknown };
+  | { kind: "interrupt"; interrupt: unknown; descriptors: PendingInterrupt[] };

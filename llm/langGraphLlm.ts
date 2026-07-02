@@ -3,10 +3,9 @@ import { HumanMessage, SystemMessage } from "langchain";
 import type { AgentRuntime } from "./agentRuntime.js";
 import type { AgentModelFactory } from "./modelFactory.js";
 import { detectUserLanguage, type PreviousUserMessage } from "../domain/languageDetect.js";
-import type { AgentModeCompletionAdapter } from "./agentModels.js";
-import { adaptRawStream } from "./streamAdapter.js";
-import type { LlmPort, LlmStreamInput } from "../application/ports.js";
-import type { AgentMessage } from "../domain/turnTypes.js";
+import { adaptRawStream, normalizeInterrupts } from "./streamAdapter.js";
+import type { AgentModeCompletionAdapter, LlmPort, LlmStreamInput } from "../application/ports.js";
+import type { AgentMessage, PendingInterrupt } from "../domain/turnTypes.js";
 
 function toLangchainMessages(messages: AgentMessage[]) {
   return messages.map((message) =>
@@ -59,8 +58,9 @@ export class LangGraphLlm implements LlmPort {
   async getPendingInterrupts(input: {
     completionAdapter: AgentModeCompletionAdapter;
     sessionId: string;
-  }): Promise<unknown[]> {
+  }): Promise<PendingInterrupt[]> {
     const models = await this.modelFactory.create(input.completionAdapter);
-    return this.runtime.getPendingInterrupts({ models, sessionId: input.sessionId });
+    const raw = await this.runtime.getPendingInterrupts({ models, sessionId: input.sessionId });
+    return normalizeInterrupts(raw);
   }
 }
