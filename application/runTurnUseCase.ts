@@ -244,15 +244,17 @@ export class RunTurnUseCase {
     interrupt: unknown,
     descriptors: PendingInterrupt[],
   ) {
-    const existing = this.pendingInterrupts.get(prepared.sessionId) ?? [];
-    const merged = new Map(existing.map((item) => [item.id, item.count]));
-    for (const item of descriptors) {
-      merged.set(item.id, item.count);
+    if (!this.deps.hasPersistentCheckpointer) {
+      const existing = this.pendingInterrupts.get(prepared.sessionId) ?? [];
+      const merged = new Map(existing.map((item) => [item.id, item.count]));
+      for (const item of descriptors) {
+        merged.set(item.id, item.count);
+      }
+      this.pendingInterrupts.set(
+        prepared.sessionId,
+        [...merged.entries()].map(([id, count]) => ({ id, count })),
+      );
     }
-    this.pendingInterrupts.set(
-      prepared.sessionId,
-      [...merged.entries()].map(([id, count]) => ({ id, count })),
-    );
     await prepared.observability.emit?.({
       type: "interrupt",
       sessionId: prepared.sessionId,
@@ -312,7 +314,7 @@ export class RunTurnUseCase {
       await textBuffer.flush(emit);
       return { text: fullResponse };
     } finally {
-      if (!interrupted) {
+      if (!this.deps.hasPersistentCheckpointer && !interrupted) {
         this.pendingInterrupts.delete(prepared.sessionId);
       }
     }

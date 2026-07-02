@@ -574,7 +574,6 @@ async function callOpenApiSchema(params: {
   }
 
   const response = createDirectToolResponse();
-  logger.info(`Calling OpenAPI tool "${toolName}" with direct handler`);
   const lang = acceptLanguage ?? "en";
   const tr = (
     msg: string,
@@ -658,15 +657,6 @@ export function prepareApiBasedTools(
       openApiSchemasByToolName.set(toolName, schema);
     }
   }
-
-  logger.info(
-    `AdminForth Agent OpenAPI APIs: ${formatLogNameList(
-      adminforth.openApi.registeredSchemas.map((schema) => openApiSchemaPathToToolName(schema.path, adminforth)),
-    )}`,
-  );
-  logger.info(
-    `AdminForth Agent OpenAPI tools connected: ${formatLogNameList([...openApiSchemasByToolName.keys()])}`,
-  );
 
   for (const [toolName, schema] of openApiSchemasByToolName.entries()) {
     apiBasedTools[toolName] = {

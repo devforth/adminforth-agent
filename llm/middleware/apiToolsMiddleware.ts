@@ -72,10 +72,6 @@ export function createApiBasedToolsMiddleware(
         .map((toolName) => dynamicTools[toolName]);
       const availableTools = [...request.tools, ...tools];
 
-      logger.info(
-        `AdminForth Agent callable tools: ${availableTools.map((tool) => tool.name).join(", ")}`,
-      );
-
       return handler({
         ...request,
         tools: availableTools,
@@ -83,7 +79,6 @@ export function createApiBasedToolsMiddleware(
     },
     async wrapToolCall(request, handler) {
       const startedAt = Date.now();
-      const toolInput = JSON.stringify(request.toolCall.args ?? {});
       if (!request.toolCall.id) {
         throw new Error(`Tool call "${request.toolCall.name}" has no id.`);
       }
@@ -128,9 +123,6 @@ export function createApiBasedToolsMiddleware(
         startedAt,
       });
       toolCallTracker.start();
-      logger.info(
-        `Invoking tool "${request.toolCall.name}" with input: ${toolInput}`,
-      );
 
       try {
 
@@ -164,10 +156,6 @@ export function createApiBasedToolsMiddleware(
           status: "error",
           content: `Error: ${message}`,
         })
-      } finally {
-        logger.info(
-          `Tool "${request.toolCall.name}" finished in ${Date.now() - startedAt}ms`,
-        );
       }
     },
   });

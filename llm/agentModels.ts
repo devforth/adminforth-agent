@@ -1,6 +1,5 @@
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import {
-  logger,
   type CompletionAdapter,
 } from "adminforth";
 import { BaseCallbackHandler } from "@langchain/core/callbacks/base";
@@ -35,19 +34,8 @@ type AgentChatModelSpec = {
   middleware: AgentMiddleware[];
 };
 
-type LlmOutputTokenUsage = {
-  promptTokens?: unknown;
-  completionTokens?: unknown;
-};
-
-type MessageUsageMetadata = {
-  input_tokens?: unknown;
-  output_tokens?: unknown;
-};
-
 type PendingLlmRun = {
   startedAt: number;
-  firstTokenAt?: number;
 };
 
 function isLangChainAgentCompletionAdapter(
@@ -73,61 +61,6 @@ async function getAgentChatModelSpec(params: {
   };
 }
 
-function getFiniteNumber(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
-}
-
-function extractTokenUsage(output: LLMResult) {
-  const llmOutputTokenUsage = (
-    output.llmOutput as { tokenUsage?: LlmOutputTokenUsage } | undefined
-  )?.tokenUsage;
-
-  const promptTokens = getFiniteNumber(llmOutputTokenUsage?.promptTokens);
-  const completionTokens = getFiniteNumber(
-    llmOutputTokenUsage?.completionTokens,
-  );
-
-  if (promptTokens !== undefined || completionTokens !== undefined) {
-    return {
-      InputTokens: promptTokens ?? 0,
-      outputTokens: completionTokens ?? 0,
-    };
-  }
-
-  let InputTokens = 0;
-  let outputTokens = 0;
-
-  for (const generationBatch of output.generations) {
-    for (const generation of generationBatch) {
-      if (!("message" in generation) || !generation.message) {
-        continue;
-      }
-
-      const message = generation.message as {
-        usage_metadata?: MessageUsageMetadata;
-        response_metadata?: {
-          tokenUsage?: LlmOutputTokenUsage;
-        };
-      };
-
-      InputTokens +=
-        getFiniteNumber(message.usage_metadata?.input_tokens) ??
-        getFiniteNumber(message.response_metadata?.tokenUsage?.promptTokens) ??
-        0;
-      outputTokens +=
-        getFiniteNumber(message.usage_metadata?.output_tokens) ??
-        getFiniteNumber(
-          message.response_metadata?.tokenUsage?.completionTokens,
-        ) ??
-        0;
-    }
-  }
-
-  return { InputTokens, outputTokens };
-}
-
 class AgentLlmMetricsLogger extends BaseCallbackHandler {
   name = "AgentLlmMetricsLogger";
   lc_prefer_streaming = true;
@@ -138,41 +71,8 @@ class AgentLlmMetricsLogger extends BaseCallbackHandler {
     this.pendingRuns.set(runId, { startedAt: Date.now() });
   }
 
-  async handleLLMNewToken(
-    _token: string,
-    _chunk: unknown,
-    runId: string,
-  ) {
-    const pendingRun = this.pendingRuns.get(runId);
-
-    if (!pendingRun || pendingRun.firstTokenAt !== undefined) {
-      return;
-    }
-
-    pendingRun.firstTokenAt = Date.now();
-  }
-
-  async handleLLMEnd(output: LLMResult, runId: string) {
-    const pendingRun = this.pendingRuns.get(runId);
-
-    if (!pendingRun) {
-      return;
-    }
-
+  async handleLLMEnd(_output: LLMResult, runId: string) {
     this.pendingRuns.delete(runId);
-
-    const finishedAt = Date.now();
-    const rtt = finishedAt - pendingRun.startedAt;
-    const ttft =
-      pendingRun.firstTokenAt === undefined
-        ? rtt
-        : pendingRun.firstTokenAt - pendingRun.startedAt;
-    const { InputTokens, outputTokens } = extractTokenUsage(output);
-
-    logger.info(
-      { InputTokens, outputTokens, ttft, rtt },
-      "LLM call finished",
-    );
   }
 
   async handleLLMError(_error: unknown, runId: string) {
