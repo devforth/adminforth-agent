@@ -5,13 +5,18 @@ import {
   type AudioAdapter,
   type ChatSurfaceAdapter,
 } from "adminforth";
-import type { AgentModeCompletionAdapter } from "./agent/simpleAgent.js";
+import type { AgentModeCompletionAdapter } from "./llm/agentModels.js";
 
 interface ISessionResource {
   resourceId: string;
   idField: string;
   titleField: string;
-  turnsField: string;
+  /**
+   * @deprecated Not used by the plugin — session turns are looked up via
+   * `turnResource.sessionIdField`. Kept optional for backward compatibility;
+   * will be removed in a future major version.
+   */
+  turnsField?: string;
   askerIdField: string;
   createdAtField: string;
 }
@@ -85,8 +90,9 @@ export interface PluginOptions extends PluginsCommonOptions {
   systemPrompt?: string;
 
   /**
-   * Response generation level.
-   * Default is low
+   * @deprecated Not applied — reasoning effort is configured on the completion
+   * adapter (e.g. `extraRequestBodyParameters.reasoning.effort`), not here.
+   * Kept for backward compatibility; will be removed in a future major version.
    */
   reasoning?: "none" | "minimal" | "low" | "medium" | "high" | "xhigh";
 

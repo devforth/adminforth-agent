@@ -1,98 +1,92 @@
-import { AgentTurnService } from '../agentTurnService.js';
-import { TurnStreamConsumer } from '../agent/turn/TurnStreamConsumer.js';
+import { RunTurnUseCase, buildResumeValue } from '../application/runTurnUseCase.js';
+import type { AgentStreamChunk } from '../domain/turnTypes.js';
 
 // Characterization tests for the turn-orchestration flow (the layer between the HTTP
-// endpoint and the LLM). We drive the REAL AgentTurnService + REAL TurnStreamConsumer,
-// injecting fakes only for the outer collaborators (lifecycle / context / mode / model /
-// prompt / runtime). The fake runtime yields a scripted LangGraph-shaped stream, so we
-// freeze the emitted AgentEvent sequence, persistence, error/abort handling, and the
-// HITL approve→resume path WITHOUT spinning up a real LLM.
+// endpoint and the LLM). We drive the REAL RunTurnUseCase, faking only the two true
+// boundaries: the LlmPort (a scripted typed stream) and the session repository. This
+// freezes the emitted AgentEvent sequence, persistence, error/abort handling, and the
+// HITL approve -> resume path without a real LLM or database.
 
-async function* streamOf(...chunks: any[]) {
+async function* streamOf(...chunks: AgentStreamChunk[]) {
   for (const chunk of chunks) {
     yield chunk;
   }
 }
 
-// Shapes the real TurnStreamConsumer expects on the ['messages', ...] / ['updates', ...] stream.
-function textChunk(text: string) {
-  return ['messages', [{ content: [{ type: 'text', text }] }, { langgraph_node: 'model' }]];
-}
-function reasoningChunk(text: string) {
-  return ['messages', [{ content: [{ type: 'reasoning', reasoning: text }] }, { langgraph_node: 'model' }]];
-}
-function interruptChunk(interrupts: unknown) {
-  return ['updates', { __interrupt__: interrupts }];
-}
+const text = (delta: string): AgentStreamChunk => ({ kind: 'text', delta });
+const reasoning = (delta: string): AgentStreamChunk => ({ kind: 'reasoning', delta });
+const interrupt = (value: unknown): AgentStreamChunk => ({ kind: 'interrupt', interrupt: value });
 
-type BuildOpts = {
-  streamFor?: (callIndex: number, input: any) => AsyncIterable<any>;
-  resumeInitialResponse?: string;
-};
-
-function buildService(opts: BuildOpts = {}) {
-  const runtimeCalls: any[] = [];
-  const finishCalls: any[] = [];
-  const startCalls: any[] = [];
-  const resumeCalls: any[] = [];
-
-  const lifecycle = {
-    async start(input: any) {
-      startCalls.push(input);
-      return { turnId: 'turn-1', previousUserMessages: [] };
-    },
-    async resume(input: any) {
-      resumeCalls.push(input);
-      return {
-        turnId: 'turn-1',
-        previousUserMessages: [],
-        initialResponse: opts.resumeInitialResponse ?? '',
-      };
-    },
-    async finish(payload: any) {
-      finishCalls.push(payload);
-    },
-  };
-
-  const contextBuilder = {
-    async build({ base, turnId }: any) {
-      return {
-        adminUser: base.adminUser,
-        sessionId: base.sessionId,
-        turnId,
-        abortSignal: base.abortSignal,
-        userTimeZone: base.userTimeZone ?? 'UTC',
-      };
-    },
-  };
-
-  const modeResolver = { resolve: () => ({ name: 'default', completionAdapter: {} }) };
-  const modelFactory = {
-    async create() {
-      return { model: {}, summaryModel: {}, modelMiddleware: [] };
-    },
-  };
-  const promptBuilder = { async build() { return []; } };
-
-  const runtime = {
-    async stream(input: any) {
-      runtimeCalls.push(input);
+function fakeLlm(
+  opts: {
+    streamFor?: (call: number, input: any) => AsyncIterable<AgentStreamChunk>;
+    pendingInterrupts?: unknown[];
+  } = {},
+) {
+  const calls: any[] = [];
+  const getPendingInterruptsCalls: any[] = [];
+  return {
+    calls,
+    getPendingInterruptsCalls,
+    async streamTurn(input: any) {
+      calls.push(input);
       const factory = opts.streamFor ?? (() => streamOf());
-      return factory(runtimeCalls.length, input);
+      return factory(calls.length, input);
+    },
+    async detectLanguage() {
+      return null;
+    },
+    async getPendingInterrupts(input: any) {
+      getPendingInterruptsCalls.push(input);
+      return opts.pendingInterrupts ?? [];
     },
   };
+}
 
-  const service = new AgentTurnService(
-    lifecycle as any,
-    contextBuilder as any,
-    modeResolver as any,
-    modelFactory as any,
-    promptBuilder as any,
-    runtime as any,
-    new TurnStreamConsumer() as any,
-  );
+function fakeSessions(opts: { initialResponse?: string } = {}) {
+  const calls = {
+    createNewTurn: [] as any[],
+    touchSession: [] as string[],
+    saveTurnResponse: [] as any[],
+    getResumeState: 0,
+  };
+  return {
+    calls,
+    async getPreviousUserMessages() {
+      return [];
+    },
+    async createNewTurn(sessionId: string, prompt: string) {
+      calls.createNewTurn.push({ sessionId, prompt });
+      return 'turn-1';
+    },
+    async touchSession(sessionId: string) {
+      calls.touchSession.push(sessionId);
+    },
+    async getResumeState() {
+      calls.getResumeState += 1;
+      return { turnId: 'turn-1', initialResponse: opts.initialResponse ?? '' };
+    },
+    async saveTurnResponse(payload: any) {
+      calls.saveTurnResponse.push(payload);
+    },
+  };
+}
 
-  return { service, runtimeCalls, finishCalls, startCalls, resumeCalls };
+function buildUseCase(opts: {
+  streamFor?: (call: number, input: any) => AsyncIterable<AgentStreamChunk>;
+  initialResponse?: string;
+  pendingInterrupts?: unknown[];
+} = {}) {
+  const llm = fakeLlm({ streamFor: opts.streamFor, pendingInterrupts: opts.pendingInterrupts });
+  const sessions = fakeSessions({ initialResponse: opts.initialResponse });
+  const useCase = new RunTurnUseCase({
+    llm: llm as any,
+    sessions: sessions as any,
+    modes: [{ name: 'default', completionAdapter: {} as any }],
+    getAdminforth: () => ({ config: { auth: { usernameField: 'email' }, baseUrlSlashed: '/admin/' } }) as any,
+    getAgentSystemPrompt: async () => 'SYS',
+  });
+  return { useCase, llm, sessions };
 }
 
 function makeInput(overrides: Record<string, unknown> = {}) {
@@ -113,14 +107,14 @@ function makeInput(overrides: Record<string, unknown> = {}) {
   return { input, events };
 }
 
-describe('adminforth-agent turn flow (AgentTurnService.handleTurn)', () => {
+describe('RunTurnUseCase.handleTurn', () => {
   it('streams a text turn, emits response/finish, and persists the assembled text', async () => {
-    const { service, finishCalls, runtimeCalls } = buildService({
-      streamFor: () => streamOf(textChunk('Hello'), textChunk(' world')),
+    const { useCase, llm, sessions } = buildUseCase({
+      streamFor: () => streamOf(text('Hello'), text(' world')),
     });
     const { input, events } = makeInput();
 
-    const result = await service.handleTurn(input as any);
+    const result = await useCase.handleTurn(input as any);
 
     expect(events.map((e) => e.type)).toEqual([
       'turn-started',
@@ -136,97 +130,136 @@ describe('adminforth-agent turn flow (AgentTurnService.handleTurn)', () => {
       turnId: 'turn-1',
     });
     expect(result).toMatchObject({ text: 'Hello world', turnId: 'turn-1', aborted: false, failed: false });
-    expect(finishCalls[0]).toMatchObject({ turnId: 'turn-1', responseText: 'Hello world' });
-    expect(runtimeCalls).toHaveLength(1);
-    expect('messages' in runtimeCalls[0].input).toBe(true);
+    expect(sessions.calls.saveTurnResponse[0]).toMatchObject({ turnId: 'turn-1', responseText: 'Hello world' });
+    expect(sessions.calls.touchSession).toEqual(['s1']);
+    expect(llm.calls).toHaveLength(1);
+    expect('messages' in llm.calls[0].input).toBe(true);
   });
 
   it('emits reasoning deltas but excludes reasoning from the persisted response', async () => {
-    const { service, finishCalls } = buildService({
-      streamFor: () => streamOf(reasoningChunk('thinking...'), textChunk('Answer')),
+    const { useCase, sessions } = buildUseCase({
+      streamFor: () => streamOf(reasoning('thinking...'), text('Answer')),
     });
     const { input, events } = makeInput();
 
-    await service.handleTurn(input as any);
+    await useCase.handleTurn(input as any);
 
     expect(events.some((e) => e.type === 'reasoning-delta' && e.delta === 'thinking...')).toBe(true);
     expect(events.find((e) => e.type === 'response').text).toBe('Answer');
-    expect(finishCalls[0].responseText).toBe('Answer');
+    expect(sessions.calls.saveTurnResponse[0].responseText).toBe('Answer');
   });
 
   it('turns an LLM failure into an error event and persists the message as the response (current behavior)', async () => {
-    const { service, finishCalls } = buildService({
+    const { useCase, sessions } = buildUseCase({
       streamFor: () => {
         throw new Error('llm exploded');
       },
     });
     const { input, events } = makeInput();
 
-    const result = await service.handleTurn(input as any);
+    const result = await useCase.handleTurn(input as any);
 
     expect(events.map((e) => e.type)).toEqual(['turn-started', 'error', 'finish']);
     expect(result.failed).toBe(true);
     expect(result.aborted).toBe(false);
     expect(result.text).toContain('llm exploded');
     expect(events.find((e) => e.type === 'error').error).toContain('llm exploded');
-    expect(finishCalls[0].responseText).toContain('llm exploded');
+    expect(sessions.calls.saveTurnResponse[0].responseText).toContain('llm exploded');
   });
 
   it('handles a client abort without emitting response/error and still finalizes the turn', async () => {
     const controller = new AbortController();
     controller.abort();
-    const { service, finishCalls } = buildService({
-      streamFor: () => streamOf(textChunk('partial')),
+    const { useCase, sessions } = buildUseCase({
+      streamFor: () => streamOf(text('partial')),
     });
     const { input, events } = makeInput({ abortSignal: controller.signal });
 
-    const result = await service.handleTurn(input as any);
+    const result = await useCase.handleTurn(input as any);
 
     expect(result.aborted).toBe(true);
     expect(result.failed).toBe(false);
     expect(events.map((e) => e.type)).toEqual(['turn-started', 'finish']);
-    expect(finishCalls).toHaveLength(1);
+    expect(sessions.calls.saveTurnResponse).toHaveLength(1);
   });
 
-  it('emits a HITL interrupt and resumes via a langgraph Command on approval', async () => {
-    const { service, runtimeCalls, resumeCalls } = buildService({
-      resumeInitialResponse: 'prev ',
-      streamFor: (callIndex) =>
-        callIndex === 1
+  it('emits a HITL interrupt and resumes via a provider-agnostic resume payload on approval', async () => {
+    const { useCase, llm, sessions } = buildUseCase({
+      initialResponse: 'prev ',
+      streamFor: (call) =>
+        call === 1
           ? streamOf(
-              interruptChunk([
+              interrupt([
                 { id: 'int-1', value: { actionRequests: [{ name: 'delete_record', description: 'Delete row' }] } },
               ]),
             )
-          : streamOf(textChunk('Done')),
+          : streamOf(text('Done')),
     });
 
     const first = makeInput();
-    await service.handleTurn(first.input as any);
+    await useCase.handleTurn(first.input as any);
 
     expect(first.events.map((e) => e.type)).toEqual(['turn-started', 'interrupt', 'response', 'finish']);
     expect(first.events.find((e) => e.type === 'interrupt').sessionId).toBe('s1');
 
     const second = makeInput({ prompt: '', approvalDecision: 'approve' });
-    const result = await service.handleTurn(second.input as any);
+    const result = await useCase.handleTurn(second.input as any);
 
-    expect(resumeCalls).toHaveLength(1);
-    expect(runtimeCalls).toHaveLength(2);
-    const resumeInput = runtimeCalls[1].input;
-    expect('messages' in resumeInput).toBe(false);
-    expect(resumeInput.constructor.name).toBe('Command');
+    expect(sessions.calls.getResumeState).toBe(1);
+    expect(llm.calls).toHaveLength(2);
+    expect('messages' in llm.calls[1].input).toBe(false);
+    expect('resume' in llm.calls[1].input).toBe(true);
     // initialResponse ('prev ') is prepended to the resumed streamed text.
     expect(result.text).toBe('prev Done');
     expect(second.events.find((e) => e.type === 'response').text).toBe('prev Done');
   });
 
+  it('rebuilds pending interrupts from persisted state when the in-process cache is empty (restart)', async () => {
+    const { useCase, llm } = buildUseCase({
+      initialResponse: 'prev ',
+      pendingInterrupts: [{ id: 'int-1', value: { actionRequests: [{ name: 'del', description: 'd' }] } }],
+      streamFor: () => streamOf(text('Resumed')),
+    });
+    // No interrupt was cached in this process (simulating a restart); approval must still resume.
+    const { input } = makeInput({ prompt: '', approvalDecision: 'approve' });
+    const result = await useCase.handleTurn(input as any);
+
+    expect(llm.getPendingInterruptsCalls).toHaveLength(1);
+    expect(llm.calls).toHaveLength(1);
+    expect('resume' in llm.calls[0].input).toBe(true);
+    expect(result.text).toBe('prev Resumed');
+  });
+
   it('rejects (does not swallow) an approval with no pending interrupt, after emitting turn-started', async () => {
-    const { service } = buildService();
+    const { useCase } = buildUseCase();
     const { input, events } = makeInput({ prompt: '', approvalDecision: 'approve' });
     // prepareTurn() runs BEFORE the try/catch in runAndPersistAgentResponse, so — unlike an
     // LLM failure during streaming — this error propagates out of handleTurn instead of
     // becoming a `failed` result. turn-started has already been emitted by then.
-    await expect(service.handleTurn(input as any)).rejects.toThrow('No pending approval interrupt');
+    await expect(useCase.handleTurn(input as any)).rejects.toThrow('No pending approval interrupt');
     expect(events.map((e) => e.type)).toEqual(['turn-started']);
+  });
+});
+
+describe('buildResumeValue', () => {
+  it('fans a single approval across the recorded interrupt count', () => {
+    expect(buildResumeValue({ decision: 'approve', interrupts: [{ id: 'a', count: 2 }] })).toEqual({
+      decisions: [{ type: 'approve' }, { type: 'approve' }],
+    });
+  });
+
+  it('keys resume payloads by interrupt id when there are multiple', () => {
+    const value = buildResumeValue({
+      decision: 'reject',
+      interrupts: [{ id: 'a', count: 1 }, { id: 'b', count: 1 }],
+      prompt: 'do this instead',
+    }) as Record<string, any>;
+    expect(Object.keys(value)).toEqual(['a', 'b']);
+    expect(value.a.decisions[0]).toMatchObject({ type: 'reject' });
+    expect(value.a.decisions[0].message).toContain('do this instead');
+  });
+
+  it('throws when there is no interrupt to resume', () => {
+    expect(() => buildResumeValue({ decision: 'approve', interrupts: [] })).toThrow('No pending approval interrupt');
   });
 });
