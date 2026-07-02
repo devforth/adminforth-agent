@@ -3,7 +3,7 @@ import {
   appendCustomSystemPrompt,
   buildAgentTurnSystemPrompt,
   buildAgentSystemPrompt,
-} from '../agent/systemPrompt.js';
+} from '../domain/systemPrompt.js';
 
 // Characterization tests for system-prompt assembly (base prompt, per-turn additions,
 // and the resource/skill catalog prompt). Freezes the composed structure and the

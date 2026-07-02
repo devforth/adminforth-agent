@@ -4,31 +4,27 @@ import type {
   IHttpServer,
 } from "adminforth";
 
-import { AdminForthPlugin } from "adminforth";
+import { AdminForthPlugin, logger } from "adminforth";
 
 import type { PluginOptions } from './types.js';
 import { MemorySaver, type BaseCheckpointSaver } from "@langchain/langgraph";
-import { AdminForthCheckpointSaver } from "./agent/checkpointer.js";
-import { appendCustomSystemPrompt, buildAgentSystemPrompt, DEFAULT_AGENT_SYSTEM_PROMPT} from "./agent/systemPrompt.js";
-import { setupCoreEndpoints } from "./endpoints/core.js";
-import { setupSessionEndpoints } from "./endpoints/sessions.js";
-import { setupChatSurfaceEndpoints } from "./endpoints/chatSurfaces.js";
-import type { AgentEndpointsContext } from "./endpoints/context.js";
-import { AgentSessionStore } from "./sessionStore.js";
-import { ChatSurfaceService } from "./chatSurfaceService.js";
-import { AgentTurnService } from "./agentTurnService.js";
-import { AgentModelFactory } from "./agent/models/AgentModelFactory.js";
-import { AgentModeResolver } from "./agent/models/AgentModeResolver.js";
-import { AgentRuntime } from "./agent/runtime/AgentRuntime.js";
-import { SpeechTurnService } from "./agent/speech/SpeechTurnService.js";
-import { AgentToolProvider } from "./agent/tools/AgentToolProvider.js";
-import { TurnContextBuilder } from "./agent/turn/TurnContextBuilder.js";
-import { TurnLifecycleService } from "./agent/turn/TurnLifecycleService.js";
-import { TurnPersistenceService } from "./agent/turn/TurnPersistenceService.js";
-import { TurnPromptBuilder } from "./agent/turn/TurnPromptBuilder.js";
-import { TurnStreamConsumer } from "./agent/turn/TurnStreamConsumer.js";
+import { AdminForthCheckpointSaver } from "./persistence/checkpointStore.js";
+import { appendCustomSystemPrompt, buildAgentSystemPrompt, DEFAULT_AGENT_SYSTEM_PROMPT} from "./domain/systemPrompt.js";
+import { setupCoreEndpoints } from "./transport/http/coreEndpoints.js";
+import { setupSessionEndpoints } from "./transport/http/sessionEndpoints.js";
+import { setupChatSurfaceEndpoints } from "./transport/http/chatSurfaceEndpoints.js";
+import type { AgentEndpointsContext } from "./transport/http/context.js";
+import { AgentSessionStore } from "./persistence/sessionStore.js";
+import { ChatSurfaceService } from "./transport/surfaces/chatSurfaceService.js";
+import { RunTurnUseCase } from "./application/runTurnUseCase.js";
+import { createSequenceDebugCollector } from "./llm/middleware/sequenceDebug.js";
+import { LangGraphLlm } from "./llm/langGraphLlm.js";
+import { AgentModelFactory } from "./llm/modelFactory.js";
+import { AgentRuntime } from "./llm/agentRuntime.js";
+import { SpeechTurnService } from "./transport/surfaces/speechTurnService.js";
+import { AgentToolProvider } from "./tools/agentToolProvider.js";
 
-export type { AgentEvent, AgentEventEmitter } from "./agentEvents.js";
+export type { AgentEvent, AgentEventEmitter } from "./domain/agentEvents.js";
 
 export default class AdminForthAgentPlugin extends AdminForthPlugin {
   options: PluginOptions;
@@ -37,9 +33,10 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
   private agentSystemPrompt: string | null = null;
   private checkpointer: BaseCheckpointSaver | null = null;
   private sessionStore: AgentSessionStore;
-  private agentTurnService: AgentTurnService;
+  private runTurnUseCase: RunTurnUseCase;
   private speechTurnService: SpeechTurnService;
   private chatSurfaceService: ChatSurfaceService;
+
   private getCheckpointer() {
     if (this.checkpointer) return this.checkpointer;
 
@@ -58,6 +55,22 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     ].filter((resourceId): resourceId is string => Boolean(resourceId));
   }
 
+  private async getAgentSystemPrompt(): Promise<string> {
+    if (!this.agentSystemPrompt) {
+      const systemPrompt = await buildAgentSystemPrompt(
+        this.adminforth,
+        this.getInternalAgentResourceIds(),
+      ).catch((err) => {
+        logger.error(
+          `Failed to build agent system prompt, falling back to default: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        return DEFAULT_AGENT_SYSTEM_PROMPT;
+      });
+      this.agentSystemPrompt = appendCustomSystemPrompt(systemPrompt, this.options.systemPrompt);
+    }
+    return this.agentSystemPrompt;
+  }
+
   constructor(options: PluginOptions) {
     super(options, import.meta.url);
     this.options = options;
@@ -72,39 +85,28 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       getCheckpointer: this.getCheckpointer.bind(this),
       toolProvider,
     });
-    const persistence = new TurnPersistenceService(() => this.adminforth, this.options);
-    this.agentTurnService = new AgentTurnService(
-      new TurnLifecycleService(this.sessionStore, persistence, this.options),
-      new TurnContextBuilder(() => this.adminforth),
-      new AgentModeResolver(this.options),
-      new AgentModelFactory(this.options.maxTokens ?? 1000),
-      new TurnPromptBuilder({
-        getAdminforth: () => this.adminforth,
-        getAgentSystemPrompt: async () => {
-          if (!this.agentSystemPrompt) {
-            const systemPrompt = await buildAgentSystemPrompt(
-              this.adminforth,
-              this.getInternalAgentResourceIds(),
-            ).catch((err) => {
-              return DEFAULT_AGENT_SYSTEM_PROMPT;
-            });
-            this.agentSystemPrompt = appendCustomSystemPrompt(systemPrompt, this.options.systemPrompt);
-          }
-          return this.agentSystemPrompt;
-        },
-      }),
+    const llm = new LangGraphLlm(
       runtime,
-      new TurnStreamConsumer(),
+      new AgentModelFactory(this.options.maxTokens ?? 1000),
     );
+    this.runTurnUseCase = new RunTurnUseCase({
+      llm,
+      sessions: this.sessionStore,
+      modes: this.options.modes,
+      getAdminforth: () => this.adminforth,
+      getAgentSystemPrompt: this.getAgentSystemPrompt.bind(this),
+      hasPersistentCheckpointer: Boolean(this.options.checkpointResource),
+      createDebugSink: createSequenceDebugCollector,
+    });
     this.speechTurnService = new SpeechTurnService(
-      this.agentTurnService.runAndPersistAgentResponse.bind(this.agentTurnService),
+      this.runTurnUseCase.runAndPersistAgentResponse.bind(this.runTurnUseCase),
     );
     this.chatSurfaceService = new ChatSurfaceService(
       () => this.adminforth,
       this.options,
       this.sessionStore,
-      this.agentTurnService.handleTurn.bind(this.agentTurnService),
-      this.agentTurnService.runAndPersistAgentResponse.bind(this.agentTurnService),
+      this.runTurnUseCase.handleTurn.bind(this.runTurnUseCase),
+      this.runTurnUseCase.runAndPersistAgentResponse.bind(this.runTurnUseCase),
     );
     this.agentSystemPromptPromise = Promise.resolve(
       appendCustomSystemPrompt(DEFAULT_AGENT_SYSTEM_PROMPT, this.options.systemPrompt),
@@ -151,7 +153,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       throw new Error("sessionResource is required for AdminForthAgentPlugin");
     }
   }
-  
+
   validateConfigAfterDiscover(adminforth: IAdminForth, resourceConfig: AdminForthResource) {
     this.options.audioAdapter?.validate();
     for (const chatSurfaceAdapter of this.options.chatSurfaceAdapters ?? []) {
@@ -176,9 +178,9 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     const endpointContext = {
       adminforth: this.adminforth,
       options: this.options,
-      handleTurn: this.agentTurnService.handleTurn.bind(this.agentTurnService),
+      handleTurn: this.runTurnUseCase.handleTurn.bind(this.runTurnUseCase),
       handleSpeechTurn: this.speechTurnService.handle.bind(this.speechTurnService),
-      runAndPersistAgentResponse: this.agentTurnService.runAndPersistAgentResponse.bind(this.agentTurnService),
+      runAndPersistAgentResponse: this.runTurnUseCase.runAndPersistAgentResponse.bind(this.runTurnUseCase),
       getSessionTurns: this.sessionStore.getSessionTurns.bind(this.sessionStore),
       createNewTurn: this.sessionStore.createNewTurn.bind(this.sessionStore),
       createSystemTurn: this.sessionStore.createSystemTurn.bind(this.sessionStore),

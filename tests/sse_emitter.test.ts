@@ -1,4 +1,4 @@
-import { createSseEventEmitter } from '../surfaces/web-sse/createSseEventEmitter.js';
+import { createSseEventEmitter } from '../transport/sse/sseWriter.js';
 
 // Characterization tests for the outbound SSE wire contract. This is the plugin's
 // external streaming protocol (consumed by the Vercel-AI-UI frontend on /agent/response

@@ -1,7 +1,7 @@
 import {
   AgentSessionStore,
   AGENT_SYSTEM_TURN_PROMPT,
-} from '../sessionStore.js';
+} from '../persistence/sessionStore.js';
 
 // Characterization tests for session/turn persistence. Uses a fake AdminForth resource
 // so we freeze the field mapping and the read/transform logic (previous-message windowing,

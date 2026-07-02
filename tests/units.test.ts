@@ -1,9 +1,8 @@
-import { VegaLiteStreamBuffer } from '../agent/turn/VegaLiteStreamBuffer.js';
-import { isAbortError, getErrorMessage } from '../errors.js';
-import { sanitizeSpeechText } from '../sanitizeSpeechText.js';
-import { AgentModeResolver } from '../agent/models/AgentModeResolver.js';
-import { detectUserLanguage } from '../agent/languageDetect.js';
-import { createToolCallTracker } from '../agent/toolCallEvents.js';
+import { VegaLiteStreamBuffer } from '../domain/vegaLiteStreamBuffer.js';
+import { isAbortError, getErrorMessage } from '../shared/errors.js';
+import { sanitizeSpeechText } from '../shared/sanitizeSpeechText.js';
+import { detectUserLanguage } from '../domain/languageDetect.js';
+import { createToolCallTracker } from '../domain/toolCallEvents.js';
 
 // Characterization tests for the small, deterministic building blocks used across the
 // main flows: the vega-lite streaming buffer, error helpers, speech-text sanitizer,
@@ -88,26 +87,6 @@ describe('sanitizeSpeechText', () => {
     expect(out).toContain('Before');
     expect(out).toContain('after');
     expect(out).not.toContain('code()');
-  });
-});
-
-describe('AgentModeResolver', () => {
-  const options = {
-    modes: [
-      { name: 'A', completionAdapter: {} },
-      { name: 'B', completionAdapter: {} },
-    ],
-  } as any;
-
-  it('resolves a mode by name', () => {
-    expect(new AgentModeResolver(options).resolve('B').name).toBe('B');
-  });
-
-  it('falls back to the first mode for unknown / missing names', () => {
-    const resolver = new AgentModeResolver(options);
-    expect(resolver.resolve('nope').name).toBe('A');
-    expect(resolver.resolve(undefined).name).toBe('A');
-    expect(resolver.resolve(null).name).toBe('A');
   });
 });
 
