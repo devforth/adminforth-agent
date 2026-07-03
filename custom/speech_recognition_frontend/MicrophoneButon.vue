@@ -1,7 +1,7 @@
 <template>
   <div
     v-show="!agentStore.isResponseInProgress || isAudioChatMode"
-    class="absolute bottom-2 flex items-center justify-center z-10 gap-4"
+    class="absolute bottom-1 flex items-center justify-center z-10 gap-4"
     :class="[!agentStore.isAudioChatMode ? 'right-16': agentStore.isMobile ? 'right-1/2 translate-x-1/2' : 'right-1/2 translate-x-1/2']"
   > 
     <button 
@@ -14,10 +14,10 @@
     </button>
     <button
       v-else 
-      class="h-9 bg-lightPrimary dark:bg-darkPrimary 
+      class="h-7 bg-lightPrimary dark:bg-darkPrimary 
         hover:opacity-90 rounded-full flex items-center justify-center
         transition-all duration-300 ease-in-out overflow-hidden"
-      :class="[isAudioChatMode ? 'w-32 px-2': 'w-9']" 
+      :class="[isAudioChatMode ? 'w-32 px-2': 'w-7']" 
       @click="toggleChatMode"
     >
       <div class="w-5 h-5 flex items-center justify-center">
