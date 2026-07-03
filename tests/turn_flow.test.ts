@@ -1,4 +1,5 @@
 import { RunTurnUseCase, buildResumeValue } from '../application/runTurnUseCase.js';
+import { SteerBuffer } from '../domain/steerBuffer.js';
 import type { AgentStreamChunk } from '../domain/turnTypes.js';
 
 // Characterization tests for the turn-orchestration flow (the layer between the HTTP
@@ -92,16 +93,18 @@ function buildUseCase(opts: {
     pendingInterruptsError: opts.pendingInterruptsError,
   });
   const sessions = fakeSessions({ initialResponse: opts.initialResponse });
+  const steerBuffer = new SteerBuffer();
   const useCase = new RunTurnUseCase({
     llm: llm as any,
     sessions: sessions as any,
+    steerBuffer,
     modes: [{ name: 'default', completionAdapter: {} as any }],
     getAdminforth: () => ({ config: { auth: { usernameField: 'email' }, baseUrlSlashed: '/admin/' } }) as any,
     getAgentSystemPrompt: async () => 'SYS',
     hasPersistentCheckpointer: opts.hasPersistentCheckpointer ?? false,
     createDebugSink: () => ({ flush() {}, getHistory: () => [] }),
   });
-  return { useCase, llm, sessions };
+  return { useCase, llm, sessions, steerBuffer };
 }
 
 function makeInput(overrides: Record<string, unknown> = {}) {
@@ -227,6 +230,38 @@ describe('RunTurnUseCase.handleTurn', () => {
     // initialResponse ('prev ') is prepended to the resumed streamed text.
     expect(result.text).toBe('prev Done');
     expect(second.events.find((e) => e.type === 'response').text).toBe('prev Done');
+  });
+
+  it('clears unconsumed steers when a turn completes (they must not leak into the next turn)', async () => {
+    const { useCase, steerBuffer } = buildUseCase({
+      streamFor: () => streamOf(text('done')),
+    });
+    // Steer enqueued but the (faked) LLM stream never drains it — e.g. it arrived after the
+    // last model call. On turn completion the leftover must be discarded.
+    steerBuffer.add('s1', 'too late');
+    expect(steerBuffer.size('s1')).toBe(1);
+
+    await useCase.handleTurn(makeInput().input as any);
+
+    expect(steerBuffer.size('s1')).toBe(0);
+  });
+
+  it('preserves steers across a HITL interrupt and clears them after the resumed turn ends', async () => {
+    const { useCase, steerBuffer } = buildUseCase({
+      streamFor: (call) =>
+        call === 1
+          ? streamOf(interrupt([{ id: 'int-1', value: {} }]))
+          : streamOf(text('done')),
+    });
+
+    // A steer sent while the turn is paused for approval must survive the interrupted turn...
+    steerBuffer.add('s1', 'while waiting for approval');
+    await useCase.handleTurn(makeInput().input as any);
+    expect(steerBuffer.size('s1')).toBe(1);
+
+    // ...and be cleared once the resumed turn finishes.
+    await useCase.handleTurn(makeInput({ prompt: '', approvalDecision: 'approve' }).input as any);
+    expect(steerBuffer.size('s1')).toBe(0);
   });
 
   it('with a persistent checkpointer, resumes from checkpoint state (ignoring the local cache)', async () => {

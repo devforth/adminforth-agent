@@ -134,6 +134,16 @@ function createAgentEventStream(
       });
     },
 
+    steerApplied(count: number, ids: string[]) {
+      stream.send({
+        type: isAiUiMessageStream ? "data-steer-applied" : "steer-applied",
+        data: {
+          count,
+          ids,
+        },
+      });
+    },
+
     openPage(targetPath: string) {
       stream.send({
         type: isAiUiMessageStream ? "data-open-page" : "open-page",
@@ -254,9 +264,9 @@ function createAgentEventStream(
  *
  * - `vercelAiUiMessageStream: true` (used by `/agent/response` and `/agent/approval`):
  *   the Vercel AI SDK message-stream v1 format (`start`, `text-start`/`text-delta`/
- *   `text-end`, `reasoning-*`, `data-*` parts, `error` with `errorText`, `finish`,
- *   `[DONE]`). Consumed by `DefaultChatTransport` and the manual approval parser in
- *   `custom/composables/agentStore/useAgentChat.ts`.
+ *   `text-end`, `reasoning-*`, `data-*` parts including `data-steer-applied`,
+ *   `error` with `errorText`, `finish`, `[DONE]`). Consumed by `DefaultChatTransport`
+ *   and the manual approval parser in `custom/composables/agentStore/useAgentChat.ts`.
  * - default (used by `/agent/speech-response`): bare event names
  *   (`transcript`, `speech-response`, `audio-start`/`audio-delta`/`audio-done`,
  *   `open-page`, `error`) plus the Vercel-shaped `data-tool-call`. Consumed by
@@ -287,6 +297,9 @@ export function createSseEventEmitter(
         break;
       case "interrupt":
         stream.interrupt(event.sessionId, event.interrupt);
+        break;
+      case "steer-applied":
+        stream.steerApplied(event.count, event.ids);
         break;
       case "open-page":
         stream.openPage(event.targetPath);

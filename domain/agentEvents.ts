@@ -28,6 +28,11 @@ export type AgentEvent =
       interrupt: unknown;
     }
   | {
+      type: "steer-applied";
+      count: number;
+      ids: string[];
+    }
+  | {
       type: "open-page";
       targetPath: string;
     }

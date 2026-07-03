@@ -32,6 +32,11 @@ const agentApprovalBodySchema = z.object({
   decision: z.enum(["approve", "reject"]),
 }).strict();
 
+const agentSteerBodySchema = z.object({
+  sessionId: z.string(),
+  message: z.string().min(1),
+}).strict();
+
 // Sent as multipart/form-data (via multer), so every field arrives as a plain string on the wire.
 // `currentPage` is JSON.stringify'd by the client into a form field and must be parsed back into
 // an object. Zod -> JSON-Schema conversion cannot represent `.transform()` at all (it throws), so
@@ -131,6 +136,23 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
         abortLogMessage: "Agent approval response streaming aborted by the client",
       });
       return null;
+    }
+  });
+
+  server.endpoint({
+    method: 'POST',
+    path: `/agent/steer`,
+    request_schema: agentSteerBodySchema,
+    handler: async ({ body }) => {
+      const data = body as z.infer<typeof agentSteerBodySchema>;
+      // Fire-and-forget: the steer is buffered and folded into the running turn by the
+      // beforeModel steer middleware, which signals `data-steer-applied` on that turn's
+      // SSE stream once consumed. This endpoint only confirms it was received/queued.
+      const { id, queued } = ctx.steer({
+        sessionId: data.sessionId,
+        message: data.message,
+      });
+      return { ok: true, id, queued };
     }
   });
 
