@@ -89,4 +89,38 @@ describe('createSteerMiddleware beforeModel', () => {
     expect(String(result.messages[0].content)).toContain('for s1');
     expect(buffer.size('s2')).toBe(1);
   });
+
+  // Regression: LangChain runs `beforeModel` as its own graph node and filters
+  // `runtime.context` down to only the keys named in the middleware's OWN
+  // `contextSchema` (MiddlewareNode.invokeMiddleware). Without a schema declaring
+  // `sessionId`, the hook received `{}` and drained the buffer for `undefined`,
+  // silently dropping every steer. This reproduces that filtering step.
+  it('declares a contextSchema that lets sessionId survive the framework filter', async () => {
+    const buffer = new SteerBuffer();
+    buffer.add('s1', 'for s1');
+    const middleware: any = createSteerMiddleware(buffer);
+
+    const schema = middleware.contextSchema;
+    expect(schema).toBeDefined();
+
+    // Mirror MiddlewareNode.invokeMiddleware: keep only schema keys, then parse.
+    const fullContext: Record<string, unknown> = {
+      sessionId: 's1',
+      turnId: 't1',
+      adminUser: {},
+      userTimeZone: 'UTC',
+      emit: () => {},
+    };
+    const relevant: Record<string, unknown> = {};
+    for (const key of Object.keys(schema.shape)) {
+      if (key in fullContext) relevant[key] = fullContext[key];
+    }
+    const filtered = schema.parse(relevant);
+    expect(filtered.sessionId).toBe('s1');
+
+    // And the drained buffer is keyed by that surviving sessionId.
+    const result: any = await middleware.beforeModel!({} as any, { context: filtered });
+    expect(result.messages).toHaveLength(1);
+    expect(String(result.messages[0].content)).toContain('for s1');
+  });
 });

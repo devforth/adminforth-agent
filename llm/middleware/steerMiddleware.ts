@@ -1,7 +1,13 @@
 import { HumanMessage } from "langchain";
 import { createMiddleware } from "langchain";
+import { z } from "zod";
 import type { AgentEventEmitter } from "../../domain/agentEvents.js";
 import type { SteerBuffer } from "../../domain/steerBuffer.js";
+
+const steerContextSchema = z.object({
+  sessionId: z.string(),
+  emit: z.custom<AgentEventEmitter>().optional(),
+});
 
 /**
  * `beforeModel` middleware that folds user "steering" instructions into a running
@@ -17,23 +23,18 @@ import type { SteerBuffer } from "../../domain/steerBuffer.js";
 export function createSteerMiddleware(steerBuffer: SteerBuffer) {
   return createMiddleware({
     name: "SteerMiddleware",
+    contextSchema: steerContextSchema,
     async beforeModel(_state, runtime) {
-      const { sessionId, emit } = runtime.context as {
-        sessionId: string;
-        emit?: AgentEventEmitter;
-      };
-
+      const { sessionId, emit } = runtime.context;
       const steers = steerBuffer.drain(sessionId);
       if (steers.length === 0) {
         return;
       }
-
       void emit?.({
         type: "steer-applied",
         count: steers.length,
         ids: steers.map((steer) => steer.id),
       });
-
       return {
         messages: steers.map(
           (steer) =>
