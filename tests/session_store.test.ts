@@ -109,6 +109,22 @@ describe('adminforth-agent session store', () => {
     expect(await store.getPreviousUserMessages('s1')).toEqual([{ text: 'hello' }]);
   });
 
+  it('getLatestTurn returns the newest non-system turn (skips persisted steer/system notes)', async () => {
+    const store = buildStore(() => ({
+      // queried DESC by created_at -> newest-first; a mid-turn steer note sits on top of
+      // the real (still not_finished) turn that a HITL resume must write back into.
+      async list() {
+        return [
+          { id: 'steer', prompt: AGENT_SYSTEM_TURN_PROMPT, response: '__adminforth_steer__:use EUR' },
+          { id: 'main', prompt: 'hello', response: 'not_finished' },
+        ];
+      },
+    }));
+
+    const latest = await store.getLatestTurn('s1');
+    expect(latest?.id).toBe('main');
+  });
+
   it('derives a deterministic chat-surface session id', () => {
     const store = buildStore(() => ({}));
     expect(

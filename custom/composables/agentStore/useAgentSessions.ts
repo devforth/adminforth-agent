@@ -2,7 +2,7 @@ import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { callAdminForthApi } from '@/utils';
 import type { Chat } from '../../chat';
 import type { IAgentSession, ISessionsListItem, IPart } from '../../types';
-import { PRE_SESSION_ID } from './constants';
+import { PRE_SESSION_ID, STEER_PERSIST_PREFIX } from './constants';
 import { i18nInstance } from '@/i18n';
 
 type AdminforthLike = {
@@ -50,12 +50,29 @@ export function createAgentSessionManager({
 
   function saveCurrentSessionInCache() {
     if (currentSession.value) {
-      currentSession.value.messages = currentChat.value?.messages.map((m: any) => ({
-        role: m.role,
-        text: m.parts.map((p: IPart) => p.type === 'text' ? p.text : '').join(''),
-      })) || [];
+      currentSession.value.messages = currentChat.value?.messages.map((m: any) => {
+        const text = m.parts.map((p: IPart) => p.type === 'text' ? p.text : '').join('');
+        if (m.role === 'user' && m.metadata?.steer) {
+          return { role: 'system', text: `${STEER_PERSIST_PREFIX}${text}` };
+        }
+        return { role: m.role, text };
+      }) || [];
       sessions.value[currentSession.value.sessionId] = currentSession.value;
     }
+  }
+
+  function mapStoredMessage(m: any) {
+    if (m.role === 'system' && typeof m.text === 'string' && m.text.startsWith(STEER_PERSIST_PREFIX)) {
+      return {
+        role: 'user',
+        metadata: { steer: true },
+        parts: [{ type: 'text', text: m.text.slice(STEER_PERSIST_PREFIX.length), state: 'done' }],
+      };
+    }
+    return {
+      role: m.role,
+      parts: [{ type: 'text', text: m.text, state: 'done' }],
+    };
   }
 
   async function fetchSession(sessionId: string) {
@@ -85,14 +102,7 @@ export function createAgentSessionManager({
     currentSession.value = sessions.value[sessionId];
     setCurrentChat(sessionId);
     if (currentChat.value.messages.length === 0) {
-      currentChat.value.messages = currentSession.value?.messages.map((m: any) => ({
-        role: m.role,
-        parts:[{
-          type: 'text',
-          text: m.text,
-          state: 'done',
-        }]
-      }));
+      currentChat.value.messages = currentSession.value?.messages.map(mapStoredMessage);
     }
   }
 
@@ -130,8 +140,10 @@ export function createAgentSessionManager({
     }
   }
 
-  async function sendMessage() {
-    const message = trimmedUserMessage.value;
+  async function sendMessage(explicitMessage?: string) {
+    // `explicitMessage` is used to drain a buffered (queued) message; without it we send
+    // whatever is currently typed in the input.
+    const message = (explicitMessage ?? trimmedUserMessage.value).trim();
     if (!message || isMessageInputBlocked.value) {
       return;
     }
@@ -147,7 +159,9 @@ export function createAgentSessionManager({
     currentChat.value?.sendMessage({
       text: message,
     });
-    userMessageInput.value = '';
+    if (explicitMessage === undefined) {
+      userMessageInput.value = '';
+    }
   }
 
   async function createPreSession() {

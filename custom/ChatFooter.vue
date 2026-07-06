@@ -7,10 +7,11 @@
       transition: `transform ${agentTransitions.TRANSITION_DURATION}ms ease-in-out`
     }"            
   >
-    <div 
+    <SteerQueue />
+    <div
       class="w-full border rounded-lg flex flex-col"
-      :class="agentStore.isAudioChatMode ? 'border-none mt-8' : 'border dark:bg-gray-700'"  
-    > 
+      :class="agentStore.isAudioChatMode ? 'border-none mt-8' : 'border dark:bg-gray-700'"
+    >
       <textarea
         v-if="!agentStore.isAudioChatMode"
         v-model="agentStore.userMessageInput"
@@ -21,8 +22,7 @@
           'h-8 px-4 py-3 border-b rounded-xl rounded-b-none w-full resize-none overflow-hidden text-lightInputText dark:text-darkInputText rounded-md bg-transparent text-sm bg-gray-50 dark:bg-gray-700 dark:border-gray-600 focus:outline-none',
           { '!text-base': coreStore.isIos }
         ]"
-        :placeholder="agentStore.hasPendingToolApproval ? 'Approve or reject the pending action to continue' : agentStore.userMessagePlaceholder"
-        :disabled="agentStore.isMessageInputBlocked"
+        :placeholder="placeholderText"
         @keydown.enter.exact.prevent="sendMessage"
       />
       <div class="flex items-center justify-between px-2 py-1">
@@ -81,7 +81,7 @@
           v-if="!agentStore.isResponseInProgress"
           class=" !p-0 h-7 w-7 transition-opacity duration-200"                    
           @click="sendMessage" 
-          :disabled="!agentStore.trimmedUserMessage || agentStore.isMessageInputBlocked"
+          :disabled="!agentStore.trimmedUserMessage"
         >
           <IconArrowUpOutline 
             class="w-6 h-6
@@ -105,7 +105,7 @@
 
 <script setup lang="ts">
 import { IconArrowUpOutline, IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
-import { useTemplateRef, onMounted, ref, onUnmounted, watch } from 'vue';
+import { useTemplateRef, onMounted, ref, onUnmounted, watch, computed } from 'vue';
 import { onClickOutside } from '@vueuse/core'
 import { useAgentStore } from './composables/useAgentStore';
 import { useAgentTransitions } from './composables/useAgentTransitions';
@@ -113,6 +113,7 @@ import { Button } from '@/afcl';
 import { useCoreStore } from '@/stores/core';
 import { remToPx } from './utils';
 import MicrophoneButton from './speech_recognition_frontend/MicrophoneButon.vue';
+import SteerQueue from './SteerQueue.vue';
 
 const props = defineProps<{
   meta: {
@@ -134,6 +135,13 @@ const agentStore = useAgentStore();
 const agentTransitions = useAgentTransitions();
 const coreStore = useCoreStore();
 const isModeMenuOpen = ref(false);
+
+const placeholderText = computed(() => {
+  if (agentStore.isTurnActive) {
+    return 'Queue a follow-up — send after, or steer it…';
+  }
+  return agentStore.userMessagePlaceholder;
+});
 
 onClickOutside(modeMenu as any, () => { isModeMenuOpen.value = false; });
 
@@ -177,7 +185,9 @@ function selectMode(modeName: string) {
 async function sendMessage() {
   if (agentStore.isAudioChatMode) return;
   isModeMenuOpen.value = false;
-  await agentStore.sendMessage();
+  // Routes to a steer (folded into the running turn) while generating, or a normal
+  // new-turn send when idle.
+  await agentStore.submitUserMessage();
   autoResize();
   props.conversationAreaRef?.handleSendMessage();
 }
