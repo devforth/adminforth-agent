@@ -4,6 +4,7 @@
     class="absolute bottom-full left-0 w-full mb-2 flex flex-col gap-1.5 px-2 z-20"
   >
     <TransitionGroup
+      appear
       enter-active-class="transition ease-out duration-150"
       enter-from-class="opacity-0 translate-y-1"
       enter-to-class="opacity-100 translate-y-0"

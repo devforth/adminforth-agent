@@ -549,6 +549,7 @@ export const useAgentStore = defineStore('agent', () => {
     steerQueue: steerBuffer.queue,
     steerQueuedMessage: steerBuffer.steerQueuedMessage,
     removeQueuedMessage: steerBuffer.removeQueuedMessage,
+    enqueueSteerMessage: steerBuffer.enqueue,
     //___________________________________
   }
 })

@@ -8,6 +8,7 @@
     }"            
   >
     <SteerQueue />
+    <!-- <SteerDebugPanel /> -->
     <div
       class="w-full border rounded-lg flex flex-col"
       :class="agentStore.isAudioChatMode ? 'border-none mt-8' : 'border dark:bg-gray-700'"
@@ -114,6 +115,7 @@ import { useCoreStore } from '@/stores/core';
 import { remToPx } from './utils';
 import MicrophoneButton from './speech_recognition_frontend/MicrophoneButon.vue';
 import SteerQueue from './SteerQueue.vue';
+import SteerDebugPanel from './SteerDebugPanel.vue';
 
 const props = defineProps<{
   meta: {
