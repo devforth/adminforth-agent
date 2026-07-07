@@ -53,27 +53,49 @@
       </div>
       <div v-if="showBottomSpacer" class="w-full" :style="{ height: spacerHeight + 'px' }"></div>
     </CustomAutoScrollContainer>
-    <button @click="scrollContainer.scrollToBottom();">
-      <IconArrowDownOutline 
-        class="absolute z-10 bottom-8 left-1/2 -translate-x-1/2 bg-lightPrimary/20 dark:bg-darkPrimary/10
-          border border-lightPrimary dark:border-darkPrimary text-lightPrimary dark:text-darkPrimary p-2 w-10 h-10
-          rounded-full transition-opacity duration-100 ease-in backdrop-blur-sm" 
-        :class="showScrollToBottomButton ? 'opacity-100' : 'opacity-0 pointer-events-none'"
-        :disabled="!showScrollToBottomButton"
-      />
-    </button>
+    <Transition
+      enter-active-class="transition-all duration-250 ease-out"
+      enter-from-class="opacity-0 translate-y-3 scale-90"
+      enter-to-class="opacity-100 translate-y-0 scale-100"
+      leave-active-class="transition-all duration-200 ease-in"
+      leave-from-class="opacity-100 translate-y-0 scale-100"
+      leave-to-class="opacity-0 translate-y-3 scale-90"
+    >
+      <button 
+        v-if="showScrollToBottomButton" 
+        @click="scrollContainer.scrollToBottom();"
+        class="absolute z-10 bottom-8 left-1/2 -translate-x-1/2 
+          bg-lightPrimary/20 dark:bg-darkPrimary/10
+          border border-lightPrimary dark:border-darkPrimary 
+          text-lightPrimary dark:text-darkPrimary 
+          backdrop-blur-sm rounded-full
+          w-10 h-10 flex items-center justify-center gap-0.5"
+        :class="{ 'w-12 h-8': showAnimationInScrollToBottomButton }"
+      >
+        <IconArrowDownOutline 
+          v-if="!showAnimationInScrollToBottomButton"
+          class="p-2 w-10 h-10 transition-opacity duration-100 ease-in " 
+          :disabled="!showScrollToBottomButton"
+        />
+        <ThreeDotsAnimation 
+          v-else
+          :disabled="!showScrollToBottomButton"
+        />
+      </button>
+    </Transition>
   </div>
 </template>
 
 
 <script setup lang="ts">
 import type { IMessage } from '../types';
-import { useTemplateRef, ref, onMounted, onUnmounted, watch, nextTick, defineAsyncComponent } from 'vue';
+import { useTemplateRef, ref, onMounted, onUnmounted, watch, nextTick, defineAsyncComponent, computed } from 'vue';
 import { IconArrowDownOutline } from '@iconify-prerendered/vue-flowbite';
 import SessionsHistory from '../SessionsHistory.vue';
 import { useAgentStore } from '../composables/useAgentStore';
 import { useAgentTransitions } from '../composables/useAgentTransitions';
 import MessageRenderer from './MessageRenderer.vue';
+import ThreeDotsAnimation from './ThreeDotsAnimation.vue';
 
 const CustomAutoScrollContainer = defineAsyncComponent(() => import('../CustomAutoScrollContainer.vue'));
 
@@ -113,6 +135,10 @@ let observedLastAgentMessageElement: HTMLElement | null = null;
 let updateSpacerFrameId: number | null = null;
 let pendingSpacerUpdate: Promise<void> | null = null;
 let spacerUpdateQueued = false;
+
+const showAnimationInScrollToBottomButton = computed(() => {
+  return agentStore.isResponseInProgress && showScrollToBottomButton.value;
+});
 
 onMounted(async () => {
   messageResizeObserver = new ResizeObserver(() => {

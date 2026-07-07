@@ -12,18 +12,18 @@
 
   .bounce-dot2 {
     animation: bounce 1.5s infinite;
-    animation-delay: 0.1s;
+    animation-delay: 0.2s;
   }
 
   .bounce-dot3 {
     animation: bounce 1.5s infinite;
-    animation-delay: 0.2s;
+    animation-delay: 0.4s;
   }
 
   @keyframes bounce {
     0%, 100% {
       transform: translateY(20%);
-      opacity: 0.3;
+      opacity: 0.4;
       animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
     }
     50% {
