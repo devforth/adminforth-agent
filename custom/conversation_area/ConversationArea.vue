@@ -208,7 +208,17 @@ function getHeightOfLastUserMessage() {
 }
 
 function getHeightOfLastAgentMessage() {
-  return getLastMessageElement('assistant')?.clientHeight ?? 0;
+  const lastUserIndex = props.messages.findLastIndex((message: IMessage) => message.role === 'user');
+  const lastAgentIndex = props.messages.findLastIndex((message: IMessage) => message.role === 'assistant');
+  // Only reserve spacer space for the current turn's answer, i.e. an assistant message that comes
+  // after the last user message. Right after a send the "Thinking" placeholder isn't pushed yet, so
+  // findLastIndex would return the previous turn's answer (which sits above the just-sent user
+  // message). Subtracting its height shrinks the spacer, making scrollToBottom stop short — and once
+  // the real placeholder arrives the spacer grows and the true bottom drops below where we scrolled.
+  if (lastAgentIndex <= lastUserIndex) {
+    return 0;
+  }
+  return messagesRefs.value[lastAgentIndex]?.clientHeight ?? 0;
 }
 
 function getScrollClientHeight() {
@@ -221,15 +231,14 @@ async function updateSpacerHeight() {
   }
 
   const clientHeight = getScrollClientHeight();
-
   if (!clientHeight) {
     return;
   }
 
   const lastUserMessageHeight = getHeightOfLastUserMessage();
   const lastAgentMessageHeight = getHeightOfLastAgentMessage();
-
-  spacerHeight.value = Math.max(0, clientHeight - (lastUserMessageHeight + MASK_HEIGHT + lastAgentMessageHeight));
+  const newSpacerHeight = Math.max(0, clientHeight - (lastUserMessageHeight + MASK_HEIGHT + lastAgentMessageHeight));
+  spacerHeight.value = newSpacerHeight;
 }
 
 function scheduleSpacerHeightUpdate() {
@@ -310,8 +319,9 @@ async function handleSendMessage() {
 
   if (clientHeight) {
     showBottomSpacer.value = true;
+    await nextTick(); // render the just-sent user message + spacer before measuring their heights
     await updateSpacerHeight();
-    await nextTick();
+    await nextTick(); // apply the computed spacer height before scrolling
     scrollContainer.value?.scrollToBottom();
   }
 }
