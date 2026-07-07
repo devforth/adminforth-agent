@@ -27,6 +27,7 @@ export type AgentEndpointsContext = {
   getSessionTurns(sessionId: string): Promise<SessionTurn[]>;
   createNewTurn(sessionId: string, prompt: string, response?: string): Promise<string>;
   createSystemTurn(sessionId: string, systemMessage: string): Promise<string>;
+  appendSteerToCurrentTurn(sessionId: string, steerText: string): Promise<void>;
   handleChatSurfaceMessage(
     adapter: ChatSurfaceAdapter,
     incoming: ChatSurfaceIncomingMessage,
@@ -42,7 +43,7 @@ export type CoreEndpointsContext = Pick<
 export type SessionEndpointsContext = Pick<
   AgentEndpointsContext,
   "adminforth" | "options" | "getSessionTurns" | "createNewTurn"
-  | "createSystemTurn"
+  | "createSystemTurn" | "appendSteerToCurrentTurn"
 >;
 
 export type ChatSurfaceEndpointsContext = Pick<

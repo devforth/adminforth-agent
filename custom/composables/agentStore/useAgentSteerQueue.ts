@@ -3,7 +3,7 @@ import { ref } from 'vue';
 import { callAdminForthApi } from '@/utils';
 import type { Chat } from '../../chat';
 import type { IMessage } from '../../types';
-import { PRE_SESSION_ID, STEER_PERSIST_PREFIX } from './constants';
+import { PRE_SESSION_ID } from './constants';
 
 export type QueuedMessage = {
   id: string;
@@ -54,15 +54,15 @@ export function createAgentSteerQueue({
     }
   }
 
-  // Persist the steer as a tagged system turn so it survives a reload (display only —
-  // the LLM already has it via the running turn + checkpointer, so this never re-enters
-  // the model context). The prefix lets the reload path re-render it as a steer.
+  // Persist the steer by appending it onto the running turn's prompt (display only — the
+  // LLM already has it via the running turn + checkpointer, so this never re-enters the
+  // model context). The backend adds the marker; the reload path splits it back out.
   async function persistSteerMessage(sessionId: string, text: string) {
     try {
       const res = await callAdminForthApi({
         method: 'POST',
-        path: '/agent/add-system-message-to-turns',
-        body: { sessionId, systemMessage: `${STEER_PERSIST_PREFIX}${text}` },
+        path: '/agent/append-steer-to-turn',
+        body: { sessionId, message: text },
       });
       if (res?.error) {
         console.error('Error persisting steer message:', res.error);

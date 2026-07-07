@@ -109,20 +109,25 @@ describe('adminforth-agent session store', () => {
     expect(await store.getPreviousUserMessages('s1')).toEqual([{ text: 'hello' }]);
   });
 
-  it('getLatestTurn returns the newest non-system turn (skips persisted steer/system notes)', async () => {
+  it('appendSteerToCurrentTurn appends onto the latest non-system turn, skipping system notes', async () => {
+    // newest-first (DESC): a system note (e.g. audio) sits on top of the real running turn.
+    const rows: any[] = [
+      { id: 'sys', prompt: AGENT_SYSTEM_TURN_PROMPT, response: 'END_AUDIO_CHAT' },
+      { id: 'main', prompt: 'buy a car', response: 'not_finished' },
+    ];
     const store = buildStore(() => ({
-      // queried DESC by created_at -> newest-first; a mid-turn steer note sits on top of
-      // the real (still not_finished) turn that a HITL resume must write back into.
       async list() {
-        return [
-          { id: 'steer', prompt: AGENT_SYSTEM_TURN_PROMPT, response: '__adminforth_steer__:use EUR' },
-          { id: 'main', prompt: 'hello', response: 'not_finished' },
-        ];
+        return rows;
+      },
+      async update(id: string, fields: any) {
+        Object.assign(rows.find((r: any) => r.id === id), fields);
       },
     }));
 
-    const latest = await store.getLatestTurn('s1');
-    expect(latest?.id).toBe('main');
+    await store.appendSteerToCurrentTurn('s1', 'and the cheapest one');
+
+    expect(rows.find((r: any) => r.id === 'main').prompt).toBe('buy a car__adminforth_steer__:and the cheapest one');
+    expect(rows.find((r: any) => r.id === 'sys').prompt).toBe(AGENT_SYSTEM_TURN_PROMPT);
   });
 
   it('derives a deterministic chat-surface session id', () => {

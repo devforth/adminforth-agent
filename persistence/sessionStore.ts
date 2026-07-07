@@ -7,6 +7,8 @@ import type { PluginOptions } from "../types.js";
 
 export const AGENT_SYSTEM_TURN_PROMPT = "__adminforth_system_message__";
 
+export const STEER_PROMPT_MARKER = "__adminforth_steer__:";
+
 export class AgentSessionStore {
   constructor(
     private getAdminforth: () => IAdminForth,
@@ -35,6 +37,33 @@ export class AgentSessionStore {
     };
     const newTurn = await this.getAdminforth().resource(this.options.turnResource.resourceId).create(turnRecord);
     return newTurn.createdRecord[this.options.turnResource.idField];
+  }
+
+  /**
+   * Append a mid-turn steer to the current (running) turn's prompt instead of creating a
+   * new record. Targets the latest non-system turn so a steer attaches to the real
+   * conversation turn, never an audio/system note.
+   */
+  async appendSteerToCurrentTurn(sessionId: string, steerText: string) {
+    const turns = await this.getAdminforth().resource(this.options.turnResource.resourceId).list(
+      [Filters.EQ(this.options.turnResource.sessionIdField, sessionId)],
+      undefined,
+      undefined,
+      [Sorts.DESC(this.options.turnResource.createdAtField)]
+    );
+    const turn = turns.find(
+      (candidate) => candidate[this.options.turnResource.promptField] !== AGENT_SYSTEM_TURN_PROMPT
+    );
+    if (!turn) {
+      return;
+    }
+    const currentPrompt = turn[this.options.turnResource.promptField] ?? "";
+    await this.getAdminforth().resource(this.options.turnResource.resourceId).update(
+      turn[this.options.turnResource.idField],
+      {
+        [this.options.turnResource.promptField]: `${currentPrompt}${STEER_PROMPT_MARKER}${steerText}`,
+      },
+    );
   }
 
   async getSessionTurns(sessionId: string) {
