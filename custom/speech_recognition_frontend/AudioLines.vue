@@ -11,7 +11,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
-const IDLE_LINE_HEIGHTS = [0.5, 1, 0.75, 0.5];
+const IDLE_LINE_HEIGHTS = [0.4, 0.8, 0.55, 0.4];
 const RECORDING_LINE_WEIGHTS = [0.45, 1, 0.75, 0.9, 0.55];
 const MIN_RECORDING_HEIGHT = 0.25;
 const MAX_RECORDING_DELTA = 0.9;

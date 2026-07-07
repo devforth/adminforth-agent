@@ -109,6 +109,27 @@ describe('adminforth-agent session store', () => {
     expect(await store.getPreviousUserMessages('s1')).toEqual([{ text: 'hello' }]);
   });
 
+  it('appendSteerToCurrentTurn appends onto the latest non-system turn, skipping system notes', async () => {
+    // newest-first (DESC): a system note (e.g. audio) sits on top of the real running turn.
+    const rows: any[] = [
+      { id: 'sys', prompt: AGENT_SYSTEM_TURN_PROMPT, response: 'END_AUDIO_CHAT' },
+      { id: 'main', prompt: 'buy a car', response: 'not_finished' },
+    ];
+    const store = buildStore(() => ({
+      async list() {
+        return rows;
+      },
+      async update(id: string, fields: any) {
+        Object.assign(rows.find((r: any) => r.id === id), fields);
+      },
+    }));
+
+    await store.appendSteerToCurrentTurn('s1', 'and the cheapest one');
+
+    expect(rows.find((r: any) => r.id === 'main').prompt).toBe('buy a car__adminforth_steer__:and the cheapest one');
+    expect(rows.find((r: any) => r.id === 'sys').prompt).toBe(AGENT_SYSTEM_TURN_PROMPT);
+  });
+
   it('derives a deterministic chat-surface session id', () => {
     const store = buildStore(() => ({}));
     expect(

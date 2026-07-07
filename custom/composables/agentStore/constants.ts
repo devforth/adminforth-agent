@@ -11,6 +11,7 @@ export const PLACEHOLDER_TYPING_DELAY_MS = 60;
 export const PLACEHOLDER_DELETING_DELAY_MS = 35;
 export const PLACEHOLDER_HOLD_DELAY_MS = 3000;
 export const PRE_SESSION_ID = 'pre-session';
+export const STEER_PERSIST_PREFIX = '__adminforth_steer__:';
 
 export enum RESERVED_SYSTEM_MESSAGE_CONTENT {
   START_AUDIO_CHAT = 'START_AUDIO_CHAT',

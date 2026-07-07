@@ -3,6 +3,8 @@ import { createAgent, summarizationMiddleware, humanInTheLoopMiddleware } from "
 import type { BaseCheckpointSaver } from "@langchain/langgraph";
 import { createApiBasedToolsMiddleware } from "./middleware/apiToolsMiddleware.js";
 import { createSequenceDebugMiddleware, type SequenceDebugCollector } from "./middleware/sequenceDebug.js";
+import { createSteerMiddleware } from "./middleware/steerMiddleware.js";
+import type { SteerBuffer } from "../domain/steerBuffer.js";
 import { createAgentLlmMetricsLogger } from "./agentModels.js";
 import type { AgentToolProvider } from "../tools/agentToolProvider.js";
 import type { AgentRuntimeRunInput, AgentTurnModels } from "./agentModels.js";
@@ -29,6 +31,8 @@ export type AgentRuntimeOptions = {
   getAdminforth: () => IAdminForth;
   getCheckpointer: () => BaseCheckpointSaver;
   toolProvider: AgentToolProvider;
+  /** Per-session buffer of mid-turn steering instructions drained by the steer middleware. */
+  steerBuffer: SteerBuffer;
 };
 
 export class AgentRuntime {
@@ -50,7 +54,9 @@ export class AgentRuntime {
       interruptOn: createHumanInTheLoopInterrupts(apiBasedTools),
       descriptionPrefix: "Tool execution pending approval",
     });
+    const steerMiddleware = createSteerMiddleware(this.options.steerBuffer);
     const middleware = [
+      steerMiddleware,
       apiBasedToolsMiddleware,
       hitlMiddleware,
       ...(input.models.modelMiddleware ?? []),

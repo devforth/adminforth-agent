@@ -10,6 +10,11 @@ const addSystemMessageBodySchema = z.object({
   systemMessage: z.string(),
 }).strict();
 
+const appendSteerBodySchema = z.object({
+  sessionId: z.string(),
+  message: z.string().min(1),
+}).strict();
+
 const getSessionsBodySchema = z.object({
   limit: z.number().int().min(1).max(100).optional(),
 }).strict();
@@ -181,6 +186,34 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
         };
       }
       await ctx.createSystemTurn(data.sessionId, data.systemMessage);
+      return {
+        ok: true
+      }
+    }
+  })
+
+  server.endpoint({
+    method: 'POST',
+    path: `/agent/append-steer-to-turn`,
+    request_schema: appendSteerBodySchema,
+    handler: async ({ body, adminUser, response }) => {
+      const data = body as z.infer<typeof appendSteerBodySchema>;
+      const session = await ctx.adminforth.resource(ctx.options.sessionResource.resourceId).get(
+        [Filters.EQ(ctx.options.sessionResource.idField, data.sessionId)]
+      );
+      if (!session) {
+        response.setStatus(404, 'Session not found');
+        return {
+          error: 'Session not found'
+        };
+      }
+      if (session[ctx.options.sessionResource.askerIdField] !== adminUser!.pk) {
+        response.setStatus(403, 'Unauthorized');
+        return {
+          error: 'Unauthorized'
+        };
+      }
+      await ctx.appendSteerToCurrentTurn(data.sessionId, data.message);
       return {
         ok: true
       }

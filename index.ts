@@ -23,6 +23,7 @@ import { AgentModelFactory } from "./llm/modelFactory.js";
 import { AgentRuntime } from "./llm/agentRuntime.js";
 import { SpeechTurnService } from "./transport/surfaces/speechTurnService.js";
 import { AgentToolProvider } from "./tools/agentToolProvider.js";
+import { SteerBuffer } from "./domain/steerBuffer.js";
 
 export type { AgentEvent, AgentEventEmitter } from "./domain/agentEvents.js";
 
@@ -33,6 +34,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
   private agentSystemPrompt: string | null = null;
   private checkpointer: BaseCheckpointSaver | null = null;
   private sessionStore: AgentSessionStore;
+  private steerBuffer: SteerBuffer;
   private runTurnUseCase: RunTurnUseCase;
   private speechTurnService: SpeechTurnService;
   private chatSurfaceService: ChatSurfaceService;
@@ -75,6 +77,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     super(options, import.meta.url);
     this.options = options;
     this.sessionStore = new AgentSessionStore(() => this.adminforth, this.options);
+    this.steerBuffer = new SteerBuffer();
     const toolProvider = new AgentToolProvider(
       () => this.adminforth,
       this.getInternalAgentResourceIds.bind(this),
@@ -84,6 +87,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       getAdminforth: () => this.adminforth,
       getCheckpointer: this.getCheckpointer.bind(this),
       toolProvider,
+      steerBuffer: this.steerBuffer,
     });
     const llm = new LangGraphLlm(
       runtime,
@@ -92,6 +96,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     this.runTurnUseCase = new RunTurnUseCase({
       llm,
       sessions: this.sessionStore,
+      steerBuffer: this.steerBuffer,
       modes: this.options.modes,
       getAdminforth: () => this.adminforth,
       getAgentSystemPrompt: this.getAgentSystemPrompt.bind(this),
@@ -180,10 +185,15 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       options: this.options,
       handleTurn: this.runTurnUseCase.handleTurn.bind(this.runTurnUseCase),
       handleSpeechTurn: this.speechTurnService.handle.bind(this.speechTurnService),
+      steer: ({ sessionId, message }) => {
+        const { id } = this.steerBuffer.add(sessionId, message);
+        return { id, queued: this.steerBuffer.size(sessionId) };
+      },
       runAndPersistAgentResponse: this.runTurnUseCase.runAndPersistAgentResponse.bind(this.runTurnUseCase),
       getSessionTurns: this.sessionStore.getSessionTurns.bind(this.sessionStore),
       createNewTurn: this.sessionStore.createNewTurn.bind(this.sessionStore),
       createSystemTurn: this.sessionStore.createSystemTurn.bind(this.sessionStore),
+      appendSteerToCurrentTurn: this.sessionStore.appendSteerToCurrentTurn.bind(this.sessionStore),
       handleChatSurfaceMessage: this.chatSurfaceService.handleMessage.bind(this.chatSurfaceService),
     } satisfies AgentEndpointsContext;
 

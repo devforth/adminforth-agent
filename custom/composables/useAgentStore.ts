@@ -18,6 +18,7 @@ import {
 import { createAgentChatManager } from './agentStore/useAgentChat';
 import { createAgentPlaceholderController } from './agentStore/useAgentPlaceholder';
 import { createAgentSessionManager } from './agentStore/useAgentSessions';
+import { createAgentSteerQueue } from './agentStore/useAgentSteerQueue';
 
 export const useAgentStore = defineStore('agent', () => {
   const agentTransitions = useAgentTransitions();
@@ -218,6 +219,42 @@ export const useAgentStore = defineStore('agent', () => {
     blockCloseOfChat,
     adminforth,
     setCurrentChat,
+  });
+
+  // "Turn active" = a request is in flight (submitted or streaming) or paused for HITL
+  // approval. Messages submitted during this window are buffered rather than sent.
+  const isTurnActive = computed(() => {
+    const status = (currentChat.value as any)?.status;
+    return status === 'submitted' || status === 'streaming' || hasPendingToolApproval.value;
+  });
+
+  const steerBuffer = createAgentSteerQueue({
+    activeSessionId,
+    currentChat,
+    sendMessage,
+  });
+
+  // Submitting while a turn is active buffers the message (it shows up in the steer
+  // queue, where the user can steer it or let it send); otherwise it sends right away.
+  function submitUserMessage() {
+    const message = trimmedUserMessage.value;
+    if (!message) {
+      return;
+    }
+    if (isTurnActive.value) {
+      steerBuffer.enqueue(message);
+      userMessageInput.value = '';
+      return;
+    }
+    return sendMessage();
+  }
+
+  // When the active turn finishes, drain the next buffered message as a normal send
+  // (one per turn, FIFO). Messages the user explicitly steered were already removed.
+  watch(isTurnActive, (active: boolean, wasActive: boolean) => {
+    if (wasActive && !active) {
+      steerBuffer.flushNext();
+    }
   });
 
   watch(() => viewportWidth.value, (newWidth) => {
@@ -505,6 +542,14 @@ export const useAgentStore = defineStore('agent', () => {
     addDataToolCallMessage,
     openAgentPage,
     setCurrentChatStatus,
-    updateLastAgentMessage
+    updateLastAgentMessage,
+    //_________-Steer queue-_____________
+    submitUserMessage,
+    isTurnActive,
+    steerQueue: steerBuffer.queue,
+    steerQueuedMessage: steerBuffer.steerQueuedMessage,
+    removeQueuedMessage: steerBuffer.removeQueuedMessage,
+    enqueueSteerMessage: steerBuffer.enqueue,
+    //___________________________________
   }
 })

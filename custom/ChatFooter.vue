@@ -7,27 +7,30 @@
       transition: `transform ${agentTransitions.TRANSITION_DURATION}ms ease-in-out`
     }"            
   >
-    <div 
-      class="w-full border rounded-lg pb-8"
-      :class="agentStore.isAudioChatMode ? 'border-none mt-8' : 'border dark:bg-gray-700'"  
-    > 
+    <SteerQueue />
+    <!-- <SteerDebugPanel /> -->
+    <div
+      class="w-full border rounded-lg flex flex-col"
+      :class="agentStore.isAudioChatMode ? 'border-none mt-8' : 'border dark:bg-gray-700'"
+    >
       <textarea
         v-if="!agentStore.isAudioChatMode"
         v-model="agentStore.userMessageInput"
         ref="textInput"
+        rows="1"
         @input="autoResize"
         :class="[
-          'min-h-12 px-4 pt-4 rounded-xl w-full resize-none overflow-hidden text-lightInputText dark:text-darkInputText rounded-md bg-transparent text-sm bg-gray-50 dark:bg-gray-700 dark:border-gray-600 focus:outline-none',
+          'h-8 px-4 py-3 border-b rounded-xl rounded-b-none w-full resize-none overflow-hidden text-lightInputText dark:text-darkInputText rounded-md bg-transparent text-sm bg-gray-50 dark:bg-gray-700 dark:border-gray-600 focus:outline-none',
           { '!text-base': coreStore.isIos }
         ]"
-        :placeholder="agentStore.hasPendingToolApproval ? 'Approve or reject the pending action to continue' : agentStore.userMessagePlaceholder"
-        :disabled="agentStore.isMessageInputBlocked"
+        :placeholder="placeholderText"
         @keydown.enter.exact.prevent="sendMessage"
       />
+      <div class="flex items-center justify-between px-2 py-1">
       <div
         v-if="agentStore.availableModes.length > 1"
         ref="modeMenu"
-        class="absolute bottom-2 left-4"
+        class="relative"
       >
         <button
           aria-label="Select mode"
@@ -46,22 +49,30 @@
             :class="isModeMenuOpen ? '!rotate-180' : '!rotate-0'"
           />
         </button>
-
-        <div
-          v-if="isModeMenuOpen"
-          class="absolute bottom-full left-0 mb-2 min-w-40 overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-600 dark:bg-gray-800"
-        >
-          <button
-            v-for="mode in agentStore.availableModes"
-            :key="mode.name"
-            class="block w-full px-3 py-2 text-left text-sm text-lightInputText transition-colors duration-150 hover:bg-gray-100 dark:text-darkInputText dark:hover:bg-gray-700"
-            :class="mode.name === agentStore.activeModeName ? 'bg-gray-100 dark:bg-gray-700' : ''"
-            type="button"
-            @click="selectMode(mode.name)"
+          <Transition
+            enter-active-class="transition ease-out duration-200"
+            enter-from-class="opacity-0 scale-95"
+            enter-to-class="opacity-100 scale-100"
+            leave-active-class="transition ease-in duration-150"
+            leave-from-class="opacity-100 scale-100"
+            leave-to-class="opacity-0 scale-95"
           >
-            {{ mode.name }}
-          </button>
-        </div>
+          <div
+            v-if="isModeMenuOpen"
+            class="absolute bottom-full left-0 mb-2 min-w-40 overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-600 dark:bg-gray-800"
+          >
+            <button
+              v-for="mode in agentStore.availableModes"
+              :key="mode.name"
+              class="block w-full px-3 py-2 text-left text-sm text-lightInputText transition-colors duration-150 hover:bg-gray-100 dark:text-darkInputText dark:hover:bg-gray-700"
+              :class="mode.name === agentStore.activeModeName ? 'bg-gray-100 dark:bg-gray-700' : ''"
+              type="button"
+              @click="selectMode(mode.name)"
+            >
+              {{ mode.name }}
+            </button>
+          </div>
+        </Transition>
       </div>
       <MicrophoneButton 
         v-if="props.meta.hasAudioAdapter"   
@@ -69,32 +80,33 @@
       <template v-if="!agentStore.isAudioChatMode">
         <Button 
           v-if="!agentStore.isResponseInProgress"
-          class="absolute right-4 bottom-2 !p-0 h-9 w-9 transition-opacity duration-200"                    
+          class=" !p-0 h-7 w-7 transition-opacity duration-200"                    
           @click="sendMessage" 
-          :disabled="!agentStore.trimmedUserMessage || agentStore.isMessageInputBlocked"
+          :disabled="!agentStore.trimmedUserMessage"
         >
           <IconArrowUpOutline 
-            class="w-8 h-8 p-1
+            class="w-6 h-6
               text-white" 
           />
         </Button>
         <Button
           v-else
-          class="absolute right-4 bottom-2 !p-0 h-9 w-9"    
+          class="right-4 bottom-2 !p-0 h-7 w-7"    
           @click="stopCurrentRequest"                
         >
           <div
-            class="w-3 h-3 bg-white rounded-sm"
+            class="w-2.5 h-2.5 bg-white rounded-sm"
           />
         </Button>
       </template>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { IconArrowUpOutline, IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
-import { useTemplateRef, onMounted, ref, onUnmounted } from 'vue';
+import { useTemplateRef, onMounted, ref, onUnmounted, watch, computed } from 'vue';
 import { onClickOutside } from '@vueuse/core'
 import { useAgentStore } from './composables/useAgentStore';
 import { useAgentTransitions } from './composables/useAgentTransitions';
@@ -102,6 +114,8 @@ import { Button } from '@/afcl';
 import { useCoreStore } from '@/stores/core';
 import { remToPx } from './utils';
 import MicrophoneButton from './speech_recognition_frontend/MicrophoneButon.vue';
+import SteerQueue from './SteerQueue.vue';
+import SteerDebugPanel from './SteerDebugPanel.vue';
 
 const props = defineProps<{
   meta: {
@@ -124,6 +138,13 @@ const agentTransitions = useAgentTransitions();
 const coreStore = useCoreStore();
 const isModeMenuOpen = ref(false);
 
+const placeholderText = computed(() => {
+  if (agentStore.isTurnActive) {
+    return 'Queue a follow-up — send after, or steer it…';
+  }
+  return agentStore.userMessagePlaceholder;
+});
+
 onClickOutside(modeMenu as any, () => { isModeMenuOpen.value = false; });
 
 onMounted(async () => {
@@ -131,6 +152,11 @@ onMounted(async () => {
   agentStore.setCurrentGenerationModeFromLocalStorage();
   agentStore.regisrerTextInput(textInput.value);
   textInput.value?.focus();
+  autoResize();
+});
+
+watch(() => textInput.value?.value, () => {
+  autoResize();
 });
 
 function autoResize() {
@@ -161,7 +187,9 @@ function selectMode(modeName: string) {
 async function sendMessage() {
   if (agentStore.isAudioChatMode) return;
   isModeMenuOpen.value = false;
-  await agentStore.sendMessage();
+  // Routes to a steer (folded into the running turn) while generating, or a normal
+  // new-turn send when idle.
+  await agentStore.submitUserMessage();
   autoResize();
   props.conversationAreaRef?.handleSendMessage();
 }

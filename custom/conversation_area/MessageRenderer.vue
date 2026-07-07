@@ -1,5 +1,11 @@
 <template>
-  <ProcessingTimeline 
+  <div
+    v-if="message.role === 'user' && message.metadata?.steer"
+    class="self-end mr-4 mb-0.5 text-xs italic text-gray-400 dark:text-gray-500"
+  >
+    {{ $t('Steering instruction') }}
+  </div>
+  <ProcessingTimeline
     :message="message"
     :isLastMessageInChat="isLastMessageInChat"
   />

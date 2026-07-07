@@ -5,6 +5,7 @@ import { buildAgentTurnSystemPrompt } from "../domain/systemPrompt.js";
 import { getErrorMessage, isAbortError } from "../shared/errors.js";
 import type { PreviousUserMessage } from "../domain/languageDetect.js";
 import type { AgentSessionStore } from "../persistence/sessionStore.js";
+import type { SteerBuffer } from "../domain/steerBuffer.js";
 import type { PluginOptions } from "../types.js";
 import type { LlmPort } from "./ports.js";
 import type {
@@ -103,6 +104,8 @@ export function buildResumeValue(input: {
 export type RunTurnUseCaseDeps = {
   llm: LlmPort;
   sessions: AgentSessionStore;
+  /** Per-session buffer of mid-turn steering instructions; cleared when a turn ends unconsumed. */
+  steerBuffer: SteerBuffer;
   modes: PluginOptions["modes"];
   getAdminforth: () => IAdminForth;
   getAgentSystemPrompt: () => Promise<string>;
@@ -314,6 +317,12 @@ export class RunTurnUseCase {
       await textBuffer.flush(emit);
       return { text: fullResponse };
     } finally {
+      // When the turn is interrupted for HITL approval it will resume, so any steers
+      // buffered meanwhile must survive to be applied on resume. Otherwise the turn is
+      // done and leftover (unconsumed) steers must not leak into the next turn.
+      if (!interrupted) {
+        this.deps.steerBuffer.clear(prepared.sessionId);
+      }
       if (!this.deps.hasPersistentCheckpointer && !interrupted) {
         this.pendingInterrupts.delete(prepared.sessionId);
       }
