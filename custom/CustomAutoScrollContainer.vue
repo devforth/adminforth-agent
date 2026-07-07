@@ -24,11 +24,13 @@ const props = withDefaults(defineProps<{
   wrapperStyle?: Record<string, string>
   contentStyle?: Record<string, string>
   scrollBarAutoHide?: boolean
+  scrollToBottomOnMount?: boolean
 }>(), {
   enabled: true,
   threshold: 50,
   behavior: 'instant',
-  scrollBarAutoHide: true
+  scrollBarAutoHide: true,
+  scrollToBottomOnMount: true
 })
 
 const containerRef = ref<HTMLDivElement | null>(null)
@@ -72,7 +74,7 @@ onMounted(() => {
       scrollParams.value.scrollTop = containerRef.value.scrollEl.scrollTop
       scrollParams.value.scrollHeight = containerRef.value.scrollEl.scrollHeight
       scrollParams.value.clientHeight = containerRef.value.scrollEl.clientHeight
-      if (props.enabled && !isUserScrolledUp.value) {
+      if (!isUserScrolledUp.value && props.scrollToBottomOnMount) {
         scrollToBottom()
       }
     })
@@ -102,6 +104,7 @@ function isNearBottom(customThreshold?: number): boolean {
 }
 
 function scrollToBottom(force = false): void {
+  console.log('scrollToBottom called with force:', force)
   const container = containerRef.value?.scrollEl
   if (!container) return
   

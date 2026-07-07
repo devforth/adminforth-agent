@@ -11,7 +11,7 @@
   <div ref="chatContainerRef" class="relative flex-1 min-h-0 overflow-hidden" @click="recalculateScroll()">
     <CustomAutoScrollContainer
       v-if="showScrollContainer"
-      :enabled="!showScrollToBottomButton" 
+      :enabled="false" 
       class="relative h-full flex flex-col overflow-y-auto translate-x-[-50%] left-1/2"
       ref="scrollContainer"
       :threshold="THRESHOLD_TO_SHOW_BUTTON"
@@ -251,11 +251,11 @@ function scheduleSpacerHeightUpdate() {
       pendingSpacerUpdate = null;
 
       // Auto-scroll to bottom if response generation is in progress
-      if (agentStore.isResponseInProgress) {
-        nextTick(() => {
-          scrollContainer.value?.scrollToBottom();
-        });
-      }
+      // if (agentStore.isResponseInProgress) {
+      //   nextTick(() => {
+      //     scrollContainer.value?.scrollToBottom();
+      //   });
+      // }
 
       if (spacerUpdateQueued) {
         scheduleSpacerHeightUpdate();
