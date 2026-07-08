@@ -1,9 +1,9 @@
 <template>
   <div
-    class="flex rounded-xl border px-4 border-gray-200 dark:border-gray-700 min-w-0"
+    class="flex items-center justify-center rounded-xl border px-6 border-gray-200 dark:border-gray-700 min-w-0"
     @click="handleMarkdownLinkClick"
     :class="[
-      hasVegaLite ? 'w-full my-2' : 'm-2',
+      hasVegaLite ? 'w-full my-2' : '',
       props.role === 'user' ? 'bg-lightListTableHeading dark:bg-darkListTableHeading self-end max-w-[80%] mr-4' 
         : 'border-none self-start max-w-full'
     ]"
