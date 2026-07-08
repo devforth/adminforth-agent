@@ -11,9 +11,9 @@
   <div ref="chatContainerRef" class="relative flex-1 min-h-0 overflow-hidden" @click="recalculateScroll()">
     <CustomAutoScrollContainer
       v-if="showScrollContainer"
-      :enabled="!showScrollToBottomButton" 
       class="relative h-full flex flex-col overflow-y-auto translate-x-[-50%] left-1/2"
       ref="scrollContainer"
+      :enabled="false"
       :threshold="THRESHOLD_TO_SHOW_BUTTON"
       behavior="smooth"
       :wrapperStyle = "{ 
@@ -53,27 +53,49 @@
       </div>
       <div v-if="showBottomSpacer" class="w-full" :style="{ height: spacerHeight + 'px' }"></div>
     </CustomAutoScrollContainer>
-    <button @click="scrollContainer.scrollToBottom();">
-      <IconArrowDownOutline 
-        class="absolute z-10 bottom-8 left-1/2 -translate-x-1/2 bg-lightPrimary/20 dark:bg-darkPrimary/10
-          border border-lightPrimary dark:border-darkPrimary text-lightPrimary dark:text-darkPrimary p-2 w-10 h-10
-          rounded-full transition-opacity duration-100 ease-in backdrop-blur-sm" 
-        :class="showScrollToBottomButton ? 'opacity-100' : 'opacity-0 pointer-events-none'"
-        :disabled="!showScrollToBottomButton"
-      />
-    </button>
+    <Transition
+      enter-active-class="transition-all duration-250 ease-out"
+      enter-from-class="opacity-0 translate-y-3 scale-90"
+      enter-to-class="opacity-100 translate-y-0 scale-100"
+      leave-active-class="transition-all duration-200 ease-in"
+      leave-from-class="opacity-100 translate-y-0 scale-100"
+      leave-to-class="opacity-0 translate-y-3 scale-90"
+    >
+      <button 
+        v-if="showScrollToBottomButton" 
+        @click="scrollContainer.scrollToBottom();"
+        class="absolute z-10 bottom-8 left-1/2 -translate-x-1/2 
+          bg-lightPrimary/20 dark:bg-darkPrimary/10
+          border border-lightPrimary dark:border-darkPrimary 
+          text-lightPrimary dark:text-darkPrimary 
+          backdrop-blur-sm rounded-full
+          w-10 h-10 flex items-center justify-center gap-0.5"
+        :class="{ 'w-12 h-8': showAnimationInScrollToBottomButton }"
+      >
+        <IconArrowDownOutline 
+          v-if="!showAnimationInScrollToBottomButton"
+          class="p-2 w-10 h-10 transition-opacity duration-100 ease-in " 
+          :disabled="!showScrollToBottomButton"
+        />
+        <ThreeDotsAnimation 
+          v-else
+          :disabled="!showScrollToBottomButton"
+        />
+      </button>
+    </Transition>
   </div>
 </template>
 
 
 <script setup lang="ts">
 import type { IMessage } from '../types';
-import { useTemplateRef, ref, onMounted, onUnmounted, watch, nextTick, defineAsyncComponent } from 'vue';
+import { useTemplateRef, ref, onMounted, onUnmounted, watch, nextTick, defineAsyncComponent, computed } from 'vue';
 import { IconArrowDownOutline } from '@iconify-prerendered/vue-flowbite';
 import SessionsHistory from '../SessionsHistory.vue';
 import { useAgentStore } from '../composables/useAgentStore';
 import { useAgentTransitions } from '../composables/useAgentTransitions';
 import MessageRenderer from './MessageRenderer.vue';
+import ThreeDotsAnimation from './ThreeDotsAnimation.vue';
 
 const CustomAutoScrollContainer = defineAsyncComponent(() => import('../CustomAutoScrollContainer.vue'));
 
@@ -113,6 +135,10 @@ let observedLastAgentMessageElement: HTMLElement | null = null;
 let updateSpacerFrameId: number | null = null;
 let pendingSpacerUpdate: Promise<void> | null = null;
 let spacerUpdateQueued = false;
+
+const showAnimationInScrollToBottomButton = computed(() => {
+  return agentStore.isResponseInProgress && showScrollToBottomButton.value;
+});
 
 onMounted(async () => {
   messageResizeObserver = new ResizeObserver(() => {
@@ -182,7 +208,17 @@ function getHeightOfLastUserMessage() {
 }
 
 function getHeightOfLastAgentMessage() {
-  return getLastMessageElement('assistant')?.clientHeight ?? 0;
+  const lastUserIndex = props.messages.findLastIndex((message: IMessage) => message.role === 'user');
+  const lastAgentIndex = props.messages.findLastIndex((message: IMessage) => message.role === 'assistant');
+  // Only reserve spacer space for the current turn's answer, i.e. an assistant message that comes
+  // after the last user message. Right after a send the "Thinking" placeholder isn't pushed yet, so
+  // findLastIndex would return the previous turn's answer (which sits above the just-sent user
+  // message). Subtracting its height shrinks the spacer, making scrollToBottom stop short — and once
+  // the real placeholder arrives the spacer grows and the true bottom drops below where we scrolled.
+  if (lastAgentIndex <= lastUserIndex) {
+    return 0;
+  }
+  return messagesRefs.value[lastAgentIndex]?.clientHeight ?? 0;
 }
 
 function getScrollClientHeight() {
@@ -195,15 +231,14 @@ async function updateSpacerHeight() {
   }
 
   const clientHeight = getScrollClientHeight();
-
   if (!clientHeight) {
     return;
   }
 
   const lastUserMessageHeight = getHeightOfLastUserMessage();
   const lastAgentMessageHeight = getHeightOfLastAgentMessage();
-
-  spacerHeight.value = Math.max(0, clientHeight - (lastUserMessageHeight + MASK_HEIGHT + lastAgentMessageHeight));
+  const newSpacerHeight = Math.max(0, clientHeight - (lastUserMessageHeight + MASK_HEIGHT + lastAgentMessageHeight));
+  spacerHeight.value = newSpacerHeight;
 }
 
 function scheduleSpacerHeightUpdate() {
@@ -225,11 +260,11 @@ function scheduleSpacerHeightUpdate() {
       pendingSpacerUpdate = null;
 
       // Auto-scroll to bottom if response generation is in progress
-      if (agentStore.isResponseInProgress) {
-        nextTick(() => {
-          scrollContainer.value?.scrollToBottom();
-        });
-      }
+      // if (agentStore.isResponseInProgress) {
+      //   nextTick(() => {
+      //     scrollContainer.value?.scrollToBottom();
+      //   });
+      // }
 
       if (spacerUpdateQueued) {
         scheduleSpacerHeightUpdate();
@@ -284,8 +319,9 @@ async function handleSendMessage() {
 
   if (clientHeight) {
     showBottomSpacer.value = true;
+    await nextTick(); // render the just-sent user message + spacer before measuring their heights
     await updateSpacerHeight();
-    await nextTick();
+    await nextTick(); // apply the computed spacer height before scrolling
     scrollContainer.value?.scrollToBottom();
   }
 }
