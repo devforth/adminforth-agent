@@ -24,15 +24,15 @@
         >
           <button
             type="button"
-            class="flex items-center justify-center w-8 h-8 rounded-md text-gray-400 hover:text-lightPrimary dark:hover:text-darkPrimary opacity-60 group-hover/msg:opacity-100 transition-opacity duration-150"
+            class="flex items-center justify-center w-8 h-8 rounded-md text-gray-400 hover:text-lightPrimary dark:hover:text-darkPrimary opacity-60 group-hover/msg:opacity-100 transition-opacity duration-150 hover:scale-110"
             :title="$t('Copy message')"
-            @click="agentStore.copyMessageToClipboard(message)"
+            @click="copyMessageToClipboard(message)"
           >
             <IconFileCopySolid class="w-5 h-5" />
           </button>
           <button
             type="button"
-            class="flex items-center justify-center w-8 h-8 rounded-md text-gray-400 hover:text-lightPrimary dark:hover:text-darkPrimary opacity-60 group-hover/msg:opacity-100 transition-opacity duration-150"
+            class="flex items-center justify-center w-8 h-8 rounded-md text-gray-400 hover:text-lightPrimary dark:hover:text-darkPrimary opacity-60 group-hover/msg:opacity-100 transition-opacity duration-150 hover:scale-110"
             :title="$t('Edit message')"
             @click="agentStore.startEditMessage(message)"
           >
@@ -89,6 +89,7 @@
   import ToolApprovalRenderer from './ToolApprovalRenderer.vue';
   import { RESERVED_SYSTEM_MESSAGE_CONTENT } from '../composables/agentStore/constants';
   import { useAgentStore } from '../composables/useAgentStore';
+  import { useAdminforth } from '@/adminforth';
 
   const props = defineProps<{
     message: IMessage
@@ -96,6 +97,7 @@
   }>();
 
   const agentStore = useAgentStore();
+  const { alert } = useAdminforth();
   const showEditButton = ref(false);
   // A user message is editable once it carries a turnId (loaded from history or stamped
   // after its turn finished). Steer sub-messages and other roles are never editable, and
@@ -123,5 +125,16 @@
 
   function hideEditButtonOnHover() {
     showEditButton.value = false;
+  }
+
+  function copyMessageToClipboard(message: IMessage) {
+    navigator.clipboard.writeText(message.parts[0].text ?? '')
+      .then(() => {
+        alert({ message: 'Message copied to clipboard', variant: 'success' });
+      })
+      .catch((error) => {
+        console.error('Failed to copy message to clipboard:', error);
+        alert({ message: 'Failed to copy message to clipboard', variant: 'danger' });
+      });
   }
 </script>
