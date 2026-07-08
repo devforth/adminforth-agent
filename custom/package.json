@@ -25,6 +25,7 @@
     "marked": "^18.0.0",
     "shiki": "^4.0.2",
     "vega-embed": "^7.1.0",
-    "voice-activity-detection": "^0.0.5"
+    "voice-activity-detection": "^0.0.5",
+    "vue-virtual-scroller": "^3.0.4"
   }
 }

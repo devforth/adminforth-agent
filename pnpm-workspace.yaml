@@ -1,4 +1,7 @@
 allowBuilds:
   adminforth: true
+  protobufjs: true
+packages:
+  - custom
 minimumReleaseAgeExclude:
   - adminforth

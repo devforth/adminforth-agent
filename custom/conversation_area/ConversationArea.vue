@@ -33,14 +33,30 @@
       }"
     > 
 
-      <div 
-        v-for="(message, index) in props.messages" :key="index"
-        class="flex flex-col w-full mt-2 pb-2"
-        :class="message.role === 'user' ? 'self-end' : 'self-start'"
-        ref="messagesRefs"
+      <DynamicScroller
+        ref="dynamicScroller"
+        :items="scrollerItems"
+        :min-item-size="EMPTY_MESSAGE_HEIGHT"
+        :scrollParent="innerScrollContainerRef"
+        key-field="key"
+        page-mode
+        @resize="scheduleSpacerHeightUpdate"
       >
-        <MessageRenderer :message="message" :isLastMessageInChat="index === props.messages.length - 1"/>
-      </div>
+        <template #default="{ item, index, active }">
+          <DynamicScrollerItem
+            :item="item"
+            :active="active"
+            :data-index="index"
+          >
+            <div
+              class="flex flex-col w-full mt-2 pb-2"
+              :class="item.message.role === 'user' ? 'self-end' : 'self-start'"
+            >
+              <MessageRenderer :message="item.message" :isLastMessageInChat="index === scrollerItems.length - 1"/>
+            </div>
+          </DynamicScrollerItem>
+        </template>
+      </DynamicScroller>
       <div 
         v-if="props.messages.length === 0"
         class="flex-1 flex flex-col items-center justify-center text-gray-400 tracking-widest text-xl font-medium h-max"
@@ -96,6 +112,7 @@ import { useAgentStore } from '../composables/useAgentStore';
 import { useAgentTransitions } from '../composables/useAgentTransitions';
 import MessageRenderer from './MessageRenderer.vue';
 import ThreeDotsAnimation from './ThreeDotsAnimation.vue';
+import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller';
 
 const CustomAutoScrollContainer = defineAsyncComponent(() => import('../CustomAutoScrollContainer.vue'));
 
@@ -114,7 +131,12 @@ const agentStore = useAgentStore();
 const agentTransitions = useAgentTransitions();
 const showScrollContainer = ref(true);
 const chatContainerRef = ref<HTMLElement | null>(null);
-const messagesRefs = ref<Array<HTMLElement | null>>([]);
+const dynamicScroller = useTemplateRef('dynamicScroller');
+// DynamicScroller needs a string key field on each item, and messages have no stable id. The list is
+// append-only, so we wrap every message with its array index as the key (kept in sync automatically).
+const scrollerItems = computed(() =>
+  props.messages.map((message: IMessage, index: number) => ({ key: index, message })),
+);
 /*
 * Whenever user sends a message, it adds a bottom spacer, that takes the remaining height
 * without last user and last agent message. 
@@ -129,9 +151,6 @@ const spacerHeight = ref(0);
 const MASK_HEIGHT = 20;
 const EMPTY_MESSAGE_HEIGHT = 18;
 const THRESHOLD_TO_SHOW_BUTTON = 10;
-let messageResizeObserver: ResizeObserver | null = null;
-let observedLastUserMessageElement: HTMLElement | null = null;
-let observedLastAgentMessageElement: HTMLElement | null = null;
 let updateSpacerFrameId: number | null = null;
 let pendingSpacerUpdate: Promise<void> | null = null;
 let spacerUpdateQueued = false;
@@ -141,11 +160,8 @@ const showAnimationInScrollToBottomButton = computed(() => {
 });
 
 onMounted(async () => {
-  messageResizeObserver = new ResizeObserver(() => {
-    scheduleSpacerHeightUpdate();
-  });
-
   await import('@incremark/theme/styles.css')
+  await import('vue-virtual-scroller/dist/vue-virtual-scroller.css')
   await agentStore.fetchPlaceholderMessages()
   await refreshSpacerTracking();
 });
@@ -155,8 +171,6 @@ onUnmounted(() => {
     innerScrollContainerRef.value.removeEventListener('scroll', recalculateScroll);
   }
 
-  stopObservingLastMessages();
-  messageResizeObserver?.disconnect();
   if (updateSpacerFrameId !== null) {
     cancelAnimationFrame(updateSpacerFrameId);
     updateSpacerFrameId = null;
@@ -198,13 +212,26 @@ function resetSpacer() {
   spacerHeight.value = 0;
 }
 
-function getLastMessageElement(role: 'user' | 'assistant') {
-  const lastMessageIndex = props.messages.findLastIndex((message: IMessage) => message.role === role);
-  return messagesRefs.value[lastMessageIndex] ?? null;
+// The message nodes are virtualized (pooled/recycled) by DynamicScroller, so we can't read heights
+// off per-item DOM refs anymore. We ask the scroller for its cached, measured item size. That cache
+// is filled on a batched (nextTick) measure pass, so right after a message renders (e.g. the just-sent
+// user message) it can still be 0 — in that case we fall back to a live DOM read of the rendered item.
+function getMeasuredMessageHeight(index: number) {
+  const item = scrollerItems.value[index];
+  if (!item || index < 0) {
+    return 0;
+  }
+  const cachedHeight = dynamicScroller.value?.getItemSize(item, index) ?? 0;
+  if (cachedHeight) {
+    return cachedHeight;
+  }
+  const itemEl = innerScrollContainerRef.value?.querySelector<HTMLElement>(`[data-index="${index}"]`);
+  return itemEl?.getBoundingClientRect().height ?? 0;
 }
 
 function getHeightOfLastUserMessage() {
-  return getLastMessageElement('user')?.clientHeight ?? 0;
+  const lastUserIndex = props.messages.findLastIndex((message: IMessage) => message.role === 'user');
+  return getMeasuredMessageHeight(lastUserIndex);
 }
 
 function getHeightOfLastAgentMessage() {
@@ -218,7 +245,7 @@ function getHeightOfLastAgentMessage() {
   if (lastAgentIndex <= lastUserIndex) {
     return 0;
   }
-  return messagesRefs.value[lastAgentIndex]?.clientHeight ?? 0;
+  return getMeasuredMessageHeight(lastAgentIndex);
 }
 
 function getScrollClientHeight() {
@@ -273,44 +300,10 @@ function scheduleSpacerHeightUpdate() {
   });
 }
 
-function stopObservingLastMessages() {
-  if (!messageResizeObserver) {
-    return;
-  }
-
-  if (observedLastUserMessageElement) {
-    messageResizeObserver.unobserve(observedLastUserMessageElement);
-    observedLastUserMessageElement = null;
-  }
-
-  if (observedLastAgentMessageElement) {
-    messageResizeObserver.unobserve(observedLastAgentMessageElement);
-    observedLastAgentMessageElement = null;
-  }
-}
-
-function observeLastMessages() {
-  if (!messageResizeObserver) {
-    return;
-  }
-
-  stopObservingLastMessages();
-
-  observedLastUserMessageElement = getLastMessageElement('user');
-  observedLastAgentMessageElement = getLastMessageElement('assistant');
-
-  if (observedLastUserMessageElement) {
-    messageResizeObserver.observe(observedLastUserMessageElement);
-  }
-
-  if (observedLastAgentMessageElement) {
-    messageResizeObserver.observe(observedLastAgentMessageElement);
-  }
-}
-
 async function refreshSpacerTracking() {
   await nextTick();
-  observeLastMessages();
+  // DynamicScroller re-measures growing/last messages and fires @resize -> scheduleSpacerHeightUpdate,
+  // so no manual per-message ResizeObserver is needed anymore.
   await updateSpacerHeight();
 }
 
