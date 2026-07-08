@@ -11,9 +11,9 @@
   <div ref="chatContainerRef" class="relative flex-1 min-h-0 overflow-hidden" @click="recalculateScroll()">
     <CustomAutoScrollContainer
       v-if="showScrollContainer"
-      :enabled="false" 
       class="relative h-full flex flex-col overflow-y-auto translate-x-[-50%] left-1/2"
       ref="scrollContainer"
+      :enabled="false"
       :threshold="THRESHOLD_TO_SHOW_BUTTON"
       behavior="smooth"
       :wrapperStyle = "{ 

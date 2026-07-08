@@ -24,15 +24,15 @@ const props = withDefaults(defineProps<{
   wrapperStyle?: Record<string, string>
   contentStyle?: Record<string, string>
   scrollBarAutoHide?: boolean
-  scrollToBottomOnMount?: boolean
   debugMode?: boolean
+  scrollToBottomOnMount?: boolean
 }>(), {
   enabled: true,
   threshold: 50,
   behavior: 'instant',
   scrollBarAutoHide: true,
-  scrollToBottomOnMount: true,
-  debugMode: false
+  debugMode: false,
+  scrollToBottomOnMount: true
 })
 
 const containerRef = ref<HTMLDivElement | null>(null)
@@ -42,6 +42,18 @@ const scrollElement = ref<HTMLElement | null>(null)
 let lastScrollTop = 0
 let lastScrollHeight = 0
 let observer: MutationObserver | null = null
+
+const INITIAL_SCROLL_DEBOUNCE = 200
+let initialScrollDone = false
+let initialScrollTimer: ReturnType<typeof setTimeout> | null = null
+
+function scheduleInitialScrollEnd(): void {
+  if (initialScrollTimer) clearTimeout(initialScrollTimer)
+  initialScrollTimer = setTimeout(() => {
+    initialScrollDone = true
+    initialScrollTimer = null
+  }, INITIAL_SCROLL_DEBOUNCE)
+}
 
 const scrollParams = ref({
   scrollTop: 0,
@@ -71,26 +83,37 @@ onMounted(() => {
       if (!hasScrollbar()) {
         isUserScrolledUp.value = false
       }
-      
+
       lastScrollHeight = containerRef.value.scrollEl.scrollHeight
       scrollParams.value.scrollTop = containerRef.value.scrollEl.scrollTop
       scrollParams.value.scrollHeight = containerRef.value.scrollEl.scrollHeight
       scrollParams.value.clientHeight = containerRef.value.scrollEl.clientHeight
-      if (!isUserScrolledUp.value && props.scrollToBottomOnMount) {
+      if (props.enabled && !isUserScrolledUp.value) {
         scrollToBottom()
+      } else if (props.scrollToBottomOnMount && !initialScrollDone) {
+        // Delayed content is still settling in the initial scroll phase: keep
+        // pinning to the bottom and restart the quiet-period debounce.
+        scrollToBottom(true)
+        scheduleInitialScrollEnd()
       }
     })
   })
-  
+
   observer.observe(containerRef.value?.scrollEl, {
     childList: true,
     subtree: true,
     characterData: true
   })
+
+  if (props.scrollToBottomOnMount) {
+    nextTick(() => scrollToBottom(true))
+    scheduleInitialScrollEnd()
+  }
 })
 
 onUnmounted(() => {
   observer?.disconnect()
+  if (initialScrollTimer) clearTimeout(initialScrollTimer)
 })
 
 function isNearBottom(customThreshold?: number): boolean {
