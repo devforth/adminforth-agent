@@ -18,7 +18,7 @@
     "@shikijs/langs": "^4.0.2",
     "@shikijs/themes": "^4.0.2",
     "@vueuse/core": "^14.2.1",
-    "ai": "^6.0.168",
+    "ai": "6.0.168",
     "custom-vue-scrollbar": "^0.0.8",
     "dompurify": "^3.3.3",
     "katex": "^0.16.45",
