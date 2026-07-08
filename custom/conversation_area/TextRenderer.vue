@@ -12,8 +12,9 @@
     <IncremarkContent
       class="text-wrap break-words w-full max-w-full"
       v-if="content"
-      :content="content" 
-      :is-finished="isFinished" 
+      :key="renderNonce"
+      :content="content"
+      :is-finished="isFinished"
       :components="incremarkComponents"
       :incremark-options="incremarkOptions"
     />
@@ -51,6 +52,13 @@
 
   const content = computed(() => props.message)
   const isFinished = computed(() => props.state === 'done')
+
+  const renderNonce = ref(0);
+  watch(content, (newContent, oldContent) => {
+    if (isFinished.value && newContent !== oldContent) {
+      renderNonce.value++;
+    }
+  });
   const hasVegaLite = computed(() => props.message?.includes('```vega-lite'))
   const isStateStreaming = computed(() => props.state === 'streaming')
 

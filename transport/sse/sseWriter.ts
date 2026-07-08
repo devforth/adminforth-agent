@@ -163,6 +163,16 @@ function createAgentEventStream(
       });
     },
 
+    turnPersisted(sessionId: string, turnId: string) {
+      stream.send({
+        type: isAiUiMessageStream ? "data-turn-persisted" : "turn-persisted",
+        data: {
+          sessionId,
+          turnId,
+        },
+      });
+    },
+
     response(text: string, sessionId: string, turnId: string) {
       stream.send({
         type: isAiUiMessageStream ? "data-response" : "response",
@@ -306,6 +316,9 @@ export function createSseEventEmitter(
         break;
       case "transcript":
         stream.transcript(event.text, event.language);
+        break;
+      case "turn-persisted":
+        stream.turnPersisted(event.sessionId, event.turnId);
         break;
       case "response":
         stream.response(event.text, event.sessionId, event.turnId);

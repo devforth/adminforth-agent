@@ -428,6 +428,11 @@ export class RunTurnUseCase {
     input: RunAndPersistAgentResponseInput,
   ): Promise<RunAndPersistAgentResponseResult> {
     const prepared = await this.prepareTurn(input);
+    await prepared.observability.emit?.({
+      type: "turn-persisted",
+      sessionId: prepared.sessionId,
+      turnId: prepared.turnId,
+    });
 
     let fullResponse = prepared.initialResponse ?? "";
     let aborted = false;
