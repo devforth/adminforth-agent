@@ -27,6 +27,7 @@
             :isRecording="microphoneButtonMode === 'listen'"
             :amplitude="audioAmplitude"
           />
+          <Spinner v-if="isPolling" class="ml-2 w-4 h-4 text-lightButtonsText dark:text-darkButtonsText fill-lightButtonsBackground dark:fill-darkPrimary" />
         </div>
         <div v-else-if="microphoneButtonMode === 'generating'" class="flex items-center justify-center gap-2 text-white text-sm">
           <span class="w-3 h-3 bg-white rounded-sm" />
@@ -65,6 +66,7 @@ const hideAnimationDebounced = debounce(() => {
 const sendUserRecordDebounced = debounce(() => {
   sendRecordForTranscription();
 }, 500);
+const isPolling = ref(false);
 
 const isAudioChatMode = computed(() => agentStore.isAudioChatMode);
 
@@ -116,8 +118,10 @@ function toggleChatMode() {
 }
 
 async function onStartRecording() {
+  isPolling.value = true;
   await unlockAudio();
   await requestMicAndStartVAD(saidSomething, stopRecording, onAnySound);
+  isPolling.value = false;
   microphoneButtonMode.value = 'listen';
   agentAudio.playBeep(1000);
 }
