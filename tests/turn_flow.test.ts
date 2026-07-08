@@ -179,6 +179,7 @@ describe('RunTurnUseCase.handleTurn', () => {
     const result = await useCase.handleTurn(input as any);
 
     expect(events.map((e) => e.type)).toEqual([
+      'turn-persisted',
       'turn-started',
       'text-delta',
       'text-delta',
@@ -221,7 +222,7 @@ describe('RunTurnUseCase.handleTurn', () => {
 
     const result = await useCase.handleTurn(input as any);
 
-    expect(events.map((e) => e.type)).toEqual(['turn-started', 'error', 'finish']);
+    expect(events.map((e) => e.type)).toEqual(['turn-persisted','turn-started', 'error', 'finish']);
     expect(result.failed).toBe(true);
     expect(result.aborted).toBe(false);
     expect(result.text).toContain('llm exploded');
@@ -241,7 +242,7 @@ describe('RunTurnUseCase.handleTurn', () => {
 
     expect(result.aborted).toBe(true);
     expect(result.failed).toBe(false);
-    expect(events.map((e) => e.type)).toEqual(['turn-started', 'finish']);
+    expect(events.map((e) => e.type)).toEqual(['turn-persisted','turn-started', 'finish']);
     expect(sessions.calls.saveTurnResponse).toHaveLength(1);
   });
 
@@ -261,7 +262,7 @@ describe('RunTurnUseCase.handleTurn', () => {
     const first = makeInput();
     await useCase.handleTurn(first.input as any);
 
-    expect(first.events.map((e) => e.type)).toEqual(['turn-started', 'interrupt', 'response', 'finish']);
+    expect(first.events.map((e) => e.type)).toEqual(['turn-persisted','turn-started', 'interrupt', 'response', 'finish']);
     expect(first.events.find((e) => e.type === 'interrupt').sessionId).toBe('s1');
 
     const second = makeInput({ prompt: '', approvalDecision: 'approve' });
