@@ -364,7 +364,7 @@ describe('RunTurnUseCase.handleEditTurn', () => {
 
     const result = await useCase.handleEditTurn(input as any);
 
-    expect(events.map((e) => e.type)).toEqual(['turn-started', 'text-delta', 'response', 'finish']);
+    expect(events.map((e) => e.type)).toEqual(['turn-started', 'turn-persisted', 'text-delta', 'response', 'finish']);
     // Forks from the PREVIOUS turn's checkpoint, not the edited one.
     expect(llm.calls).toHaveLength(1);
     expect(llm.calls[0].branchFromCheckpointId).toBe('cp1');
