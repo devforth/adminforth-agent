@@ -121,7 +121,12 @@ export function createAgentChatManager({
       return;
     }
 
-    if (dataPart?.type === 'data-response' && typeof dataPart.data?.turnId === 'string') {
+    // `data-turn-persisted` arrives at turn start, `data-response` at turn end — either
+    // way, stamp the prompt with its turn id so it can be edited.
+    if (
+      (dataPart?.type === 'data-turn-persisted' || dataPart?.type === 'data-response')
+      && typeof dataPart.data?.turnId === 'string'
+    ) {
       tagCurrentTurnPrompt(dataPart.data.turnId);
     }
   }
@@ -157,7 +162,10 @@ export function createAgentChatManager({
       return;
     }
 
-    if (dataPart?.type === 'data-response' && typeof dataPart.data?.turnId === 'string') {
+    if (
+      (dataPart?.type === 'data-turn-persisted' || dataPart?.type === 'data-response')
+      && typeof dataPart.data?.turnId === 'string'
+    ) {
       tagCurrentTurnPrompt(dataPart.data.turnId);
     }
   }
@@ -300,6 +308,10 @@ export function createAgentChatManager({
   async function sendEditMessage({ messageId, turnId, text }: { messageId: string; turnId: string; text: string; }) {
     const chat = currentChat.value;
     if (!chat) {
+      return;
+    }
+    const currentMessage = chat.messages.find((m: any) => m.id === messageId);
+    if (!currentMessage || currentMessage.parts[0].text.trim() === text.trim()) {
       return;
     }
     await stopActiveTurnAndWaitForIdle();
