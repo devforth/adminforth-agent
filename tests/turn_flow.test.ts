@@ -26,13 +26,18 @@ function fakeLlm(
     streamFor?: (call: number, input: any) => AsyncIterable<AgentStreamChunk>;
     pendingInterrupts?: Array<{ id: string; count: number }>;
     pendingInterruptsError?: Error;
+    latestCheckpointId?: string | null;
   } = {},
 ) {
   const calls: any[] = [];
   const getPendingInterruptsCalls: any[] = [];
+  const getLatestCheckpointIdCalls: any[] = [];
+  const resetThreadCalls: any[] = [];
   return {
     calls,
     getPendingInterruptsCalls,
+    getLatestCheckpointIdCalls,
+    resetThreadCalls,
     async streamTurn(input: any) {
       calls.push(input);
       const factory = opts.streamFor ?? (() => streamOf());
@@ -48,15 +53,23 @@ function fakeLlm(
       }
       return opts.pendingInterrupts ?? [];
     },
+    async getLatestCheckpointId(input: any) {
+      getLatestCheckpointIdCalls.push(input);
+      return opts.latestCheckpointId ?? 'cp-latest';
+    },
+    async resetThreadCheckpoints(input: any) {
+      resetThreadCalls.push(input);
+    },
   };
 }
 
-function fakeSessions(opts: { initialResponse?: string } = {}) {
+function fakeSessions(opts: { initialResponse?: string; agentTurns?: any[] } = {}) {
   const calls = {
     createNewTurn: [] as any[],
     touchSession: [] as string[],
     saveTurnResponse: [] as any[],
     getResumeState: 0,
+    editTurnAndTruncateAfter: [] as any[],
   };
   return {
     calls,
@@ -77,8 +90,22 @@ function fakeSessions(opts: { initialResponse?: string } = {}) {
     async saveTurnResponse(payload: any) {
       calls.saveTurnResponse.push(payload);
     },
+    async getAgentTurns() {
+      return opts.agentTurns ?? [];
+    },
+    async editTurnAndTruncateAfter(payload: any) {
+      calls.editTurnAndTruncateAfter.push(payload);
+    },
   };
 }
+
+const SESSION_RESOURCE = {
+  resourceId: 'sessions',
+  idField: 'id',
+  titleField: 'title',
+  askerIdField: 'asker_id',
+  createdAtField: 'created_at',
+} as any;
 
 function buildUseCase(opts: {
   streamFor?: (call: number, input: any) => AsyncIterable<AgentStreamChunk>;
@@ -86,22 +113,39 @@ function buildUseCase(opts: {
   pendingInterrupts?: Array<{ id: string; count: number }>;
   pendingInterruptsError?: Error;
   hasPersistentCheckpointer?: boolean;
+  turnCheckpointsEnabled?: boolean;
+  agentTurns?: any[];
+  latestCheckpointId?: string | null;
+  sessionOwnerPk?: string | null;
 } = {}) {
   const llm = fakeLlm({
     streamFor: opts.streamFor,
     pendingInterrupts: opts.pendingInterrupts,
     pendingInterruptsError: opts.pendingInterruptsError,
+    latestCheckpointId: opts.latestCheckpointId,
   });
-  const sessions = fakeSessions({ initialResponse: opts.initialResponse });
+  const sessions = fakeSessions({ initialResponse: opts.initialResponse, agentTurns: opts.agentTurns });
   const steerBuffer = new SteerBuffer();
+  const getAdminforth = () => ({
+    config: { auth: { usernameField: 'email' }, baseUrlSlashed: '/admin/' },
+    resource: () => ({
+      async get() {
+        // Session owned by 'u1' unless overridden (null => session missing).
+        if (opts.sessionOwnerPk === null) return null;
+        return { id: 's1', asker_id: opts.sessionOwnerPk ?? 'u1' };
+      },
+    }),
+  }) as any;
   const useCase = new RunTurnUseCase({
     llm: llm as any,
     sessions: sessions as any,
     steerBuffer,
     modes: [{ name: 'default', completionAdapter: {} as any }],
-    getAdminforth: () => ({ config: { auth: { usernameField: 'email' }, baseUrlSlashed: '/admin/' } }) as any,
+    getAdminforth,
     getAgentSystemPrompt: async () => 'SYS',
     hasPersistentCheckpointer: opts.hasPersistentCheckpointer ?? false,
+    turnCheckpointsEnabled: opts.turnCheckpointsEnabled ?? false,
+    sessionResource: SESSION_RESOURCE,
     createDebugSink: () => ({ flush() {}, getHistory: () => [] }),
   });
   return { useCase, llm, sessions, steerBuffer };
@@ -301,6 +345,98 @@ describe('RunTurnUseCase.handleTurn', () => {
     // becoming a `failed` result. turn-started has already been emitted by then.
     await expect(useCase.handleTurn(input as any)).rejects.toThrow('No pending approval interrupt');
     expect(events.map((e) => e.type)).toEqual(['turn-started']);
+  });
+});
+
+describe('RunTurnUseCase.handleEditTurn', () => {
+  it('edits a non-first message: forks from the previous turn, truncates, and persists to the same turn', async () => {
+    const { useCase, llm, sessions } = buildUseCase({
+      turnCheckpointsEnabled: true,
+      latestCheckpointId: 'cp-new',
+      agentTurns: [
+        { id: 't1', prompt: 'p1', response: 'r1', checkpointId: 'cp1' },
+        { id: 't2', prompt: 'p2', response: 'r2', checkpointId: 'cp2' },
+      ],
+      streamFor: () => streamOf(text('New answer')),
+    });
+    const { input, events } = makeInput({ turnId: 't2', prompt: 'edited prompt' });
+
+    const result = await useCase.handleEditTurn(input as any);
+
+    expect(events.map((e) => e.type)).toEqual(['turn-started', 'text-delta', 'response', 'finish']);
+    // Forks from the PREVIOUS turn's checkpoint, not the edited one.
+    expect(llm.calls).toHaveLength(1);
+    expect(llm.calls[0].branchFromCheckpointId).toBe('cp1');
+    expect('messages' in llm.calls[0].input).toBe(true);
+    expect(llm.resetThreadCalls).toHaveLength(0);
+    // Truncates + rewrites the edited turn (reusing its id, no new turn created).
+    expect(sessions.calls.editTurnAndTruncateAfter).toEqual([
+      { sessionId: 's1', turnId: 't2', newPrompt: 'edited prompt' },
+    ]);
+    expect(sessions.calls.createNewTurn).toHaveLength(0);
+    expect(result).toMatchObject({ turnId: 't2', text: 'New answer', aborted: false, failed: false });
+    // Records the new tip checkpoint on the edited turn.
+    expect(sessions.calls.saveTurnResponse[0]).toMatchObject({
+      turnId: 't2',
+      responseText: 'New answer',
+      checkpointId: 'cp-new',
+    });
+  });
+
+  it('editing the first message resets the thread instead of forking', async () => {
+    const { useCase, llm, sessions } = buildUseCase({
+      turnCheckpointsEnabled: true,
+      agentTurns: [{ id: 't1', prompt: 'p1', response: 'r1', checkpointId: 'cp1' }],
+      streamFor: () => streamOf(text('Fresh')),
+    });
+    const { input } = makeInput({ turnId: 't1', prompt: 'edited first' });
+
+    await useCase.handleEditTurn(input as any);
+
+    expect(llm.resetThreadCalls).toHaveLength(1);
+    expect(llm.calls[0].branchFromCheckpointId).toBeUndefined();
+    expect(sessions.calls.editTurnAndTruncateAfter[0].turnId).toBe('t1');
+  });
+
+  it('rejects an edit when the previous turn has no stored checkpoint', async () => {
+    const { useCase } = buildUseCase({
+      turnCheckpointsEnabled: true,
+      agentTurns: [
+        { id: 't1', prompt: 'p1', response: 'r1', checkpointId: null },
+        { id: 't2', prompt: 'p2', response: 'r2', checkpointId: 'cp2' },
+      ],
+    });
+    const { input, events } = makeInput({ turnId: 't2', prompt: 'x' });
+
+    await expect(useCase.handleEditTurn(input as any)).rejects.toThrow(/no stored checkpoint/i);
+    expect(events.map((e) => e.type)).toEqual(['turn-started']);
+  });
+
+  it('rejects an edit when checkpointIdField is not configured', async () => {
+    const { useCase } = buildUseCase({
+      turnCheckpointsEnabled: false,
+      agentTurns: [
+        { id: 't1', prompt: 'p1', response: 'r1', checkpointId: null },
+        { id: 't2', prompt: 'p2', response: 'r2', checkpointId: null },
+      ],
+    });
+    const { input } = makeInput({ turnId: 't2', prompt: 'x' });
+
+    await expect(useCase.handleEditTurn(input as any)).rejects.toThrow(/checkpointIdField/);
+  });
+
+  it('rejects an edit on a session the user does not own', async () => {
+    const { useCase } = buildUseCase({
+      turnCheckpointsEnabled: true,
+      sessionOwnerPk: 'someone-else',
+      agentTurns: [
+        { id: 't1', prompt: 'p1', response: 'r1', checkpointId: 'cp1' },
+        { id: 't2', prompt: 'p2', response: 'r2', checkpointId: 'cp2' },
+      ],
+    });
+    const { input } = makeInput({ turnId: 't2', prompt: 'x' });
+
+    await expect(useCase.handleEditTurn(input as any)).rejects.toThrow(/does not belong/);
   });
 });
 

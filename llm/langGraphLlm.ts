@@ -38,6 +38,7 @@ export class LangGraphLlm implements LlmPort {
       input: runtimeInput as any,
       context: input.context,
       observability: input.observability,
+      branchFromCheckpointId: input.branchFromCheckpointId,
     });
 
     return adaptRawStream(rawStream as AsyncIterable<any>);
@@ -62,5 +63,20 @@ export class LangGraphLlm implements LlmPort {
     const models = await this.modelFactory.create(input.completionAdapter);
     const raw = await this.runtime.getPendingInterrupts({ models, sessionId: input.sessionId });
     return normalizeInterrupts(raw);
+  }
+
+  async getLatestCheckpointId(input: {
+    completionAdapter: AgentModeCompletionAdapter;
+    sessionId: string;
+  }): Promise<string | null> {
+    const models = await this.modelFactory.create(input.completionAdapter);
+    return this.runtime.getLatestCheckpointId({ models, sessionId: input.sessionId });
+  }
+
+  async resetThreadCheckpoints(input: {
+    completionAdapter: AgentModeCompletionAdapter;
+    sessionId: string;
+  }): Promise<void> {
+    await this.runtime.resetThreadCheckpoints(input.sessionId);
   }
 }

@@ -71,12 +71,79 @@ export class AgentSessionStore {
       [Filters.EQ(this.options.turnResource.sessionIdField, sessionId)],
       undefined,
       undefined,
-      [Sorts.ASC(this.options.turnResource.createdAtField)]
+      [Sorts.ASC(this.options.turnResource.createdAtField), Sorts.ASC(this.options.turnResource.idField)]
     );
     return turns.map(turn => ({
+      id: turn[this.options.turnResource.idField],
       prompt: turn[this.options.turnResource.promptField],
       response: turn[this.options.turnResource.responseField],
     }));
+  }
+
+  /**
+   * Ordered non-system (real conversation) turns with their stored checkpoint id.
+   * Used by message editing to locate the target turn and its previous turn's
+   * fork point. Stable order (`createdAt ASC, id ASC`) so positions never drift.
+   */
+  async getAgentTurns(sessionId: string) {
+    const checkpointIdField = this.options.turnResource.checkpointIdField;
+    const turns = await this.getAdminforth().resource(this.options.turnResource.resourceId).list(
+      [Filters.EQ(this.options.turnResource.sessionIdField, sessionId)],
+      undefined,
+      undefined,
+      [Sorts.ASC(this.options.turnResource.createdAtField), Sorts.ASC(this.options.turnResource.idField)]
+    );
+    return turns
+      .filter((turn) => turn[this.options.turnResource.promptField] !== AGENT_SYSTEM_TURN_PROMPT)
+      .map((turn) => ({
+        id: turn[this.options.turnResource.idField],
+        prompt: turn[this.options.turnResource.promptField],
+        response: turn[this.options.turnResource.responseField],
+        checkpointId: checkpointIdField
+          ? (turn[checkpointIdField] ? String(turn[checkpointIdField]) : null)
+          : null,
+      }));
+  }
+
+  /**
+   * Apply a message edit and branch: replace the edited turn's prompt and truncate
+   * everything after it. Deletes later turns FIRST, then updates the edited turn, so
+   * an interruption can only leave a consistent "truncated, edit-not-yet-applied"
+   * state (recoverable by retry) — never "edited but stale later turns remain".
+   * (AdminForth's resource API has no transactions, hence the deliberate ordering.)
+   */
+  async editTurnAndTruncateAfter(input: {
+    sessionId: string;
+    turnId: string;
+    newPrompt: string;
+  }): Promise<void> {
+    const r = this.options.turnResource;
+    const resource = this.getAdminforth().resource(r.resourceId);
+    const turns = await resource.list(
+      [Filters.EQ(r.sessionIdField, input.sessionId)],
+      undefined,
+      undefined,
+      [Sorts.ASC(r.createdAtField), Sorts.ASC(r.idField)],
+    );
+
+    const targetIndex = turns.findIndex((turn) => turn[r.idField] === input.turnId);
+    if (targetIndex === -1) {
+      throw new Error(`Turn "${input.turnId}" not found in session "${input.sessionId}".`);
+    }
+
+    const laterTurns = turns.slice(targetIndex + 1);
+    for (const turn of laterTurns) {
+      await resource.delete(turn[r.idField]);
+    }
+
+    const updates: Record<string, unknown> = {
+      [r.promptField]: input.newPrompt,
+      [r.responseField]: "not_finished",
+    };
+    if (r.checkpointIdField) {
+      updates[r.checkpointIdField] = null;
+    }
+    await resource.update(input.turnId, updates);
   }
 
   async getPreviousUserMessages(sessionId: string) {
@@ -142,6 +209,12 @@ export class AgentSessionStore {
     turnId: string;
     responseText: string;
     debugHistory?: unknown;
+    /**
+     * Tip checkpoint id for this turn. Persisted only when provided AND the field is
+     * configured — so aborted/failed turns (which pass undefined) never overwrite it
+     * with a stale value.
+     */
+    checkpointId?: string | null;
   }) {
     const turnUpdates: Record<string, unknown> = {
       [this.options.turnResource.responseField]: input.responseText,
@@ -149,6 +222,10 @@ export class AgentSessionStore {
 
     if (this.options.turnResource.debugField) {
       turnUpdates[this.options.turnResource.debugField] = input.debugHistory;
+    }
+
+    if (this.options.turnResource.checkpointIdField && input.checkpointId !== undefined) {
+      turnUpdates[this.options.turnResource.checkpointIdField] = input.checkpointId;
     }
 
     await this.getAdminforth()

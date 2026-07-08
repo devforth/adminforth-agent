@@ -72,6 +72,7 @@ export type RunAndPersistAgentResponseInput = BaseAgentTurnInput & {
   approvalDecision?: "approve" | "reject";
   failureLogMessage: string;
   abortLogMessage: string;
+  editTurnId?: string;
 };
 
 export type RunAndPersistAgentResponseResult = {
@@ -83,6 +84,7 @@ export type RunAndPersistAgentResponseResult = {
 
 export type HandleTurnInput = TextAgentTurnInput;
 export type HandleSpeechTurnInput = SpeechAgentTurnInput;
+export type HandleEditTurnInput = TextAgentTurnInput & { turnId: string };
 
 /**
  * Provider-agnostic message passed from the application layer to the LLM port.

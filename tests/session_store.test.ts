@@ -65,7 +65,7 @@ describe('adminforth-agent session store', () => {
     expect(created.session_id).toBe('s1');
   });
 
-  it('getSessionTurns maps rows to { prompt, response }', async () => {
+  it('getSessionTurns maps rows to { id, prompt, response }', async () => {
     const store = buildStore(() => ({
       async list() {
         return [
@@ -76,8 +76,8 @@ describe('adminforth-agent session store', () => {
     }));
 
     expect(await store.getSessionTurns('s1')).toEqual([
-      { prompt: 'p1', response: 'r1' },
-      { prompt: 'p2', response: 'r2' },
+      { id: '1', prompt: 'p1', response: 'r1' },
+      { id: '2', prompt: 'p2', response: 'r2' },
     ]);
   });
 
@@ -128,6 +128,118 @@ describe('adminforth-agent session store', () => {
 
     expect(rows.find((r: any) => r.id === 'main').prompt).toBe('buy a car__adminforth_steer__:and the cheapest one');
     expect(rows.find((r: any) => r.id === 'sys').prompt).toBe(AGENT_SYSTEM_TURN_PROMPT);
+  });
+
+  it('getAgentTurns excludes system turns and surfaces the stored checkpoint id', async () => {
+    const optionsWithCheckpoint = {
+      ...OPTIONS,
+      turnResource: { ...OPTIONS.turnResource, checkpointIdField: 'checkpoint_id' },
+    } as any;
+    const adminforth = {
+      resource: () => ({
+        async list() {
+          return [
+            { id: 't1', prompt: 'hello', response: 'hi', checkpoint_id: 'cp1' },
+            { id: 'sys', prompt: AGENT_SYSTEM_TURN_PROMPT, response: 'note', checkpoint_id: null },
+            { id: 't2', prompt: 'again', response: 'ok', checkpoint_id: 'cp2' },
+          ];
+        },
+      }),
+    };
+    const store = new AgentSessionStore(() => adminforth as any, optionsWithCheckpoint);
+
+    expect(await store.getAgentTurns('s1')).toEqual([
+      { id: 't1', prompt: 'hello', response: 'hi', checkpointId: 'cp1' },
+      { id: 't2', prompt: 'again', response: 'ok', checkpointId: 'cp2' },
+    ]);
+  });
+
+  it('getAgentTurns yields null checkpointId when the field is not configured', async () => {
+    const store = buildStore(() => ({
+      async list() {
+        return [{ id: 't1', prompt: 'hello', response: 'hi', checkpoint_id: 'cp1' }];
+      },
+    }));
+
+    expect(await store.getAgentTurns('s1')).toEqual([
+      { id: 't1', prompt: 'hello', response: 'hi', checkpointId: null },
+    ]);
+  });
+
+  it('editTurnAndTruncateAfter deletes later turns first, then rewrites the edited turn', async () => {
+    const optionsWithCheckpoint = {
+      ...OPTIONS,
+      turnResource: { ...OPTIONS.turnResource, checkpointIdField: 'checkpoint_id' },
+    } as any;
+    const rows: any[] = [
+      { id: 't1', prompt: 'p1', response: 'r1', checkpoint_id: 'cp1' },
+      { id: 't2', prompt: 'p2', response: 'r2', checkpoint_id: 'cp2' },
+      { id: 't3', prompt: 'p3', response: 'r3', checkpoint_id: 'cp3' },
+    ];
+    const calls: string[] = [];
+    const adminforth = {
+      resource: () => ({
+        async list() {
+          return [...rows];
+        },
+        async delete(id: string) {
+          calls.push(`delete:${id}`);
+          const idx = rows.findIndex((r) => r.id === id);
+          if (idx !== -1) rows.splice(idx, 1);
+        },
+        async update(id: string, fields: any) {
+          calls.push(`update:${id}`);
+          Object.assign(rows.find((r) => r.id === id), fields);
+        },
+      }),
+    };
+    const store = new AgentSessionStore(() => adminforth as any, optionsWithCheckpoint);
+
+    await store.editTurnAndTruncateAfter({ sessionId: 's1', turnId: 't2', newPrompt: 'edited' });
+
+    // t3 (later) deleted before the edited turn is updated; t1 untouched.
+    expect(calls).toEqual(['delete:t3', 'update:t2']);
+    expect(rows.map((r) => r.id)).toEqual(['t1', 't2']);
+    expect(rows.find((r) => r.id === 't2')).toMatchObject({
+      prompt: 'edited',
+      response: 'not_finished',
+      checkpoint_id: null,
+    });
+  });
+
+  it('editTurnAndTruncateAfter throws when the turn is not in the session', async () => {
+    const store = buildStore(() => ({
+      async list() {
+        return [{ id: 't1', prompt: 'p1', response: 'r1' }];
+      },
+    }));
+
+    await expect(
+      store.editTurnAndTruncateAfter({ sessionId: 's1', turnId: 'missing', newPrompt: 'x' }),
+    ).rejects.toThrow(/not found/);
+  });
+
+  it('saveTurnResponse persists checkpointId only when the field is configured and a value is provided', async () => {
+    const optionsWithCheckpoint = {
+      ...OPTIONS,
+      turnResource: { ...OPTIONS.turnResource, checkpointIdField: 'checkpoint_id' },
+    } as any;
+    const updates: any[] = [];
+    const adminforth = {
+      resource: () => ({
+        async update(id: string, fields: any) {
+          updates.push({ id, fields });
+        },
+      }),
+    };
+    const store = new AgentSessionStore(() => adminforth as any, optionsWithCheckpoint);
+
+    await store.saveTurnResponse({ turnId: 't1', responseText: 'done', checkpointId: 'cpX' });
+    await store.saveTurnResponse({ turnId: 't2', responseText: 'partial' }); // undefined -> not written
+
+    expect(updates[0].fields).toMatchObject({ response: 'done', checkpoint_id: 'cpX' });
+    expect(updates[1].fields).toEqual({ response: 'partial' });
+    expect(updates[1].fields).not.toHaveProperty('checkpoint_id');
   });
 
   it('derives a deterministic chat-surface session id', () => {

@@ -29,6 +29,7 @@ interface ITurnResource {
   promptField: string;
   responseField: string;
   debugField?: string;
+  checkpointIdField?: string;
 }
 
 interface ICheckpointResource {
