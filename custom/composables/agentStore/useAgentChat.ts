@@ -1,5 +1,5 @@
 import { DefaultChatTransport } from 'ai';
-import { ref, shallowRef, type Ref } from 'vue';
+import { ref, shallowRef, watch, type Ref } from 'vue';
 import { Chat } from '../../chat';
 import { getCurrentPageContext } from './pageContext';
 // const { DefaultChatTransport } = await import('ai');
@@ -253,15 +253,56 @@ export function createAgentChatManager({
     currentChat.value?.stop();
   }
 
+  function isChatBusy() {
+    const status = (currentChat.value as any)?.status;
+    return status === 'streaming' || status === 'submitted';
+  }
+
+  async function stopActiveTurnAndWaitForIdle() {
+    const chat = currentChat.value;
+    if (!chat || !isChatBusy()) {
+      return;
+    }
+    await chat.stop();
+    if (!isChatBusy()) {
+      return;
+    }
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      let stopWatch = () => {};
+      const finish = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        stopWatch();
+        resolve();
+      };
+      // Safety valve so a stuck status can never hang the edit indefinitely.
+      const timer = setTimeout(finish, 3000);
+      stopWatch = watch(
+        () => (currentChat.value as any)?.status,
+        () => {
+          if (!isChatBusy()) {
+            finish();
+          }
+        },
+      );
+    });
+  }
+
   // Replace the target user message in place and regenerate from it. The SDK's
   // `sendMessage({ messageId })` truncates every message after the replaced one
   // (mirroring the server-side truncate), and `editingTurnId` routes the request
-  // to /edit for the matching turn.
+  // to /edit for the matching turn. If a turn is still generating it is stopped
+  // first so the edit supersedes it.
   async function sendEditMessage({ messageId, turnId, text }: { messageId: string; turnId: string; text: string; }) {
     const chat = currentChat.value;
     if (!chat) {
       return;
     }
+    await stopActiveTurnAndWaitForIdle();
     editingTurnId.value = turnId;
     lastMessage.value = text;
     try {

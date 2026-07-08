@@ -18,18 +18,26 @@
       >
         <div
           v-if="canEdit && showEditButton"
-          class="absolute -bottom-6 right-0 self-end p-1 mr-4 mt-0.5 z-20"
+          class="absolute flex -bottom-6 right-0 self-end p-1 mr-4 mt-0.5 z-20"
           @mouseenter="showEditButtonOnHover" 
           @mouseleave="hideEditButtonOnHover" 
         >
-            <button
-              type="button"
-              class="flex items-center justify-center w-8 h-8 rounded-md text-gray-400 hover:text-lightPrimary dark:hover:text-darkPrimary opacity-60 group-hover/msg:opacity-100 transition-opacity duration-150"
-              :title="$t('Edit message')"
-              @click="agentStore.startEditMessage(message)"
-            >
-              <IconPenSolid class="w-5 h-5" />
-            </button>
+          <button
+            type="button"
+            class="flex items-center justify-center w-8 h-8 rounded-md text-gray-400 hover:text-lightPrimary dark:hover:text-darkPrimary opacity-60 group-hover/msg:opacity-100 transition-opacity duration-150"
+            :title="$t('Copy message')"
+            @click="agentStore.copyMessageToClipboard(message)"
+          >
+            <IconFileCopySolid class="w-5 h-5" />
+          </button>
+          <button
+            type="button"
+            class="flex items-center justify-center w-8 h-8 rounded-md text-gray-400 hover:text-lightPrimary dark:hover:text-darkPrimary opacity-60 group-hover/msg:opacity-100 transition-opacity duration-150"
+            :title="$t('Edit message')"
+            @click="agentStore.startEditMessage(message)"
+          >
+            <IconPenSolid class="w-5 h-5" />
+          </button>
         </div>
       </Transition>
     <div
@@ -72,7 +80,7 @@
 
 <script setup lang="ts">
   import { computed, ref } from 'vue';
-  import { IconPenSolid } from '@iconify-prerendered/vue-flowbite';
+  import { IconPenSolid, IconFileCopySolid } from '@iconify-prerendered/vue-flowbite';
   import TextRenderer from './TextRenderer.vue';
   import type { IMessage } from '../types';
   import { getMessageParts } from '../utils';
@@ -98,7 +106,6 @@
     && !props.message.metadata?.steer
     && Boolean(props.message.metadata?.turnId)
     && !agentStore.isEditingMessage
-    && !agentStore.isTurnActive
   );
 
   const isBeingEdited = computed(() =>

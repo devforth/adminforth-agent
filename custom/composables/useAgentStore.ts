@@ -466,9 +466,10 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   // Enter edit mode for a user message: stash the current input, then load the
-  // message's text into the textarea for the user to amend.
+  // message's text into the textarea for the user to amend. Allowed mid-generation —
+  // committing the edit stops the running turn (see submitEditMessage).
   function startEditMessage(message: any) {
-    if (!editingEnabled.value || isTurnActive.value) {
+    if (!editingEnabled.value) {
       return;
     }
     const turnId = message?.metadata?.turnId;
@@ -515,6 +516,7 @@ export const useAgentStore = defineStore('agent', () => {
     }
     const messageId = editingMessageId.value;
     const turnId = editingMessageTurnId.value!;
+    steerBuffer.clear();
     // Restore the stashed input and leave edit mode before the regeneration streams in.
     exitEditMode();
     await sendEditMessage({ messageId, turnId, text });
