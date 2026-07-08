@@ -84,6 +84,12 @@ export class AgentRuntime {
       signal: input.context.abortSignal,
       configurable: {
         thread_id: input.context.sessionId,
+        // When editing/branching, fork from this checkpoint instead of the
+        // thread's latest state. LangGraph writes the new branch as fresh
+        // (time-ordered) checkpoints, so it becomes the thread's latest.
+        ...(input.branchFromCheckpointId
+          ? { checkpoint_id: input.branchFromCheckpointId }
+          : {}),
       },
       context: toLangchainAgentContext({
         ...input.context,
@@ -124,5 +130,45 @@ export class AgentRuntime {
     });
     const tasks = Array.isArray(state?.tasks) ? state.tasks : [];
     return tasks.flatMap((task: any) => (Array.isArray(task?.interrupts) ? task.interrupts : []));
+  }
+
+  /**
+   * Return the thread's latest (tip) checkpoint id, or null when the thread has no
+   * persisted state. Builds a minimal agent and reads its state — no model call is
+   * made. Called after a turn completes to record the turn's fork point for editing.
+   */
+  async getLatestCheckpointId(input: {
+    models: AgentTurnModels;
+    sessionId: string;
+  }): Promise<string | null> {
+    const apiBasedTools = this.options.toolProvider.getApiBasedTools();
+    const tools = await this.options.toolProvider.getTools(apiBasedTools);
+    const agent = createAgent({
+      name: this.options.name,
+      model: input.models.model,
+      checkpointer: this.options.getCheckpointer(),
+      tools,
+      contextSchema,
+      middleware: [
+        humanInTheLoopMiddleware({
+          interruptOn: createHumanInTheLoopInterrupts(apiBasedTools),
+          descriptionPrefix: "Tool execution pending approval",
+        }),
+      ],
+    });
+
+    const state = await (agent as { getState: (config: unknown) => Promise<any> }).getState({
+      configurable: { thread_id: input.sessionId },
+    });
+    const checkpointId = state?.config?.configurable?.checkpoint_id;
+    return checkpointId ? String(checkpointId) : null;
+  }
+
+  /**
+   * Drop the entire LangGraph checkpoint thread for a session. Used when editing the
+   * first message, where there is no earlier checkpoint to fork from.
+   */
+  async resetThreadCheckpoints(sessionId: string): Promise<void> {
+    await this.options.getCheckpointer().deleteThread(sessionId);
   }
 }

@@ -59,7 +59,7 @@
           >
           <div
             v-if="isModeMenuOpen"
-            class="absolute bottom-full left-0 mb-2 min-w-40 overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-600 dark:bg-gray-800"
+            class="absolute z-20 bottom-full left-0 mb-2 min-w-40 overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-600 dark:bg-gray-800"
           >
             <button
               v-for="mode in agentStore.availableModes"
@@ -75,29 +75,52 @@
         </Transition>
       </div>
       <MicrophoneButton 
-        v-if="props.meta.hasAudioAdapter"   
+        v-if="props.meta.hasAudioAdapter"
+        v-show="!agentStore.isEditingMessage"   
       />
       <template v-if="!agentStore.isAudioChatMode">
-        <Button 
-          v-if="!agentStore.isResponseInProgress"
-          class=" !p-0 h-7 w-7 transition-opacity duration-200"                    
-          @click="sendMessage" 
-          :disabled="!agentStore.trimmedUserMessage"
-        >
-          <IconArrowUpOutline 
-            class="w-6 h-6
-              text-white" 
-          />
-        </Button>
-        <Button
-          v-else
-          class="right-4 bottom-2 !p-0 h-7 w-7"    
-          @click="stopCurrentRequest"                
-        >
-          <div
-            class="w-2.5 h-2.5 bg-white rounded-sm"
-          />
-        </Button>
+        <template v-if="agentStore.isEditingMessage">
+          <div class="flex items-center gap-3">
+            <Button
+              variant="secondary"
+              class="!p-0 h-7 w-7 mr-1 bg-red-600 text-white hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
+              title="Cancel edit"
+              @click="cancelEdit"
+            >
+              <IconCloseOutline class="w-5 h-5" />
+            </Button>
+            <Button
+              class="!p-0 h-7 w-7"
+              title="Send edited message"
+              @click="sendMessage"
+              :disabled="!agentStore.trimmedUserMessage"
+            >
+              <IconCheckOutline class="w-6 h-6 text-white" />
+            </Button>
+          </div>
+        </template>
+        <template v-else>
+          <Button
+            v-if="!agentStore.isResponseInProgress"
+            class=" !p-0 h-7 w-7 transition-opacity duration-200"
+            @click="sendMessage"
+            :disabled="!agentStore.trimmedUserMessage"
+          >
+            <IconArrowUpOutline
+              class="w-6 h-6
+                text-white"
+            />
+          </Button>
+          <Button
+            v-else
+            class="right-4 bottom-2 !p-0 h-7 w-7"
+            @click="stopCurrentRequest"
+          >
+            <div
+              class="w-2.5 h-2.5 bg-white rounded-sm"
+            />
+          </Button>
+        </template>
       </template>
       </div>
     </div>
@@ -105,7 +128,7 @@
 </template>
 
 <script setup lang="ts">
-import { IconArrowUpOutline, IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
+import { IconArrowUpOutline, IconAngleDownOutline, IconCloseOutline, IconCheckOutline } from '@iconify-prerendered/vue-flowbite';
 import { useTemplateRef, onMounted, ref, onUnmounted, watch, computed } from 'vue';
 import { onClickOutside } from '@vueuse/core'
 import { useAgentStore } from './composables/useAgentStore';
@@ -126,6 +149,7 @@ const props = defineProps<{
     defaultModeName: string | null;
     stickByDefault: boolean;
     hasAudioAdapter: boolean;
+    editingEnabled: boolean;
   }
   adminUser: any
   conversationAreaRef: any
@@ -150,6 +174,7 @@ onClickOutside(modeMenu as any, () => { isModeMenuOpen.value = false; });
 onMounted(async () => {
   agentStore.setAvailableModes(props.meta.modes, props.meta.defaultModeName);
   agentStore.setCurrentGenerationModeFromLocalStorage();
+  agentStore.setEditingEnabled(props.meta.editingEnabled);
   agentStore.regisrerTextInput(textInput.value);
   textInput.value?.focus();
   autoResize();
@@ -187,11 +212,24 @@ function selectMode(modeName: string) {
 async function sendMessage() {
   if (agentStore.isAudioChatMode) return;
   isModeMenuOpen.value = false;
+  // While editing a message, the same send action commits the edit (regenerating
+  // from that turn) instead of starting/steering a turn.
+  if (agentStore.isEditingMessage) {
+    await agentStore.submitEditMessage();
+    autoResize();
+    props.conversationAreaRef?.handleSendMessage();
+    return;
+  }
   // Routes to a steer (folded into the running turn) while generating, or a normal
   // new-turn send when idle.
   await agentStore.submitUserMessage();
   autoResize();
   props.conversationAreaRef?.handleSendMessage();
+}
+
+function cancelEdit() {
+  agentStore.cancelEditMessage();
+  autoResize();
 }
 
 function stopCurrentRequest() {

@@ -42,6 +42,11 @@ export type AgentEvent =
       language?: string;
     }
   | {
+      type: "turn-persisted";
+      sessionId: string;
+      turnId: string;
+    }
+  | {
       type: "response";
       text: string;
       sessionId: string;

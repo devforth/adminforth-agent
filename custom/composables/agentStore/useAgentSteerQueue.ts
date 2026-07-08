@@ -174,11 +174,16 @@ export function createAgentSteerQueue({
     void sendMessage(next.text);
   }
 
+  function clear() {
+    queue.value = [];
+  }
+
   return {
     queue,
     enqueue,
     removeQueuedMessage,
     steerQueuedMessage,
     flushNext,
+    clear,
   };
 }

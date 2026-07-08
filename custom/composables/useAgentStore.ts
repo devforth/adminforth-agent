@@ -34,6 +34,14 @@ export const useAgentStore = defineStore('agent', () => {
   const textInput = ref<HTMLTextAreaElement | null>(null);
   const userMessageInput = ref();
   const trimmedUserMessage = computed(() => userMessageInput.value ? userMessageInput.value.trim() : '');
+  // Message-edit state. `editingEnabled` mirrors the server capability (checkpointer +
+  // turn checkpoints). While a message is being edited its id/turnId are held here and
+  // the user's in-progress input is stashed in `savedUserInput` so it can be restored.
+  const editingEnabled = ref(false);
+  const editingMessageId = ref<string | null>(null);
+  const editingMessageTurnId = ref<string | null>(null);
+  const savedUserInput = ref('');
+  const isEditingMessage = computed(() => editingMessageId.value !== null);
   const lastMessage = ref('');
   const isTeleportedToBody = ref(false);
   const setIsTeleportedToBody = (isTeleported: boolean) => {
@@ -55,6 +63,7 @@ export const useAgentStore = defineStore('agent', () => {
     setCurrentChat,
     abortCurrentChatRequest,
     submitToolApproval: submitToolApprovalResponse,
+    sendEditMessage,
   } = createAgentChatManager({
     lastMessage,
     activeModeName,
@@ -275,6 +284,10 @@ export const useAgentStore = defineStore('agent', () => {
     }
   })
   watch(activeSessionId, (newVal: string | null) => {
+    // The edited message lives in the outgoing session's chat, so drop edit mode.
+    if (editingMessageId.value !== null) {
+      exitEditMode();
+    }
     if (newVal) {
       setLocalStorageItem('lastSessionId', newVal);
     }
@@ -448,6 +461,67 @@ export const useAgentStore = defineStore('agent', () => {
     addSystemMessage(RESERVED_SYSTEM_MESSAGE_CONTENT.AGENT_RESPONSE_ABORTED);
   }
 
+  function setEditingEnabled(enabled: boolean) {
+    editingEnabled.value = enabled;
+  }
+
+  // Enter edit mode for a user message: stash the current input, then load the
+  // message's text into the textarea for the user to amend. Allowed mid-generation —
+  // committing the edit stops the running turn (see submitEditMessage).
+  function startEditMessage(message: any) {
+    if (!editingEnabled.value) {
+      return;
+    }
+    const turnId = message?.metadata?.turnId;
+    const messageId = message?.id;
+    if (!turnId || !messageId) {
+      return;
+    }
+    if (editingMessageId.value === null) {
+      savedUserInput.value = userMessageInput.value ?? '';
+    }
+    const text = (message.parts ?? [])
+      .filter((part: any) => part.type === 'text')
+      .map((part: any) => part.text ?? '')
+      .join('');
+    editingMessageId.value = messageId;
+    editingMessageTurnId.value = turnId;
+    userMessageInput.value = text;
+    nextTick(() => focusTextInput());
+  }
+
+  // Leave edit mode and restore whatever the user had been typing before.
+  function exitEditMode() {
+    userMessageInput.value = savedUserInput.value;
+    savedUserInput.value = '';
+    editingMessageId.value = null;
+    editingMessageTurnId.value = null;
+  }
+
+  function cancelEditMessage() {
+    if (editingMessageId.value === null) {
+      return;
+    }
+    exitEditMode();
+    nextTick(() => focusTextInput());
+  }
+
+  async function submitEditMessage() {
+    if (editingMessageId.value === null) {
+      return;
+    }
+    const text = trimmedUserMessage.value;
+    if (!text) {
+      return;
+    }
+    const messageId = editingMessageId.value;
+    const turnId = editingMessageTurnId.value!;
+    steerBuffer.clear();
+    // Restore the stashed input and leave edit mode before the regeneration streams in.
+    exitEditMode();
+    await sendEditMessage({ messageId, turnId, text });
+  }
+
   function resolveInternalRoute(href: string): string | null {
     if (href.startsWith('#')) {
       return `${window.location.pathname}${window.location.search}${href}`;
@@ -533,6 +607,15 @@ export const useAgentStore = defineStore('agent', () => {
     getLocalStorageItem,
     addDebugMessage,
     abortCurrentChatRequestAndAddSystemMessage,
+    //_________-Message editing-_____________
+    editingEnabled,
+    setEditingEnabled,
+    isEditingMessage,
+    editingMessageId,
+    startEditMessage,
+    cancelEditMessage,
+    submitEditMessage,
+    //_______________________________________
     addSystemMessage,
     isAudioChatMode,
     setIsAudioChatMode,

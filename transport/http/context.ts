@@ -5,6 +5,7 @@ import type {
   IAdminForth,
 } from "adminforth";
 import type {
+  HandleEditTurnInput,
   HandleSpeechTurnInput,
   HandleTurnInput,
   RunAndPersistAgentResponseInput,
@@ -13,6 +14,7 @@ import type {
 import type { PluginOptions } from "../../types.js";
 
 export type SessionTurn = {
+  id: string;
   prompt: string;
   response: string;
 };
@@ -21,6 +23,7 @@ export type AgentEndpointsContext = {
   adminforth: IAdminForth;
   options: PluginOptions;
   handleTurn(input: HandleTurnInput): Promise<RunAndPersistAgentResponseResult>;
+  handleEditTurn(input: HandleEditTurnInput): Promise<RunAndPersistAgentResponseResult>;
   handleSpeechTurn(input: HandleSpeechTurnInput): Promise<RunAndPersistAgentResponseResult | null>;
   steer(input: { sessionId: string; message: string }): { id: string; queued: number };
   runAndPersistAgentResponse(input: RunAndPersistAgentResponseInput): Promise<RunAndPersistAgentResponseResult>;
@@ -37,7 +40,7 @@ export type AgentEndpointsContext = {
 
 export type CoreEndpointsContext = Pick<
   AgentEndpointsContext,
-  "options" | "handleTurn" | "handleSpeechTurn" | "steer"
+  "options" | "handleTurn" | "handleEditTurn" | "handleSpeechTurn" | "steer"
 >;
 
 export type SessionEndpointsContext = Pick<

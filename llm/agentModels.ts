@@ -27,6 +27,7 @@ export type AgentRuntimeRunInput = {
   input: { messages: Messages } | Command;
   context: AgentTurnContext;
   observability: AgentTurnObservability;
+  branchFromCheckpointId?: string;
 };
 
 type AgentChatModelSpec = {

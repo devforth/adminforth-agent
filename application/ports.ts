@@ -31,6 +31,7 @@ export type LlmStreamInput = {
   input: { messages: AgentMessage[] } | { resume: unknown };
   context: AgentTurnContext;
   observability: AgentTurnObservability;
+  branchFromCheckpointId?: string;
 };
 
 /**
@@ -65,4 +66,23 @@ export interface LlmPort {
     completionAdapter: AgentModeCompletionAdapter;
     sessionId: string;
   }): Promise<PendingInterrupt[]>;
+
+  /**
+   * Return the session thread's latest (tip) checkpoint id, or null when the thread
+   * has no persisted state. Recorded on each turn so message editing can fork from
+   * the previous turn's checkpoint.
+   */
+  getLatestCheckpointId(input: {
+    completionAdapter: AgentModeCompletionAdapter;
+    sessionId: string;
+  }): Promise<string | null>;
+
+  /**
+   * Drop the entire LangGraph checkpoint thread for a session. Used when editing the
+   * first message, where there is no earlier checkpoint to fork from.
+   */
+  resetThreadCheckpoints(input: {
+    completionAdapter: AgentModeCompletionAdapter;
+    sessionId: string;
+  }): Promise<void>;
 }

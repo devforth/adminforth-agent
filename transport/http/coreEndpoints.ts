@@ -37,6 +37,15 @@ const agentSteerBodySchema = z.object({
   message: z.string().min(1),
 }).strict();
 
+const agentEditBodySchema = z.object({
+  sessionId: z.string(),
+  turnId: z.string(),
+  message: z.string().min(1),
+  mode: z.string().nullish(),
+  timeZone: z.string().optional(),
+  currentPage: currentPageContextSchema.optional(),
+}).strict();
+
 // Sent as multipart/form-data (via multer), so every field arrives as a plain string on the wire.
 // `currentPage` is JSON.stringify'd by the client into a form field and must be parsed back into
 // an object. Zod -> JSON-Schema conversion cannot represent `.transform()` at all (it throws), so
@@ -109,6 +118,34 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
         emit,
         failureLogMessage: "Agent response streaming failed",
         abortLogMessage: "Agent response streaming aborted by the client",
+      });
+      return null;
+    }
+  });
+
+  server.endpoint({
+    method: 'POST',
+    path: `/agent/edit`,
+    request_schema: agentEditBodySchema,
+    handler: async ({ body, adminUser, _raw_express_res, abortSignal }) => {
+      const data = body as z.infer<typeof agentEditBodySchema>;
+      const emit = createSseEventEmitter(_raw_express_res, {
+        vercelAiUiMessageStream: true,
+        closeActiveBlockOnToolStart: true,
+      });
+
+      await ctx.handleEditTurn({
+        prompt: data.message,
+        turnId: data.turnId,
+        sessionId: data.sessionId,
+        modeName: data.mode,
+        userTimeZone: data.timeZone ?? 'UTC',
+        currentPage: data.currentPage,
+        abortSignal,
+        adminUser: adminUser!,
+        emit,
+        failureLogMessage: "Agent message edit streaming failed",
+        abortLogMessage: "Agent message edit streaming aborted by the client",
       });
       return null;
     }

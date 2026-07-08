@@ -1,18 +1,20 @@
 <template>
   <div
-    class="flex items-center justify-center rounded-xl border px-6 border-gray-200 dark:border-gray-700 min-w-0"
+    class="flex items-center justify-center rounded-xl border px-6 border-gray-200 dark:border-gray-700 min-w-0 transition-shadow duration-150"
     @click="handleMarkdownLinkClick"
     :class="[
-      hasVegaLite ? 'w-full my-2' : '',
+      hasVegaLite ? 'w-full my-2' : 'm-2',
       props.role === 'user' ? 'bg-lightListTableHeading dark:bg-darkListTableHeading self-end max-w-[80%] mr-4' 
-        : 'border-none self-start max-w-full'
+        : 'border-none self-start max-w-full',
+      props.highlight ? 'ring-2 ring-lightPrimary dark:ring-darkPrimary w-full max-w-[calc(100%-2rem)]' : ''
     ]"
   >
     <IncremarkContent
       class="text-wrap break-words w-full max-w-full"
       v-if="content"
-      :content="content" 
-      :is-finished="isFinished" 
+      :key="renderNonce"
+      :content="content"
+      :is-finished="isFinished"
       :components="incremarkComponents"
       :incremark-options="incremarkOptions"
     />
@@ -33,7 +35,8 @@
   const props = defineProps<{
     message: string | undefined,
     state: string | undefined,
-    role: IMessage['role']
+    role: IMessage['role'],
+    highlight?: boolean
   }>();
 
   const emit = defineEmits(['toggle-thoughts']);
@@ -49,6 +52,13 @@
 
   const content = computed(() => props.message)
   const isFinished = computed(() => props.state === 'done')
+
+  const renderNonce = ref(0);
+  watch(content, (newContent, oldContent) => {
+    if (isFinished.value && newContent !== oldContent) {
+      renderNonce.value++;
+    }
+  });
   const hasVegaLite = computed(() => props.message?.includes('```vega-lite'))
   const isStateStreaming = computed(() => props.state === 'streaming')
 

@@ -1,4 +1,4 @@
-import { logger, type IAdminForth } from "adminforth";
+import { logger, Filters, type IAdminForth } from "adminforth";
 import { randomUUID } from "crypto";
 import { VegaLiteStreamBuffer } from "../domain/vegaLiteStreamBuffer.js";
 import { buildAgentTurnSystemPrompt } from "../domain/systemPrompt.js";
@@ -15,6 +15,7 @@ import type {
   BaseAgentTurnInput,
   DebugSink,
   HandleTurnInput,
+  HandleEditTurnInput,
   PendingInterrupt,
   RunAndPersistAgentResponseInput,
   RunAndPersistAgentResponseResult,
@@ -32,6 +33,7 @@ type PreparedTurn = {
   observability: AgentTurnObservability;
   resume?: { decision: "approve" | "reject"; interrupts?: PendingInterrupt[] };
   initialResponse?: string;
+  branchFromCheckpointId?: string;
 };
 
 function getApprovalDecision(input: BaseAgentTurnInput) {
@@ -111,6 +113,13 @@ export type RunTurnUseCaseDeps = {
   getAgentSystemPrompt: () => Promise<string>;
   /** True when a persistent checkpointer is configured (not the in-memory MemorySaver). */
   hasPersistentCheckpointer: boolean;
+  /**
+   * True when `turnResource.checkpointIdField` is configured — the tip checkpoint id
+   * is then recorded per turn, enabling message editing / branching.
+   */
+  turnCheckpointsEnabled: boolean;
+  /** Resource config used for the edit ownership check + turn lookups. */
+  sessionResource: PluginOptions["sessionResource"];
   /** Factory for the per-turn debug sink; the concrete impl lives in the llm layer. */
   createDebugSink: () => DebugSink;
 };
@@ -169,11 +178,96 @@ export class RunTurnUseCase {
     return this.pendingInterrupts.get(sessionId) ?? [];
   }
 
+  /** Verify the session exists and belongs to the requesting admin user. */
+  private async assertSessionOwnership(sessionId: string, adminUser: BaseAgentTurnInput["adminUser"]) {
+    const s = this.deps.sessionResource;
+    const session = await this.deps.getAdminforth().resource(s.resourceId).get(
+      [Filters.EQ(s.idField, sessionId)],
+    );
+    if (!session) {
+      throw new Error(`Session "${sessionId}" not found.`);
+    }
+    if (session[s.askerIdField] !== adminUser.pk) {
+      throw new Error(`Session "${sessionId}" does not belong to the current user.`);
+    }
+  }
+
+  /**
+   * Prepare an edit/branch turn: validate ownership, resolve the fork checkpoint from
+   * the previous turn, truncate the conversation after the edited turn, and reuse the
+   * edited turn's id for the regenerated response.
+   */
+  private async prepareEditTurn(input: RunAndPersistAgentResponseInput): Promise<PreparedTurn> {
+    const sequenceDebugSink = this.deps.createDebugSink();
+    const mode = this.resolveMode(input.modeName);
+    const editTurnId = input.editTurnId!;
+
+    if (!this.deps.turnCheckpointsEnabled) {
+      throw new Error("Edit/fork requires checkpointIdField to be configured on turnResource.");
+    }
+    await this.assertSessionOwnership(input.sessionId, input.adminUser);
+
+    const agentTurns = await this.deps.sessions.getAgentTurns(input.sessionId);
+    const targetIndex = agentTurns.findIndex((turn) => turn.id === editTurnId);
+    if (targetIndex === -1) {
+      throw new Error(`Turn "${editTurnId}" not found in session "${input.sessionId}".`);
+    }
+
+    const previous = agentTurns[targetIndex - 1];
+    let branchFromCheckpointId: string | undefined;
+    if (previous) {
+      if (!previous.checkpointId) {
+        throw new Error(
+          `Cannot edit this message: the previous turn has no stored checkpoint to branch from.`,
+        );
+      }
+      branchFromCheckpointId = previous.checkpointId;
+    } else {
+      // No earlier turn to fork from — drop the whole thread and start fresh.
+      await this.deps.llm.resetThreadCheckpoints({
+        completionAdapter: mode.completionAdapter,
+        sessionId: input.sessionId,
+      });
+    }
+
+    // Language-detection context: the kept user messages just before the edited turn.
+    const previousUserMessages: PreviousUserMessage[] = agentTurns
+      .slice(Math.max(0, targetIndex - 2), targetIndex)
+      .map((turn) => ({ text: turn.prompt }));
+
+    // Editing supersedes any in-flight turn state for this session.
+    this.deps.steerBuffer.clear(input.sessionId);
+    this.pendingInterrupts.delete(input.sessionId);
+
+    // Apply the edit + truncate (deletes later turns first, then rewrites the edited turn).
+    await this.deps.sessions.editTurnAndTruncateAfter({
+      sessionId: input.sessionId,
+      turnId: editTurnId,
+      newPrompt: input.prompt,
+    });
+    await this.deps.sessions.touchSession(input.sessionId);
+
+    return {
+      prompt: input.prompt,
+      sessionId: input.sessionId,
+      turnId: editTurnId,
+      previousUserMessages,
+      mode,
+      context: this.buildContext(input, editTurnId),
+      observability: { emit: input.emit, sequenceDebugSink },
+      branchFromCheckpointId,
+    };
+  }
+
   private async prepareTurn(input: RunAndPersistAgentResponseInput): Promise<PreparedTurn> {
     const sequenceDebugSink = this.deps.createDebugSink();
     const mode = this.resolveMode(input.modeName);
     const approvalDecision = getApprovalDecision(input);
     const shouldResume = Boolean(approvalDecision);
+
+    if (input.editTurnId && !shouldResume) {
+      return this.prepareEditTurn(input);
+    }
 
     let turnId: string;
     let previousUserMessages: PreviousUserMessage[] = [];
@@ -281,6 +375,7 @@ export class RunTurnUseCase {
       input: streamInput,
       context: prepared.context,
       observability: prepared.observability,
+      branchFromCheckpointId: prepared.branchFromCheckpointId,
     });
 
     const { emit } = prepared.observability;
@@ -333,6 +428,11 @@ export class RunTurnUseCase {
     input: RunAndPersistAgentResponseInput,
   ): Promise<RunAndPersistAgentResponseResult> {
     const prepared = await this.prepareTurn(input);
+    await prepared.observability.emit?.({
+      type: "turn-persisted",
+      sessionId: prepared.sessionId,
+      turnId: prepared.turnId,
+    });
 
     let fullResponse = prepared.initialResponse ?? "";
     let aborted = false;
@@ -352,11 +452,28 @@ export class RunTurnUseCase {
       }
     }
 
+    // Record the turn's tip checkpoint id ONLY on success, so message editing can
+    // fork from it. On abort/failure leave the previous value untouched (undefined =
+    // don't overwrite). Never let a checkpoint read break response persistence.
+    let checkpointId: string | null | undefined;
+    if (!aborted && !failed && this.deps.turnCheckpointsEnabled) {
+      try {
+        checkpointId = await this.deps.llm.getLatestCheckpointId({
+          completionAdapter: prepared.mode.completionAdapter,
+          sessionId: prepared.sessionId,
+        });
+      } catch (error) {
+        logger.warn(`Failed to read latest checkpoint id for turn "${prepared.turnId}": ${getErrorMessage(error)}`);
+        checkpointId = undefined;
+      }
+    }
+
     prepared.observability.sequenceDebugSink.flush();
     await this.deps.sessions.saveTurnResponse({
       turnId: prepared.turnId,
       responseText: fullResponse,
       debugHistory: prepared.observability.sequenceDebugSink.getHistory(),
+      checkpointId,
     });
 
     return {
@@ -387,6 +504,49 @@ export class RunTurnUseCase {
       emit: input.emit,
       failureLogMessage: input.failureLogMessage ?? "Agent response failed",
       abortLogMessage: input.abortLogMessage ?? "Agent response aborted",
+    });
+
+    if (agentResponse.failed) {
+      await input.emit({
+        type: "error",
+        error: agentResponse.text,
+      });
+    } else if (!agentResponse.aborted) {
+      await input.emit({
+        type: "response",
+        text: agentResponse.text,
+        sessionId: input.sessionId,
+        turnId: agentResponse.turnId,
+      });
+    }
+
+    await input.emit({
+      type: "finish",
+    });
+
+    return agentResponse;
+  }
+
+  async handleEditTurn(input: HandleEditTurnInput) {
+    await input.emit({
+      type: "turn-started",
+      messageId: randomUUID(),
+    });
+
+    const agentResponse = await this.runAndPersistAgentResponse({
+      prompt: input.prompt,
+      sessionId: input.sessionId,
+      modeName: input.modeName,
+      userTimeZone: input.userTimeZone,
+      currentPage: input.currentPage,
+      chatSurface: input.chatSurface,
+      adminPublicOrigin: input.adminPublicOrigin,
+      editTurnId: input.turnId,
+      abortSignal: input.abortSignal,
+      adminUser: input.adminUser,
+      emit: input.emit,
+      failureLogMessage: input.failureLogMessage ?? "Agent message edit failed",
+      abortLogMessage: input.abortLogMessage ?? "Agent message edit aborted",
     });
 
     if (agentResponse.failed) {

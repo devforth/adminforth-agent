@@ -30,9 +30,16 @@ export interface IToolGroup {
 }
 
 export interface IMessage {
+  id?: string;
   role: 'user' | 'assistant' | 'system';
   metadata?: any,
   parts: IPart[];
+}
+
+export interface IStoredMessage {
+  role: 'user' | 'assistant' | 'system';
+  text: string;
+  turnId?: string;
 }
 
 export interface IAgentSession {

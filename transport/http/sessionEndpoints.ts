@@ -79,11 +79,12 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
           title: session[ctx.options.sessionResource.titleField],
           timestamp: session[ctx.options.sessionResource.createdAtField],
           messages: turns.flatMap(turn => {
-            const messages: Array<{ text: string; role: 'user' | 'assistant' | 'system' }> = [];
+            const messages: Array<{ text: string; role: 'user' | 'assistant' | 'system'; turnId: string }> = [];
             if (turn.prompt === AGENT_SYSTEM_TURN_PROMPT) {
               messages.push({
                 text: turn.response,
                 role: 'system',
+                turnId: turn.id,
               });
               return messages;
             }
@@ -91,12 +92,14 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
               messages.push({
                 text: turn.prompt,
                 role: 'user',
+                turnId: turn.id,
               });
             }
             if (turn.response && turn.response !== "not_finished") {
               messages.push({
                 text: turn.response,
                 role: 'assistant',
+                turnId: turn.id,
               });
             }
             return messages;

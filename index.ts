@@ -101,6 +101,8 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       getAdminforth: () => this.adminforth,
       getAgentSystemPrompt: this.getAgentSystemPrompt.bind(this),
       hasPersistentCheckpointer: Boolean(this.options.checkpointResource),
+      turnCheckpointsEnabled: Boolean(this.options.turnResource.checkpointIdField),
+      sessionResource: this.options.sessionResource,
       createDebugSink: createSequenceDebugCollector,
     });
     this.speechTurnService = new SpeechTurnService(
@@ -135,6 +137,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         defaultModeName: this.options.modes[0].name,
         stickByDefault: this.options.stickByDefault ?? false,
         hasAudioAdapter: Boolean(this.options.audioAdapter),
+        editingEnabled: Boolean(this.options.checkpointResource && this.options.turnResource.checkpointIdField),
       }
     });
     if (!this.adminforth.config.customization.customHeadItems) {
@@ -184,6 +187,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       adminforth: this.adminforth,
       options: this.options,
       handleTurn: this.runTurnUseCase.handleTurn.bind(this.runTurnUseCase),
+      handleEditTurn: this.runTurnUseCase.handleEditTurn.bind(this.runTurnUseCase),
       handleSpeechTurn: this.speechTurnService.handle.bind(this.speechTurnService),
       steer: ({ sessionId, message }) => {
         const { id } = this.steerBuffer.add(sessionId, message);
