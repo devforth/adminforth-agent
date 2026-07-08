@@ -52,32 +52,35 @@ export function createAgentSessionManager({
     if (currentSession.value) {
       currentSession.value.messages = currentChat.value?.messages.map((m: any) => {
         const text = m.parts.map((p: IPart) => p.type === 'text' ? p.text : '').join('');
+        const turnId = m.metadata?.turnId;
         if (m.role === 'user' && m.metadata?.steer) {
-          return { role: 'user', text: `${STEER_PERSIST_PREFIX}${text}` };
+          return { role: 'user', text: `${STEER_PERSIST_PREFIX}${text}`, turnId };
         }
-        return { role: m.role, text };
+        return { role: m.role, text, turnId };
       }) || [];
       sessions.value[currentSession.value.sessionId] = currentSession.value;
     }
   }
 
   function mapStoredMessage(m: any): any[] {
+    const turnId = m.turnId;
     if (m.role === 'user' && typeof m.text === 'string' && m.text.includes(STEER_PERSIST_PREFIX)) {
       const [prompt, ...steers] = m.text.split(STEER_PERSIST_PREFIX);
       const mapped: any[] = [];
       if (prompt) {
-        mapped.push({ role: 'user', parts: [{ type: 'text', text: prompt, state: 'done' }] });
+        mapped.push({ id: crypto.randomUUID(), role: 'user', metadata: { turnId }, parts: [{ type: 'text', text: prompt, state: 'done' }] });
       }
       for (const steer of steers) {
         mapped.push({
+          id: crypto.randomUUID(),
           role: 'user',
-          metadata: { steer: true },
+          metadata: { turnId, steer: true },
           parts: [{ type: 'text', text: steer, state: 'done' }],
         });
       }
       return mapped;
     }
-    return [{ role: m.role, parts: [{ type: 'text', text: m.text, state: 'done' }] }];
+    return [{ id: crypto.randomUUID(), role: m.role, metadata: { turnId }, parts: [{ type: 'text', text: m.text, state: 'done' }] }];
   }
 
   async function fetchSession(sessionId: string) {

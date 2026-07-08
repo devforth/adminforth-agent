@@ -1,5 +1,5 @@
 import { DefaultChatTransport } from 'ai';
-import { shallowRef, type Ref } from 'vue';
+import { ref, shallowRef, type Ref } from 'vue';
 import { Chat } from '../../chat';
 import { getCurrentPageContext } from './pageContext';
 // const { DefaultChatTransport } = await import('ai');
@@ -25,6 +25,7 @@ export function createAgentChatManager({
 }: CreateAgentChatManagerOptions) {
   const chats = new Map<string, Chat<any>>();
   const currentChat = shallowRef<Chat<any> | null>();
+  const editingTurnId = ref<string | null>(null);
   const agentApiBase = `${(import.meta as AgentImportMeta).env.VITE_ADMINFORTH_PUBLIC_PATH || ''}/adminapi/v1/agent`;
 
   function replaceLastMessage(message: any) {
@@ -89,6 +90,26 @@ export function createAgentChatManager({
     replaceLastMessage(assistantMessage);
   }
 
+  // Stamp the just-finished turn's id onto its prompt message so it becomes editable
+  // without a session reload. The prompt is the last user message that isn't a
+  // mid-turn steer.
+  function tagCurrentTurnPrompt(turnId: string) {
+    const messages = currentChat.value?.messages;
+    if (!messages) {
+      return;
+    }
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      if (message.role === 'user' && !message.metadata?.steer) {
+        messages.splice(i, 1, {
+          ...message,
+          metadata: { ...(message.metadata ?? {}), turnId },
+        });
+        return;
+      }
+    }
+  }
+
   function handleRealtimeChatData(dataPart: any) {
     if (dataPart?.type === 'data-open-page' && typeof dataPart.data?.targetPath === 'string') {
       onOpenPage(dataPart.data.targetPath);
@@ -97,6 +118,11 @@ export function createAgentChatManager({
 
     if (dataPart?.type === 'data-interrupt' && typeof dataPart.data?.sessionId === 'string') {
       onToolApprovalRequest(dataPart.data.sessionId, dataPart.data.interrupt);
+      return;
+    }
+
+    if (dataPart?.type === 'data-response' && typeof dataPart.data?.turnId === 'string') {
+      tagCurrentTurnPrompt(dataPart.data.turnId);
     }
   }
 
@@ -128,6 +154,11 @@ export function createAgentChatManager({
 
     if (dataPart?.type === 'data-interrupt' && typeof dataPart.data?.sessionId === 'string') {
       onToolApprovalRequest(dataPart.data.sessionId, dataPart.data.interrupt);
+      return;
+    }
+
+    if (dataPart?.type === 'data-response' && typeof dataPart.data?.turnId === 'string') {
+      tagCurrentTurnPrompt(dataPart.data.turnId);
     }
   }
 
@@ -178,7 +209,11 @@ export function createAgentChatManager({
           credentials: 'include',
           prepareSendMessagesRequest({ messages }: any) {
             const message = lastMessage.value;
-            const body = {
+            const headers = {
+              Accept: 'text/event-stream',
+              'x-vercel-ai-ui-message-stream': 'v1',
+            };
+            const body: Record<string, any> = {
               message,
               sessionId,
               timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -186,12 +221,20 @@ export function createAgentChatManager({
               currentPage: getCurrentPageContext(),
             };
 
+            // Editing an existing message branches from its turn: hit /edit, which
+            // truncates every turn after `turnId` and regenerates from that point.
+            if (editingTurnId.value) {
+              body.turnId = editingTurnId.value;
+              return {
+                api: `${agentApiBase}/edit`,
+                headers,
+                body,
+              };
+            }
+
             return {
-              headers: {
-                Accept: 'text/event-stream',
-                'x-vercel-ai-ui-message-stream': 'v1',
-              },
-              body
+              headers,
+              body,
             };
           }
         }),
@@ -208,6 +251,24 @@ export function createAgentChatManager({
 
   function abortCurrentChatRequest() {
     currentChat.value?.stop();
+  }
+
+  // Replace the target user message in place and regenerate from it. The SDK's
+  // `sendMessage({ messageId })` truncates every message after the replaced one
+  // (mirroring the server-side truncate), and `editingTurnId` routes the request
+  // to /edit for the matching turn.
+  async function sendEditMessage({ messageId, turnId, text }: { messageId: string; turnId: string; text: string; }) {
+    const chat = currentChat.value;
+    if (!chat) {
+      return;
+    }
+    editingTurnId.value = turnId;
+    lastMessage.value = text;
+    try {
+      await chat.sendMessage({ text, messageId, metadata: { turnId } });
+    } finally {
+      editingTurnId.value = null;
+    }
   }
 
   async function submitToolApproval(sessionId: string, decision: 'approve' | 'reject') {
@@ -237,5 +298,6 @@ export function createAgentChatManager({
     setCurrentChat,
     abortCurrentChatRequest,
     submitToolApproval,
+    sendEditMessage,
   };
 }

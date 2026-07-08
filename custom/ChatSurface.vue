@@ -78,6 +78,7 @@ const props = defineProps<{
     defaultModeName: string | null;
     stickByDefault: boolean;
     hasAudioAdapter: boolean;
+    editingEnabled: boolean;
   }
   adminUser: any
 }>();
