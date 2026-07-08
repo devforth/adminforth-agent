@@ -97,7 +97,6 @@ export function createAgentSteerQueue({
         state: part?.state === 'streaming' ? 'done' : part?.state,
       }));
       messages[lastIndex] = { ...streamingMessage, parts: frozenParts };
-      console.log('Frozen parts:', frozenParts);
       // 2) Redirect the SDK's in-flight reasoning/text parts into a fresh continuation
       //    message so subsequent deltas (resolved by id reference) land after the steer.
       const continuation: any = { id: crypto.randomUUID(), role: 'assistant', parts: [] };
