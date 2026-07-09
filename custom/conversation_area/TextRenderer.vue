@@ -25,6 +25,7 @@
       <textarea
         v-model="agentStore.userMessageInput"
         class="w-full min-h-24 resize-y bg-transparent text-sm text-gray-900 dark:text-gray-100 border-none focus:outline-none focus:ring-0 p-0"
+        @keydown.esc.prevent="agentStore.cancelEditMessage"
       />
       <EditActionButtons
         class="mt-2 self-end"

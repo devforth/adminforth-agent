@@ -25,6 +25,7 @@
         ]"
         :placeholder="placeholderText"
         @keydown.enter.exact.prevent="sendMessage"
+        @keydown.esc="onEscape"
       />
       <div class="flex items-center justify-between px-2 py-1">
       <div
@@ -220,6 +221,16 @@ async function sendMessage() {
 function cancelEdit() {
   agentStore.cancelEditMessage();
   autoResize();
+}
+
+// Esc discards an in-progress message edit; when not editing it does nothing so the
+// keystroke keeps its default textarea behaviour.
+function onEscape(event: KeyboardEvent) {
+  if (!agentStore.isEditingMessage) {
+    return;
+  }
+  event.preventDefault();
+  cancelEdit();
 }
 
 function stopCurrentRequest() {
