@@ -80,24 +80,11 @@
       />
       <template v-if="!agentStore.isAudioChatMode">
         <template v-if="agentStore.isEditingMessage">
-          <div class="flex items-center gap-3">
-            <Button
-              variant="secondary"
-              class="!p-0 h-7 w-7 mr-1 bg-red-600 text-white hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
-              title="Cancel edit"
-              @click="cancelEdit"
-            >
-              <IconCloseOutline class="w-5 h-5" />
-            </Button>
-            <Button
-              class="!p-0 h-7 w-7"
-              title="Send edited message"
-              @click="sendMessage"
-              :disabled="!agentStore.trimmedUserMessage"
-            >
-              <IconCheckOutline class="w-6 h-6 text-white" />
-            </Button>
-          </div>
+          <EditActionButtons
+            :confirm-disabled="!agentStore.trimmedUserMessage"
+            @cancel="cancelEdit"
+            @confirm="sendMessage"
+          />
         </template>
         <template v-else>
           <Button
@@ -128,7 +115,7 @@
 </template>
 
 <script setup lang="ts">
-import { IconArrowUpOutline, IconAngleDownOutline, IconCloseOutline, IconCheckOutline } from '@iconify-prerendered/vue-flowbite';
+import { IconArrowUpOutline, IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
 import { useTemplateRef, onMounted, ref, onUnmounted, watch, computed } from 'vue';
 import { onClickOutside } from '@vueuse/core'
 import { useAgentStore } from './composables/useAgentStore';
@@ -139,6 +126,7 @@ import { remToPx } from './utils';
 import MicrophoneButton from './speech_recognition_frontend/MicrophoneButon.vue';
 import SteerQueue from './SteerQueue.vue';
 import SteerDebugPanel from './SteerDebugPanel.vue';
+import EditActionButtons from './EditActionButtons.vue';
 
 const props = defineProps<{
   meta: {

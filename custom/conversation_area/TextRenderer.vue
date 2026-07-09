@@ -4,14 +4,14 @@
     @click="handleMarkdownLinkClick"
     :class="[
       hasVegaLite ? 'w-full my-2' : 'm-2',
-      props.role === 'user' ? 'bg-lightListTableHeading dark:bg-darkListTableHeading self-end max-w-[80%] mr-4' 
+      props.role === 'user' ? 'bg-lightListTableHeading dark:bg-darkListTableHeading self-end max-w-[80%] mr-4'
         : 'border-none self-start max-w-full',
-      props.editMode ? 'ring-2 ring-lightPrimary dark:ring-darkPrimary w-full max-w-[calc(100%-2rem)]' : ''
+      props.editMode ? 'ring-2 ring-lightPrimary dark:ring-darkPrimary w-full max-w-[calc(100%-2rem)] flex-col items-stretch py-3' : ''
     ]"
   >
     <IncremarkContent
       class="text-wrap break-words w-full max-w-full"
-      v-if="content"
+      v-if="content && !props.editMode"
       :key="renderNonce"
       :content="content"
       :is-finished="isFinished"
@@ -21,6 +21,18 @@
     <!-- <p v-else class="text-red-500 py-2">
       {{ $t('No content to render') }}
     </p> -->
+    <template v-if="props.editMode">
+      <textarea
+        v-model="agentStore.userMessageInput"
+        class="w-full min-h-24 resize-y bg-transparent text-sm text-gray-900 dark:text-gray-100 border-none focus:outline-none focus:ring-0 p-0"
+      />
+      <EditActionButtons
+        class="mt-2 self-end"
+        :confirm-disabled="!agentStore.trimmedUserMessage"
+        @cancel="agentStore.cancelEditMessage"
+        @confirm="agentStore.submitEditMessage"
+      />
+    </template>
   </div>
 </template>
 
@@ -31,6 +43,7 @@
   import { useAgentStore } from '../composables/useAgentStore';
   import { useCoreStore } from '@/stores/core';
   import type { IMessage } from '../types';
+  import EditActionButtons from '../EditActionButtons.vue';
 
   const props = defineProps<{
     message: string | undefined,
