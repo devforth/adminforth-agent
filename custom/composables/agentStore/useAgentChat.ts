@@ -313,6 +313,16 @@ export function createAgentChatManager({
       return;
     }
     await stopActiveTurnAndWaitForIdle();
+    // The edited text already folds in the turn's steer sub-messages, so drop those extra
+    // user messages first — otherwise they linger after the edit as duplicate bubbles.
+    const withoutTurnSteers = chat.messages.filter((message: any) =>
+      message.id === messageId
+      || message.role !== 'user'
+      || message.metadata?.turnId !== turnId
+    );
+    if (withoutTurnSteers.length !== chat.messages.length) {
+      chat.messages = withoutTurnSteers;
+    }
     editingTurnId.value = turnId;
     lastMessage.value = text;
     try {
