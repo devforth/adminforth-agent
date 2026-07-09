@@ -215,9 +215,11 @@ async function sendMessage() {
   // While editing a message, the same send action commits the edit (regenerating
   // from that turn) instead of starting/steering a turn.
   if (agentStore.isEditingMessage) {
-    await agentStore.submitEditMessage();
-    autoResize();
-    props.conversationAreaRef?.handleSendMessage();
+    const editSubmitted = await agentStore.submitEditMessage();
+    if (editSubmitted) {
+      autoResize();
+      props.conversationAreaRef?.handleSendMessage();
+    }
     return;
   }
   // Routes to a steer (folded into the running turn) while generating, or a normal

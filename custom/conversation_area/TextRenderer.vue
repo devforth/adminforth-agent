@@ -6,7 +6,7 @@
       hasVegaLite ? 'w-full my-2' : 'm-2',
       props.role === 'user' ? 'bg-lightListTableHeading dark:bg-darkListTableHeading self-end max-w-[80%] mr-4' 
         : 'border-none self-start max-w-full',
-      props.highlight ? 'ring-2 ring-lightPrimary dark:ring-darkPrimary w-full max-w-[calc(100%-2rem)]' : ''
+      props.editMode ? 'ring-2 ring-lightPrimary dark:ring-darkPrimary w-full max-w-[calc(100%-2rem)]' : ''
     ]"
   >
     <IncremarkContent
@@ -36,7 +36,7 @@
     message: string | undefined,
     state: string | undefined,
     role: IMessage['role'],
-    highlight?: boolean
+    editMode?: boolean
   }>();
 
   const emit = defineEmits(['toggle-thoughts']);

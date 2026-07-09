@@ -100,12 +100,14 @@ export function createAgentChatManager({
     }
     for (let i = messages.length - 1; i >= 0; i--) {
       const message = messages[i];
-      if (message.role === 'user' && !message.metadata?.steer) {
+      if (message.role === 'user') {
         messages.splice(i, 1, {
           ...message,
           metadata: { ...(message.metadata ?? {}), turnId },
         });
-        return;
+        if (!message.metadata?.steer) {
+          return;
+        }
       }
     }
   }
@@ -308,10 +310,6 @@ export function createAgentChatManager({
   async function sendEditMessage({ messageId, turnId, text }: { messageId: string; turnId: string; text: string; }) {
     const chat = currentChat.value;
     if (!chat) {
-      return;
-    }
-    const currentMessage = chat.messages.find((m: any) => m.id === messageId);
-    if (!currentMessage || currentMessage.parts[0].text.trim() === text.trim()) {
       return;
     }
     await stopActiveTurnAndWaitForIdle();

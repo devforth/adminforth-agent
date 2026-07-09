@@ -41,7 +41,7 @@
         </div>
       </Transition>
     <div
-      v-if="message.role === 'user' && message.metadata?.steer"
+      v-if="message.role === 'user' && message.metadata?.steer && !isBeingEditedTurn"
       class="self-end mr-4 mb-0.5 text-xs italic text-gray-400 dark:text-gray-500"
     >
       {{ $t('Steering instruction') }}
@@ -55,10 +55,10 @@
       :key="part.type"
     >
       <TextRenderer
-        v-if="part.type === 'text' && !checkIfMessageSystemMessage(part.text ?? '')"
-        :message="part.text"
+        v-if="part.type === 'text' && !checkIfMessageSystemMessage(part.text ?? '') && shouldBeShownWhileEditing"
+        :message="isBeingEditedMessage ? agentStore.userMessageInput : part.text"
         :role="props.message.role"
-        :highlight="isBeingEdited"
+        :editMode="isBeingEditedMessage"
         :state="part.state ?? (props.message.role === 'user' ? 'done' : undefined)"
       />
       <ToolApprovalRenderer
@@ -105,13 +105,25 @@
   const canEdit = computed(() =>
     agentStore.editingEnabled
     && props.message.role === 'user'
-    && !props.message.metadata?.steer
+    // && !props.message.metadata?.steer
     && Boolean(props.message.metadata?.turnId)
     && !agentStore.isEditingMessage
   );
 
-  const isBeingEdited = computed(() =>
+  const isBeingEditedMessage = computed(() =>
     Boolean(props.message.id) && props.message.id === agentStore.editingMessageId
+  );
+
+  const isBeingEditedTurn = computed(() =>
+    Boolean(agentStore.editingMessageTurnId && props.message?.metadata?.turnId === agentStore.editingMessageTurnId)
+  );
+
+  const isUserMessage = computed(() => props.message.role === 'user');
+
+  // While editing, hide only the *other* user messages of the edited turn (its steer
+  // sub-messages); the edited message itself and all non-user parts stay visible.
+  const shouldBeShownWhileEditing = computed(() =>
+    !(isBeingEditedTurn.value && isUserMessage.value && !isBeingEditedMessage.value)
   );
 
   function checkIfMessageSystemMessage(message: IMessage): boolean {

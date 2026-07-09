@@ -55,6 +55,7 @@ export function createAgentSteerQueue({
       return;
     }
     const steerMessage: IMessage = {
+      id: crypto.randomUUID(),
       role: 'user',
       metadata: { steer: true },
       parts: [{ type: 'text', text, state: 'done' }],

@@ -19,6 +19,7 @@ import { createAgentChatManager } from './agentStore/useAgentChat';
 import { createAgentPlaceholderController } from './agentStore/useAgentPlaceholder';
 import { createAgentSessionManager } from './agentStore/useAgentSessions';
 import { createAgentSteerQueue } from './agentStore/useAgentSteerQueue';
+import { STEER_PERSIST_PREFIX } from './agentStore/constants';
 
 export const useAgentStore = defineStore('agent', () => {
   const agentTransitions = useAgentTransitions();
@@ -465,6 +466,19 @@ export const useAgentStore = defineStore('agent', () => {
     editingEnabled.value = enabled;
   }
 
+
+  function getCompiledMessageTextWithSteeredParts(message: any): string {
+    const currentTurnUserMessages = currentChat.value?.messages.filter((msg: any) => msg.metadata?.turnId === message?.metadata?.turnId && msg.role === 'user');
+    let messageToCompile = '';
+    for(const msg of currentTurnUserMessages) {
+      const text = (msg.parts ?? [])
+        .filter((part: any) => part.type === 'text')
+        .map((part: any) => part.text ?? '')
+        .join('');
+      messageToCompile += text + ' ';
+    }
+    return messageToCompile.trim();
+  }
   // Enter edit mode for a user message: stash the current input, then load the
   // message's text into the textarea for the user to amend. Allowed mid-generation —
   // committing the edit stops the running turn (see submitEditMessage).
@@ -480,10 +494,7 @@ export const useAgentStore = defineStore('agent', () => {
     if (editingMessageId.value === null) {
       savedUserInput.value = userMessageInput.value ?? '';
     }
-    const text = (message.parts ?? [])
-      .filter((part: any) => part.type === 'text')
-      .map((part: any) => part.text ?? '')
-      .join('');
+    const text = getCompiledMessageTextWithSteeredParts(message);
     editingMessageId.value = messageId;
     editingMessageTurnId.value = turnId;
     userMessageInput.value = text;
@@ -506,20 +517,25 @@ export const useAgentStore = defineStore('agent', () => {
     nextTick(() => focusTextInput());
   }
 
-  async function submitEditMessage() {
+  async function submitEditMessage(): Promise<boolean> {
     if (editingMessageId.value === null) {
-      return;
+      return false;
     }
     const text = trimmedUserMessage.value;
     if (!text) {
-      return;
+      return false;
     }
     const messageId = editingMessageId.value;
     const turnId = editingMessageTurnId.value!;
     steerBuffer.clear();
     // Restore the stashed input and leave edit mode before the regeneration streams in.
     exitEditMode();
+    const lastMessageText = getCompiledMessageTextWithSteeredParts(currentChat.value?.messages.find((m: any) => m.id === messageId));
+    if (lastMessageText.trim() === text.trim()) {
+      return false;
+    }
     await sendEditMessage({ messageId, turnId, text });
+    return true;
   }
 
   function resolveInternalRoute(href: string): string | null {
@@ -612,6 +628,7 @@ export const useAgentStore = defineStore('agent', () => {
     setEditingEnabled,
     isEditingMessage,
     editingMessageId,
+    editingMessageTurnId,
     startEditMessage,
     cancelEditMessage,
     submitEditMessage,
