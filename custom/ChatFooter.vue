@@ -75,10 +75,9 @@
           </div>
         </Transition>
       </div>
-      <MicrophoneButton 
-        v-if="props.meta.hasAudioAdapter"
-        v-show="!agentStore.isEditingMessage"   
-      />
+      <div v-if="props.meta.hasAudioAdapter" v-show="!agentStore.isEditingMessage" class="contents">
+        <MicrophoneButton />
+      </div>
       <template v-if="!agentStore.isAudioChatMode">
         <template v-if="agentStore.isEditingMessage">
           <EditActionButtons
