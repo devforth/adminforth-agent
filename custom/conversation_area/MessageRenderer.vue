@@ -2,11 +2,11 @@
   <div 
     class="relative flex flex-col w-full group/msg" 
   >
-      <div 
-        v-if="canEdit" 
+      <div
+        v-if="showActionsBar"
         class="absolute w-full h-[calc(100%+1.5rem)] pb-8"
-        @mouseenter="showEditButtonOnHover" 
-        @mouseleave="hideEditButtonOnHover"  
+        @mouseenter="showEditButtonOnHover"
+        @mouseleave="hideEditButtonOnHover"
       />
       <Transition
         enter-active-class="transition ease-out duration-200"
@@ -17,20 +17,23 @@
         leave-to-class="opacity-0 scale-95"
       >
         <div
-          v-if="canEdit && showEditButton"
-          class="absolute flex -bottom-6 right-0 self-end p-1 mr-4 mt-0.5 z-20"
-          @mouseenter="showEditButtonOnHover" 
-          @mouseleave="hideEditButtonOnHover" 
+          v-if="showActionsBar && showEditButton"
+          class="absolute flex -bottom-6 p-1 mt-0.5 z-20"
+          :class="isUserMessage ? 'right-0 self-end mr-4' : 'left-0 self-start ml-4'"
+          @mouseenter="showEditButtonOnHover"
+          @mouseleave="hideEditButtonOnHover"
         >
           <button
+            v-if="canCopy"
             type="button"
             class="flex items-center justify-center w-8 h-8 rounded-md text-gray-400 hover:text-lightPrimary dark:hover:text-darkPrimary opacity-60 group-hover/msg:opacity-100 transition-opacity duration-150 hover:scale-110"
             :title="$t('Copy message')"
-            @click="copyMessageToClipboard(message)"
+            @click="copyMessageToClipboard"
           >
             <IconFileCopySolid class="w-5 h-5" />
           </button>
           <button
+            v-if="canEdit"
             type="button"
             class="flex items-center justify-center w-8 h-8 rounded-md text-gray-400 hover:text-lightPrimary dark:hover:text-darkPrimary opacity-60 group-hover/msg:opacity-100 transition-opacity duration-150 hover:scale-110"
             :title="$t('Edit message')"
@@ -120,6 +123,19 @@
 
   const isUserMessage = computed(() => props.message.role === 'user');
 
+  const copyableText = computed(() =>
+    (props.message.parts ?? [])
+      .filter((part: any) => part.type === 'text' && !checkIfMessageSystemMessage(part.text ?? ''))
+      .map((part: any) => part.text ?? '')
+      .join('')
+  );
+  const canCopy = computed(() =>
+    Boolean(copyableText.value.trim()) && !agentStore.isEditingMessage
+  );
+  const showActionsBar = computed(() =>
+    canEdit.value || (!isUserMessage.value && canCopy.value)
+  );
+
   // While editing, hide only the *other* user messages of the edited turn (its steer
   // sub-messages); the edited message itself and all non-user parts stay visible.
   const shouldBeShownWhileEditing = computed(() =>
@@ -139,8 +155,8 @@
     showEditButton.value = false;
   }
 
-  function copyMessageToClipboard(message: IMessage) {
-    navigator.clipboard.writeText(message.parts[0].text ?? '')
+  function copyMessageToClipboard() {
+    navigator.clipboard.writeText(copyableText.value)
       .then(() => {
         alert({ message: 'Message copied to clipboard', variant: 'success' });
       })
