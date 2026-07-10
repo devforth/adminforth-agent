@@ -1,12 +1,12 @@
 <template>
   <div 
     class="relative flex flex-col w-full group/msg" 
+    @mouseenter="showEditButtonOnHover"
+    @mouseleave="hideEditButtonOnHover"
   >
       <div
         v-if="showActionsBar"
         class="absolute w-full h-[calc(100%+1.5rem)] pb-8"
-        @mouseenter="showEditButtonOnHover"
-        @mouseleave="hideEditButtonOnHover"
       />
       <Transition
         enter-active-class="transition ease-out duration-200"

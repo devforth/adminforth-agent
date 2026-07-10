@@ -20,7 +20,7 @@
         rows="1"
         @input="autoResize"
         :class="[
-          'h-8 px-4 py-3 border-b rounded-xl rounded-b-none w-full resize-none overflow-hidden text-lightInputText dark:text-darkInputText rounded-md bg-transparent text-sm bg-gray-50 dark:bg-gray-700 dark:border-gray-600 focus:outline-none',
+          'h-8 px-4 py-3 rounded-xl rounded-b-none w-full resize-none overflow-hidden text-lightInputText dark:text-darkInputText rounded-md bg-transparent text-sm bg-gray-50 dark:bg-gray-700 dark:border-gray-600 focus:outline-none',
           { '!text-base': coreStore.isIos }
         ]"
         :placeholder="placeholderText"

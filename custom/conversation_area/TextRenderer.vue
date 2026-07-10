@@ -1,6 +1,6 @@
 <template>
   <div
-    class="flex items-center justify-center rounded-xl border px-6 border-gray-200 dark:border-gray-700 min-w-0 transition-shadow duration-150"
+    class="flex items-center justify-center rounded-xl border px-6 border-gray-200 dark:border-gray-700 min-w-0 transition-shadow duration-150 z-20"
     @click="handleMarkdownLinkClick"
     :class="[
       hasVegaLite ? 'w-full my-2' : 'm-2',

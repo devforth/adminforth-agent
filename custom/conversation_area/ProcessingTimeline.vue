@@ -16,7 +16,7 @@
       >
         {{ inProgress ? $t('Thinking') : $t('Thoughts') }} 
       </p>
-      
+      <ThreeDotsAnimation v-if="inProgress" />      
       <span v-if="thinkingDuration > 0">({{ (thinkingDuration/1000).toFixed(2) }} s)</span>
       <IconAngleDownOutline 
         v-if="ToolOrReasoningParts.length > 0"
