@@ -1,9 +1,11 @@
 import type {
   AdminUser,
+  AdminUserAuthorizeFunction,
   ChatSurfaceAdapter,
   ChatSurfaceEventSink,
   ChatSurfaceIncomingMessage,
   IAdminForth,
+  IAdminForthEndpointHandlerInput,
 } from "adminforth";
 import { Filters, logger } from "adminforth";
 import type { AgentEventEmitter } from "../../domain/agentEvents.js";
@@ -281,10 +283,43 @@ export class ChatSurfaceService {
     ]);
   }
 
+  private async isAdminUserAuthorized(
+    adminUser: AdminUser,
+    incoming: ChatSurfaceIncomingMessage,
+    request: IAdminForthEndpointHandlerInput,
+  ) {
+    const adminforth = this.getAdminforth();
+    const hooks = adminforth.config.auth!.adminUserAuthorize as AdminUserAuthorizeFunction[];
+    const extra = {
+      body: request.body,
+      query: request.query,
+      headers: request.headers,
+      cookies: request.cookies,
+      requestUrl: request.requestUrl,
+      meta: { chatSurface: incoming.surface },
+      response: request.response,
+    };
+
+    for (const hook of hooks) {
+      const result = await hook({
+        adminUser,
+        response: request.response,
+        adminforth,
+        extra,
+      });
+      if (result?.allowed === false || result?.error) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   async handleMessage(
     adapter: ChatSurfaceAdapter,
     incoming: ChatSurfaceIncomingMessage,
     sink: ChatSurfaceEventSink,
+    request: IAdminForthEndpointHandlerInput,
   ) {
     if (await this.handleLink(incoming, sink)) {
       return;
@@ -309,6 +344,14 @@ export class ChatSurfaceService {
       username: adminUserRecord[adminforth.config.auth!.usernameField],
       dbUser: adminUserRecord,
     };
+
+    if (!await this.isAdminUserAuthorized(adminUser, incoming, request)) {
+      await sink.emit({
+        type: "error",
+        message: "This chat account is not authorized to use AdminForth Agent.",
+      });
+      return;
+    }
 
     const incomingWithAudio = incoming as ChatSurfaceIncomingMessageWithAudio;
     if (incomingWithAudio.audio) {

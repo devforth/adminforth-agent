@@ -3,6 +3,7 @@ import type {
   ChatSurfaceEventSink,
   ChatSurfaceIncomingMessage,
   IAdminForth,
+  IAdminForthEndpointHandlerInput,
 } from "adminforth";
 import type {
   HandleEditTurnInput,
@@ -35,6 +36,7 @@ export type AgentEndpointsContext = {
     adapter: ChatSurfaceAdapter,
     incoming: ChatSurfaceIncomingMessage,
     sink: ChatSurfaceEventSink,
+    request: IAdminForthEndpointHandlerInput,
   ): Promise<void>;
 };
 

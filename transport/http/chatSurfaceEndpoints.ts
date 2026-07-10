@@ -54,7 +54,7 @@ export function setupChatSurfaceEndpoints(ctx: ChatSurfaceEndpointsContext, serv
         const sink = await adapter.createEventSink(surfaceContext, incoming);
 
         try {
-          await ctx.handleChatSurfaceMessage(adapter, incoming, sink);
+          await ctx.handleChatSurfaceMessage(adapter, incoming, sink, endpointInput);
         } finally {
           await sink.close?.();
         }
