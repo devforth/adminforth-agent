@@ -1,5 +1,5 @@
 <template>
-  <div class="mx-4 my-3 max-w-[min(34rem,calc(100%-2rem))] rounded-lg border border-lightPrimary/30 bg-lightNavbar p-4 text-lightListTableHeadingText shadow-sm dark:border-darkPrimary/40 dark:bg-darkNavbar dark:text-darkListTableHeadingText">
+  <div class="mx-4 my-3 max-w-[min(34rem,calc(100%-2rem))] z-20 rounded-lg border border-lightPrimary/30 bg-lightNavbar p-4 text-lightListTableHeadingText shadow-sm dark:border-darkPrimary/40 dark:bg-darkNavbar dark:text-darkListTableHeadingText">
     <div class="flex items-start gap-3">
       <div class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-lightPrimary/10 text-lightPrimary dark:bg-darkPrimary/15 dark:text-darkPrimary">
         <IconExclamationCircleOutline class="h-5 w-5" />
