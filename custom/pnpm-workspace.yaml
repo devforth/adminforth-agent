@@ -1,0 +1,5 @@
+# protobufjs (via @ricky0123/vad-web -> onnxruntime-web) ships a postinstall that
+# generates its CLI typings — irrelevant for a browser bundle, so deny the build.
+# Without an explicit decision pnpm >=11 fails the install with ERR_PNPM_IGNORED_BUILDS.
+allowBuilds:
+  protobufjs: false
