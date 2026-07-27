@@ -61,7 +61,7 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
         [Filters.EQ(ctx.options.sessionResource.idField, sessionId)]
       );
       if (!session) {
-        response.setStatus(404, 'Session not found');
+        response.setStatus(404);
         return {
           error: 'Session not found'
         };
