@@ -89,6 +89,7 @@ export function createAgentSessionManager({
         method: 'POST',
         path: '/agent/get-session-info',
         body: { sessionId },
+        silentError: true,
       });
       if (res.error) {
         console.error('Error fetching session:', res.error);
