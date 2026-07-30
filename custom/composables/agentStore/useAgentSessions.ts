@@ -92,7 +92,6 @@ export function createAgentSessionManager({
         silentError: true,
       });
       if (res.error) {
-        console.error('Error fetching session:', res.error);
         return;
       }
       sessions.value[sessionId] = res.session;
@@ -110,8 +109,10 @@ export function createAgentSessionManager({
     }
     currentSession.value = sessions.value[sessionId];
     setCurrentChat(sessionId);
-    if (currentChat.value.messages.length === 0) {
-      currentChat.value.messages = currentSession.value?.messages.flatMap(mapStoredMessage);
+    if (currentChat.value && currentChat.value.messages.length === 0) {
+      // The session fetch can bail out (deleted/expired session), leaving no stored
+      // messages — keep `messages` an array so consumers can iterate it safely.
+      currentChat.value.messages = (currentSession.value?.messages ?? []).flatMap(mapStoredMessage);
     }
   }
 

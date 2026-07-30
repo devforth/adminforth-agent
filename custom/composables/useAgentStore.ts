@@ -147,13 +147,13 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   async function submitToolApproval(sessionId: string, decision: 'approve' | 'reject') {
-    const message = currentChat.value?.messages
-      .findLast(candidate => candidate.role === 'assistant' && candidate.parts.some(part => {
+    const message = (currentChat.value?.messages ?? [])
+      .findLast(candidate => candidate.role === 'assistant' && (candidate.parts ?? []).some((part: any) => {
         return part.type === 'data-tool-approval'
           && part.data?.sessionId === sessionId
           && part.data?.status === 'pending';
       }));
-    const approvalPart = message?.parts.find(part => {
+    const approvalPart = (message?.parts ?? []).find((part: any) => {
       return part.type === 'data-tool-approval'
         && part.data?.sessionId === sessionId
         && part.data?.status === 'pending';
@@ -190,13 +190,13 @@ export const useAgentStore = defineStore('agent', () => {
     return currentChat.value?.status === 'streaming';
   });
   const hasPendingToolApproval = computed(() => (
-    currentChat.value?.messages.some((message: any) => (
+    (currentChat.value?.messages ?? []).some((message: any) => (
       message.role === 'assistant'
-      && message.parts.some((part: any) => (
+      && (message.parts ?? []).some((part: any) => (
         part.type === 'data-tool-approval'
         && (part.data?.status === 'pending' || part.data?.status === 'processing')
       ))
-    )) ?? false
+    ))
   ));
   const isMessageInputBlocked = computed(() => (
     isResponseInProgress.value || hasPendingToolApproval.value
@@ -468,7 +468,7 @@ export const useAgentStore = defineStore('agent', () => {
 
 
   function getCompiledMessageTextWithSteeredParts(message: any): string {
-    const currentTurnUserMessages = currentChat.value?.messages.filter((msg: any) => msg.metadata?.turnId === message?.metadata?.turnId && msg.role === 'user');
+    const currentTurnUserMessages = (currentChat.value?.messages ?? []).filter((msg: any) => msg.metadata?.turnId === message?.metadata?.turnId && msg.role === 'user');
     let messageToCompile = '';
     for(const msg of currentTurnUserMessages) {
       const text = (msg.parts ?? [])

@@ -67,7 +67,7 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
         };
       }
       if (session[ctx.options.sessionResource.askerIdField] !== userId) {
-        response.setStatus(403, 'Unauthorized');
+        response.setStatus(403);
         return {
           error: 'Unauthorized'
         };
