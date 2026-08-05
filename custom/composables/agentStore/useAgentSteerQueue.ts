@@ -13,12 +13,14 @@ export type QueuedMessage = {
 type CreateAgentSteerQueueOptions = {
   activeSessionId: Ref<string | null>;
   currentChat: ShallowRef<Chat<any> | null | undefined>;
+  isFinalResponseStreaming: Ref<boolean>;
   sendMessage: (text: string) => void | Promise<void>;
 };
 
 export function createAgentSteerQueue({
   activeSessionId,
   currentChat,
+  isFinalResponseStreaming,
   sendMessage,
 }: CreateAgentSteerQueueOptions) {
   const queue = ref<QueuedMessage[]>([]);
@@ -146,7 +148,10 @@ export function createAgentSteerQueue({
   async function steerQueuedMessage(id: string) {
     const item = queue.value.find((candidate: QueuedMessage) => candidate.id === id);
     const sessionId = activeSessionId.value;
-    if (!item || !sessionId || sessionId === PRE_SESSION_ID) {
+    // A steer is only consumed before a subsequent model call. Once the assistant is
+    // streaming its final text there is no such call left, so retain this item for the
+    // normal FIFO follow-up instead of silently losing the instruction server-side.
+    if (!item || !sessionId || sessionId === PRE_SESSION_ID || isFinalResponseStreaming.value) {
       return;
     }
     removeQueuedMessage(id);

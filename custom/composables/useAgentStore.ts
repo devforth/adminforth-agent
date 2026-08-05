@@ -238,9 +238,22 @@ export const useAgentStore = defineStore('agent', () => {
     return status === 'submitted' || status === 'streaming' || hasPendingToolApproval.value;
   });
 
+  // During an assistant text stream, a newly submitted steer cannot be consumed: the
+  // steer middleware only runs before another model call. Keep it in the queue so it
+  // becomes a normal follow-up when the current turn ends.
+  const isFinalResponseStreaming = computed(() => {
+    const chat = currentChat.value as any;
+    const lastMessage = chat?.lastMessage;
+
+    return chat?.status === 'streaming'
+      && lastMessage?.role === 'assistant'
+      && lastMessage.parts?.some((part: any) => part.type === 'text' && part.state === 'streaming');
+  });
+
   const steerBuffer = createAgentSteerQueue({
     activeSessionId,
     currentChat,
+    isFinalResponseStreaming,
     sendMessage,
   });
 
@@ -646,6 +659,7 @@ export const useAgentStore = defineStore('agent', () => {
     //_________-Steer queue-_____________
     submitUserMessage,
     isTurnActive,
+    isFinalResponseStreaming,
     steerQueue: steerBuffer.queue,
     steerQueuedMessage: steerBuffer.steerQueuedMessage,
     removeQueuedMessage: steerBuffer.removeQueuedMessage,

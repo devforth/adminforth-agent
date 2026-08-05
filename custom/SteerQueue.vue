@@ -28,8 +28,11 @@
         </span>
         <button
           type="button"
-          class="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-lightPrimary transition-colors hover:bg-lightPrimary/10 dark:text-darkPrimary dark:hover:bg-darkPrimary/10"
-          :title="$t('Steer into the current response')"
+          class="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-lightPrimary transition-colors hover:bg-lightPrimary/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent dark:text-darkPrimary dark:hover:bg-darkPrimary/10 dark:disabled:hover:bg-transparent"
+          :disabled="agentStore.isFinalResponseStreaming"
+          :title="agentStore.isFinalResponseStreaming
+            ? $t('The final response is streaming; this message will be sent after it finishes')
+            : $t('Steer into the current response')"
           @click="agentStore.steerQueuedMessage(item.id)"
         >
           {{ $t('Steer') }}
