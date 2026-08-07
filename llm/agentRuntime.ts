@@ -10,6 +10,7 @@ import type { AgentToolProvider } from "../tools/agentToolProvider.js";
 import type { AgentRuntimeRunInput, AgentTurnModels } from "./agentModels.js";
 import { contextSchema, toLangchainAgentContext } from "./agentContext.js";
 import type { ApiBasedTool } from "../tools/apiBasedTools.js";
+import { createSystemMessagesMiddleware } from "./middleware/systemMessages.js";
 
 function createHumanInTheLoopInterrupts(
   apiBasedTools: Record<string, ApiBasedTool>,
@@ -55,12 +56,14 @@ export class AgentRuntime {
       descriptionPrefix: "Tool execution pending approval",
     });
     const steerMiddleware = createSteerMiddleware(this.options.steerBuffer);
+    const systemMessagesMiddleware = createSystemMessagesMiddleware()
     const middleware = [
       steerMiddleware,
       apiBasedToolsMiddleware,
       hitlMiddleware,
       ...(input.models.modelMiddleware ?? []),
       sequenceDebugMiddleware,
+      systemMessagesMiddleware,
       summarizationMiddleware({
         model: input.models.summaryModel,
         trigger: { tokens: 1024 * 64 },
