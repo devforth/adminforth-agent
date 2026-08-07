@@ -62,20 +62,18 @@ function formatAdminUserPrompt(adminUser: AdminUser, usernameField: string) {
   ].join("\n");
 }
 
-export function buildAgentTurnSystemPrompt(input: {
-  agentSystemPrompt: string;
+export function buildDynamicSystemPrompt(input: {
   adminUser: AdminUser;
   usernameField: string;
-  userLanguage: DetectedLanguage | null;
+  userLanguage?: DetectedLanguage | null;
   chatSurface?: string;
 }) {
   return [
-    input.agentSystemPrompt,
     formatAdminUserPrompt(input.adminUser, input.usernameField),
     input.chatSurface
       ? `Current chat surface: ${input.chatSurface}. The user is not in the AdminForth web UI, so tools cannot move their browser. When navigate_user returns a link, send that link to the user.`
       : "",
-    formatLanguagePrompt(input.userLanguage),
+    formatLanguagePrompt(input.userLanguage ?? null),
   ].filter(Boolean).join("\n\n");
 }
 

@@ -1,5 +1,5 @@
 import { Command } from "@langchain/langgraph";
-import { HumanMessage, SystemMessage } from "langchain";
+import { HumanMessage } from "langchain";
 import type { AgentRuntime } from "./agentRuntime.js";
 import type { AgentModelFactory } from "./modelFactory.js";
 import { detectUserLanguage, type PreviousUserMessage } from "../domain/languageDetect.js";
@@ -8,11 +8,7 @@ import type { AgentModeCompletionAdapter, LlmPort, LlmStreamInput } from "../app
 import type { AgentMessage, PendingInterrupt } from "../domain/turnTypes.js";
 
 function toLangchainMessages(messages: AgentMessage[]) {
-  return messages.map((message) =>
-    message.role === "system"
-      ? new SystemMessage(message.content)
-      : new HumanMessage(message.content),
-  );
+  return messages.map((message) => new HumanMessage(message.content));
 }
 
 /**
@@ -35,6 +31,7 @@ export class LangGraphLlm implements LlmPort {
 
     const rawStream = await this.runtime.stream({
       models,
+      systemPrompt: input.systemPrompt,
       input: runtimeInput as any,
       context: input.context,
       observability: input.observability,

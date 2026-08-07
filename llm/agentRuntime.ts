@@ -1,5 +1,10 @@
 import type { IAdminForth } from "adminforth";
-import { createAgent, summarizationMiddleware, humanInTheLoopMiddleware } from "langchain";
+import {
+  createAgent,
+  summarizationMiddleware,
+  humanInTheLoopMiddleware,
+  dynamicSystemPromptMiddleware,
+} from "langchain";
 import type { BaseCheckpointSaver } from "@langchain/langgraph";
 import { createApiBasedToolsMiddleware } from "./middleware/apiToolsMiddleware.js";
 import { createSequenceDebugMiddleware, type SequenceDebugCollector } from "./middleware/sequenceDebug.js";
@@ -8,9 +13,10 @@ import type { SteerBuffer } from "../domain/steerBuffer.js";
 import { createAgentLlmMetricsLogger } from "./agentModels.js";
 import type { AgentToolProvider } from "../tools/agentToolProvider.js";
 import type { AgentRuntimeRunInput, AgentTurnModels } from "./agentModels.js";
-import { contextSchema, toLangchainAgentContext } from "./agentContext.js";
+import { contextSchema, toLangchainAgentContext, type AgentContext } from "./agentContext.js";
 import type { ApiBasedTool } from "../tools/apiBasedTools.js";
-import { createSystemMessagesMiddleware } from "./middleware/systemMessages.js";
+import { createLegacySystemMessagesMiddleware } from "./middleware/legacySystemMessages.js";
+import { buildDynamicSystemPrompt } from "../domain/systemPrompt.js";
 
 function createHumanInTheLoopInterrupts(
   apiBasedTools: Record<string, ApiBasedTool>,
@@ -56,14 +62,25 @@ export class AgentRuntime {
       descriptionPrefix: "Tool execution pending approval",
     });
     const steerMiddleware = createSteerMiddleware(this.options.steerBuffer);
-    const systemMessagesMiddleware = createSystemMessagesMiddleware()
+    const legacySystemMessagesMiddleware = createLegacySystemMessagesMiddleware();
+    const usernameField = adminforth.config.auth!.usernameField;
+    const dynamicPromptMiddleware = dynamicSystemPromptMiddleware<AgentContext>(
+      (_state, runtime) =>
+        buildDynamicSystemPrompt({
+          adminUser: runtime.context.adminUser,
+          usernameField,
+          userLanguage: runtime.context.userLanguage,
+          chatSurface: runtime.context.chatSurface,
+        }),
+    );
     const middleware = [
       steerMiddleware,
       apiBasedToolsMiddleware,
       hitlMiddleware,
+      legacySystemMessagesMiddleware,
+      dynamicPromptMiddleware,
       ...(input.models.modelMiddleware ?? []),
       sequenceDebugMiddleware,
-      systemMessagesMiddleware,
       summarizationMiddleware({
         model: input.models.summaryModel,
         trigger: { tokens: 1024 * 64 },
@@ -74,6 +91,11 @@ export class AgentRuntime {
     const agent = createAgent({
       name: this.options.name,
       model: input.models.model,
+      // Passed as a plain string on purpose: LangChain normalizes it to a single text
+      // block, and DynamicSystemPromptMiddleware appends the per-turn half as a second
+      // one. That block split is all the agent owes the provider — whether the boundary
+      // becomes a cache breakpoint is the adapter's call.
+      systemPrompt: input.systemPrompt,
       checkpointer: this.options.getCheckpointer(),
       tools,
       contextSchema,

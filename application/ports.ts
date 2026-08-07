@@ -28,6 +28,7 @@ export type AgentModeCompletionAdapter = CompletionAdapter & {
  */
 export type LlmStreamInput = {
   completionAdapter: AgentModeCompletionAdapter;
+  systemPrompt: string;
   input: { messages: AgentMessage[] } | { resume: unknown };
   context: AgentTurnContext;
   observability: AgentTurnObservability;

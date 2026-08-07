@@ -24,6 +24,7 @@ export type AgentTurnModels = {
 
 export type AgentRuntimeRunInput = {
   models: AgentTurnModels;
+  systemPrompt: string;
   input: { messages: Messages } | Command;
   context: AgentTurnContext;
   observability: AgentTurnObservability;

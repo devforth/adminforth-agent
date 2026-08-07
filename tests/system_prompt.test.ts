@@ -1,13 +1,16 @@
 import {
   DEFAULT_AGENT_SYSTEM_PROMPT,
   appendCustomSystemPrompt,
-  buildAgentTurnSystemPrompt,
+  buildDynamicSystemPrompt,
   buildAgentSystemPrompt,
 } from '../domain/systemPrompt.js';
 
-// Characterization tests for system-prompt assembly (base prompt, per-turn additions,
-// and the resource/skill catalog prompt). Freezes the composed structure and the
-// hidden-resource filtering.
+// Characterization tests for system-prompt assembly. The prompt has two halves: the
+// static one (base prompt + resource/skill catalog + custom prompt), built once and
+// bound to the agent, and the dynamic one, rebuilt from the runtime context before
+// every model call. These freeze the composed structure of each and the
+// hidden-resource filtering. How the two are joined is covered by
+// system_prompt_wiring.test.ts.
 
 describe('adminforth-agent system prompt', () => {
   describe('appendCustomSystemPrompt', () => {
@@ -24,45 +27,52 @@ describe('adminforth-agent system prompt', () => {
     });
   });
 
-  describe('buildAgentTurnSystemPrompt', () => {
+  describe('buildDynamicSystemPrompt', () => {
     const adminUser = { pk: 'u1', dbUser: { email: 'admin@x.io' } } as any;
 
-    it('includes the base prompt, admin user context, and a definite language instruction', () => {
-      const out = buildAgentTurnSystemPrompt({
-        agentSystemPrompt: 'SYS',
+    it('includes the admin user context and a definite language instruction', () => {
+      const out = buildDynamicSystemPrompt({
         adminUser,
         usernameField: 'email',
         userLanguage: { language: 'Ukrainian', code: 'UK', ambiguous: false },
         chatSurface: undefined,
       });
 
-      expect(out).toContain('SYS');
       expect(out).toContain('admin@x.io');
       expect(out).toContain('Respond in Ukrainian (UK).');
       expect(out).not.toContain('Current chat surface');
     });
 
-    it('falls back to a generic language instruction when ambiguous or unknown', () => {
-      const ambiguous = buildAgentTurnSystemPrompt({
-        agentSystemPrompt: 'SYS',
+    it('carries no part of the static half (that one is bound to the agent)', () => {
+      // Anything leaking in here would be re-sent on every model call and would break
+      // the static half's byte-for-byte stability that adapters cache on.
+      const out = buildDynamicSystemPrompt({ adminUser, usernameField: 'email' });
+
+      expect(out).not.toContain(DEFAULT_AGENT_SYSTEM_PROMPT);
+      expect(out).not.toContain('ADMIN_BASE_PATH');
+    });
+
+    it('falls back to a generic language instruction when ambiguous, unknown, or absent', () => {
+      const ambiguous = buildDynamicSystemPrompt({
         adminUser,
         usernameField: 'email',
         userLanguage: { language: 'x', code: 'x', ambiguous: true },
       });
-      const none = buildAgentTurnSystemPrompt({
-        agentSystemPrompt: 'SYS',
+      const none = buildDynamicSystemPrompt({
         adminUser,
         usernameField: 'email',
         userLanguage: null,
       });
+      // Undefined is the HITL-resume case, where no detection ran for this call.
+      const missing = buildDynamicSystemPrompt({ adminUser, usernameField: 'email' });
 
       expect(ambiguous).toContain("Respond in the user's language.");
       expect(none).toContain("Respond in the user's language.");
+      expect(missing).toContain("Respond in the user's language.");
     });
 
     it('adds a chat-surface note when a surface is present', () => {
-      const out = buildAgentTurnSystemPrompt({
-        agentSystemPrompt: 'SYS',
+      const out = buildDynamicSystemPrompt({
         adminUser,
         usernameField: 'email',
         userLanguage: null,

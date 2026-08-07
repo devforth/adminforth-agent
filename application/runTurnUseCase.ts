@@ -1,9 +1,8 @@
 import { logger, Filters, type IAdminForth } from "adminforth";
 import { randomUUID } from "crypto";
 import { VegaLiteStreamBuffer } from "../domain/vegaLiteStreamBuffer.js";
-import { buildAgentTurnSystemPrompt } from "../domain/systemPrompt.js";
 import { getErrorMessage, isAbortError } from "../shared/errors.js";
-import type { PreviousUserMessage } from "../domain/languageDetect.js";
+import type { DetectedLanguage, PreviousUserMessage } from "../domain/languageDetect.js";
 import type { AgentSessionStore } from "../persistence/sessionStore.js";
 import type { SteerBuffer } from "../domain/steerBuffer.js";
 import type { PluginOptions } from "../types.js";
@@ -132,6 +131,7 @@ export type RunTurnUseCaseDeps = {
  */
 export class RunTurnUseCase {
   private readonly pendingInterrupts = new Map<string, PendingInterrupt[]>();
+  private readonly lastDetectedLanguage = new Map<string, DetectedLanguage | null>();
 
   constructor(private readonly deps: RunTurnUseCaseDeps) {}
 
@@ -238,6 +238,7 @@ export class RunTurnUseCase {
     // Editing supersedes any in-flight turn state for this session.
     this.deps.steerBuffer.clear(input.sessionId);
     this.pendingInterrupts.delete(input.sessionId);
+    this.lastDetectedLanguage.delete(input.sessionId);
 
     // Apply the edit + truncate (deletes later turns first, then rewrites the edited turn).
     await this.deps.sessions.editTurnAndTruncateAfter({
@@ -306,8 +307,12 @@ export class RunTurnUseCase {
     };
   }
 
-  private async buildMessages(prepared: PreparedTurn): Promise<AgentMessage[]> {
-    const userLanguage = await this.deps.llm
+  private async resolveUserLanguage(prepared: PreparedTurn): Promise<DetectedLanguage | null> {
+    if (prepared.resume) {
+      return this.lastDetectedLanguage.get(prepared.sessionId) ?? null;
+    }
+
+    const detected = await this.deps.llm
       .detectLanguage({
         completionAdapter: prepared.mode.completionAdapter,
         prompt: prepared.prompt,
@@ -321,19 +326,12 @@ export class RunTurnUseCase {
         return null;
       });
 
-    const adminforth = this.deps.getAdminforth();
-    const systemPrompt = buildAgentTurnSystemPrompt({
-      agentSystemPrompt: await this.deps.getAgentSystemPrompt(),
-      adminUser: prepared.context.adminUser,
-      usernameField: adminforth.config.auth!.usernameField,
-      userLanguage,
-      chatSurface: prepared.context.chatSurface,
-    });
+    this.lastDetectedLanguage.set(prepared.sessionId, detected);
+    return detected;
+  }
 
-    return [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: prepared.prompt },
-    ];
+  private buildMessages(prepared: PreparedTurn): AgentMessage[] {
+    return [{ role: "user", content: prepared.prompt }];
   }
 
   private async handleInterrupt(
@@ -360,6 +358,7 @@ export class RunTurnUseCase {
   }
 
   private async runAgentTurn(prepared: PreparedTurn): Promise<{ text: string }> {
+    const userLanguage = await this.resolveUserLanguage(prepared);
     const streamInput = prepared.resume
       ? {
           resume: buildResumeValue({
@@ -368,12 +367,13 @@ export class RunTurnUseCase {
             prompt: prepared.prompt,
           }),
         }
-      : { messages: await this.buildMessages(prepared) };
+      : { messages: this.buildMessages(prepared) };
 
     const stream = await this.deps.llm.streamTurn({
       completionAdapter: prepared.mode.completionAdapter,
+      systemPrompt: await this.deps.getAgentSystemPrompt(),
       input: streamInput,
-      context: prepared.context,
+      context: { ...prepared.context, userLanguage },
       observability: prepared.observability,
       branchFromCheckpointId: prepared.branchFromCheckpointId,
     });
@@ -417,6 +417,9 @@ export class RunTurnUseCase {
       // done and leftover (unconsumed) steers must not leak into the next turn.
       if (!interrupted) {
         this.deps.steerBuffer.clear(prepared.sessionId);
+        // The detected language is only needed to bridge an interrupt -> resume; once
+        // the turn is done the next one re-detects.
+        this.lastDetectedLanguage.delete(prepared.sessionId);
       }
       if (!this.deps.hasPersistentCheckpointer && !interrupted) {
         this.pendingInterrupts.delete(prepared.sessionId);

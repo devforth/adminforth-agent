@@ -27,14 +27,17 @@ function fakeLlm(
     pendingInterrupts?: Array<{ id: string; count: number }>;
     pendingInterruptsError?: Error;
     latestCheckpointId?: string | null;
+    detectedLanguage?: any;
   } = {},
 ) {
   const calls: any[] = [];
+  const detectLanguageCalls: any[] = [];
   const getPendingInterruptsCalls: any[] = [];
   const getLatestCheckpointIdCalls: any[] = [];
   const resetThreadCalls: any[] = [];
   return {
     calls,
+    detectLanguageCalls,
     getPendingInterruptsCalls,
     getLatestCheckpointIdCalls,
     resetThreadCalls,
@@ -43,8 +46,9 @@ function fakeLlm(
       const factory = opts.streamFor ?? (() => streamOf());
       return factory(calls.length, input);
     },
-    async detectLanguage() {
-      return null;
+    async detectLanguage(input: any) {
+      detectLanguageCalls.push(input);
+      return opts.detectedLanguage ?? null;
     },
     async getPendingInterrupts(input: any) {
       getPendingInterruptsCalls.push(input);
@@ -117,12 +121,14 @@ function buildUseCase(opts: {
   agentTurns?: any[];
   latestCheckpointId?: string | null;
   sessionOwnerPk?: string | null;
+  detectedLanguage?: any;
 } = {}) {
   const llm = fakeLlm({
     streamFor: opts.streamFor,
     pendingInterrupts: opts.pendingInterrupts,
     pendingInterruptsError: opts.pendingInterruptsError,
     latestCheckpointId: opts.latestCheckpointId,
+    detectedLanguage: opts.detectedLanguage,
   });
   const sessions = fakeSessions({ initialResponse: opts.initialResponse, agentTurns: opts.agentTurns });
   const steerBuffer = new SteerBuffer();
@@ -197,6 +203,56 @@ describe('RunTurnUseCase.handleTurn', () => {
     expect(sessions.calls.touchSession).toEqual(['s1']);
     expect(llm.calls).toHaveLength(1);
     expect('messages' in llm.calls[0].input).toBe(true);
+  });
+
+  it('sends only the user message, passing the system prompt and language out-of-band', async () => {
+    // The system prompt must never enter the message history: it used to be prepended
+    // as a SystemMessage per turn, which piled up one copy per turn in the checkpoint.
+    const { useCase, llm } = buildUseCase({
+      streamFor: () => streamOf(text('ok')),
+      detectedLanguage: { language: 'Ukrainian', code: 'UK', ambiguous: false },
+    });
+
+    await useCase.handleTurn(makeInput().input as any);
+
+    expect(llm.calls[0].input.messages).toEqual([{ role: 'user', content: 'hi' }]);
+    expect(llm.calls[0].systemPrompt).toBe('SYS');
+    // The per-turn half travels in the context, to be rebuilt on every model call.
+    expect(llm.calls[0].context.userLanguage).toEqual({
+      language: 'Ukrainian',
+      code: 'UK',
+      ambiguous: false,
+    });
+  });
+
+  it('reuses the detected language on a HITL resume, which has no message to detect from', async () => {
+    const { useCase, llm } = buildUseCase({
+      detectedLanguage: { language: 'Ukrainian', code: 'UK', ambiguous: false },
+      streamFor: (call) =>
+        call === 1
+          ? streamOf(interrupt([{ id: 'int-1', value: {} }]))
+          : streamOf(text('Done')),
+    });
+
+    await useCase.handleTurn(makeInput().input as any);
+    await useCase.handleTurn(makeInput({ prompt: '', approvalDecision: 'approve' }).input as any);
+
+    // Detection ran once, for the original message — not again for the approval.
+    expect(llm.detectLanguageCalls).toHaveLength(1);
+    expect(llm.calls[1].context.userLanguage).toEqual({
+      language: 'Ukrainian',
+      code: 'UK',
+      ambiguous: false,
+    });
+  });
+
+  it('re-detects the language on the next turn (a user may switch languages mid-session)', async () => {
+    const { useCase, llm } = buildUseCase({ streamFor: () => streamOf(text('ok')) });
+
+    await useCase.handleTurn(makeInput().input as any);
+    await useCase.handleTurn(makeInput({ prompt: 'now in english' }).input as any);
+
+    expect(llm.detectLanguageCalls).toHaveLength(2);
   });
 
   it('emits reasoning deltas but excludes reasoning from the persisted response', async () => {

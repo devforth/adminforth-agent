@@ -1,5 +1,5 @@
 import type { AdminUser, AudioAdapter } from "adminforth";
-import type { PreviousUserMessage } from "./languageDetect.js";
+import type { DetectedLanguage } from "./languageDetect.js";
 import type { CurrentPageContext } from "../tools/getUserLocation.js";
 import type { AgentEventEmitter } from "./agentEvents.js";
 
@@ -60,6 +60,7 @@ export type AgentTurnContext = {
   currentPage?: CurrentPageContext;
   chatSurface?: string;
   adminPublicOrigin?: string;
+  userLanguage?: DetectedLanguage | null;
 };
 
 export type AgentTurnObservability = {
@@ -86,12 +87,8 @@ export type HandleTurnInput = TextAgentTurnInput;
 export type HandleSpeechTurnInput = SpeechAgentTurnInput;
 export type HandleEditTurnInput = TextAgentTurnInput & { turnId: string };
 
-/**
- * Provider-agnostic message passed from the application layer to the LLM port.
- * The infrastructure adapter maps it onto concrete LangChain messages.
- */
 export type AgentMessage = {
-  role: "system" | "user";
+  role: "user";
   content: string;
 };
 
