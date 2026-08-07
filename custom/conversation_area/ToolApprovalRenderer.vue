@@ -70,6 +70,12 @@
             {{ data.status === 'processing' ? $t('Processing') : data.status === 'approved' ? $t('Approved') : $t('Rejected') }}
           </span>
         </div>
+        <p
+          v-if="data.error"
+          class="mt-3 text-sm leading-5 text-red-600 dark:text-red-400"
+        >
+          {{ data.error }}
+        </p>
       </div>
     </div>
   </div>

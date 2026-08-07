@@ -161,6 +161,7 @@ export const useAgentStore = defineStore('agent', () => {
 
     if (approvalPart?.data) {
       approvalPart.data.status = 'processing';
+      approvalPart.data.error = undefined;
     }
 
     try {
@@ -172,6 +173,7 @@ export const useAgentStore = defineStore('agent', () => {
     } catch (error) {
       if (approvalPart?.data) {
         approvalPart.data.status = 'pending';
+        approvalPart.data.error = error instanceof Error ? error.message : String(error);
       }
       console.error('Error submitting tool approval', error);
     }

@@ -134,6 +134,11 @@ export function createAgentChatManager({
   }
 
   function handleManualApprovalStreamPart(dataPart: any) {
+    if (dataPart?.type === 'error') {
+      const error = dataPart.errorText ?? dataPart.error;
+      throw new Error(typeof error === 'string' && error ? error : 'Agent approval failed');
+    }
+
     if (dataPart?.type === 'text-delta' && typeof dataPart.delta === 'string') {
       appendTextDelta(dataPart.delta);
       return;
