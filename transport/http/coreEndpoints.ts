@@ -30,6 +30,7 @@ const agentResponseBodySchema = z.object({
 const agentApprovalBodySchema = z.object({
   sessionId: z.string(),
   decision: z.enum(["approve", "reject"]),
+  mode: z.string().nullish(),
 }).strict();
 
 const agentSteerBodySchema = z.object({
@@ -165,6 +166,7 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
       await ctx.handleTurn({
         prompt: "",
         sessionId: data.sessionId,
+        modeName: data.mode,
         approvalDecision: data.decision,
         abortSignal,
         adminUser: adminUser!,

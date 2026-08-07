@@ -344,6 +344,7 @@ export function createAgentChatManager({
       body: JSON.stringify({
         sessionId,
         decision,
+        mode: activeModeName.value,
       }),
     });
 
