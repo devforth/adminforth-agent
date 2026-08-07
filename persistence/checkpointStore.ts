@@ -34,17 +34,23 @@ export class AdminForthCheckpointSaver extends BaseCheckpointSaver {
     return this.adminforth.resource(this.resourceConfig.resourceId);
   }
 
-  private serialize(value: unknown): string | null {
+  /**
+   * Checkpoints contain LangChain message instances. Plain JSON.stringify loses
+   * their constructors, so a resumed HITL middleware cannot recognize AIMessage
+   * tool calls. Use LangGraph's serializer, which preserves those constructors.
+   */
+  private async serialize(value: unknown): Promise<string | null> {
     if (value === undefined || value === null) return null;
-    return JSON.stringify(value);
+    const [encoding, payload] = await this.serde.dumpsTyped(value);
+    if (encoding !== "json") {
+      throw new Error(`Unsupported checkpoint payload encoding "${encoding}".`);
+    }
+    return new TextDecoder().decode(payload);
   }
 
-  private deserialize<T>(value: unknown): T | null {
+  private async deserialize<T>(value: unknown): Promise<T | null> {
     if (value === undefined || value === null) return null;
-    if (typeof value === "string") {
-      return JSON.parse(value) as T;
-    }
-    return value as T;
+    return this.serde.loadsTyped("json", typeof value === "string" ? value : JSON.stringify(value)) as Promise<T>;
   }
 
   private now(): string {
@@ -127,8 +133,8 @@ export class AdminForthCheckpointSaver extends BaseCheckpointSaver {
       [r.taskIdField]: null,
       [r.sequenceField]: 0,
       [r.createdAtField]: createdAt,
-      [r.checkpointPayloadField]: this.serialize(checkpoint),
-      [r.metadataPayloadField]: this.serialize(metadata),
+      [r.checkpointPayloadField]: await this.serialize(checkpoint),
+      [r.metadataPayloadField]: await this.serialize(metadata),
       [r.writesPayloadField]: null,
       [r.schemaVersionField]: 1,
     });
@@ -174,7 +180,7 @@ export class AdminForthCheckpointSaver extends BaseCheckpointSaver {
             [r.createdAtField]: createdAt,
             [r.checkpointPayloadField]: null,
             [r.metadataPayloadField]: null,
-            [r.writesPayloadField]: this.serialize([channel, value] satisfies PendingWrite),
+            [r.writesPayloadField]: await this.serialize([channel, value] satisfies PendingWrite),
             [r.schemaVersionField]: 1,
           });
         } catch (error) {
@@ -228,16 +234,18 @@ export class AdminForthCheckpointSaver extends BaseCheckpointSaver {
       [{ field: r.sequenceField, direction: "asc" }],
     );
 
-    const pendingWrites: CheckpointPendingWrite[] = writesRows.flatMap((row: CheckpointRow) => {
-      const taskId = String(row[r.taskIdField] ?? "");
-      const write = this.deserialize<PendingWrite>(row[r.writesPayloadField]);
-      if (!write) {
-        return [];
-      }
+    const pendingWrites: CheckpointPendingWrite[] = (await Promise.all(
+      writesRows.map(async (row: CheckpointRow) => {
+        const taskId = String(row[r.taskIdField] ?? "");
+        const write = await this.deserialize<PendingWrite>(row[r.writesPayloadField]);
+        if (!write) {
+          return [];
+        }
 
-      const [channel, value] = write;
-      return [[taskId, channel, value]];
-    });
+        const [channel, value] = write;
+        return [[taskId, channel, value] as CheckpointPendingWrite];
+      }),
+    )).flat();
 
     const parentCheckpointId = checkpointRow[r.parentCheckpointIdField]
       ? String(checkpointRow[r.parentCheckpointIdField])
@@ -245,10 +253,10 @@ export class AdminForthCheckpointSaver extends BaseCheckpointSaver {
 
     const tuple: CheckpointTuple = {
       config: this.buildConfig(threadId, checkpointNs, resolvedCheckpointId),
-      checkpoint: this.deserialize<Checkpoint>(
+      checkpoint: await this.deserialize<Checkpoint>(
         checkpointRow[r.checkpointPayloadField],
       ) as Checkpoint,
-      metadata: (this.deserialize<CheckpointMetadata>(
+      metadata: (await this.deserialize<CheckpointMetadata>(
         checkpointRow[r.metadataPayloadField],
       ) ?? {}) as CheckpointMetadata,
       parentConfig: parentCheckpointId
