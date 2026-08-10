@@ -269,9 +269,7 @@ export class RunTurnUseCase {
     const approvalDecision = getApprovalDecision(input);
     const shouldResume = Boolean(approvalDecision);
 
-    console.log(`Preparing turn for session "${input.sessionId}" (resume=${shouldResume})`);
     if (this.requiresSessionOwnership(input)) {
-      console.log(`Asserting session ownership for session "${input.sessionId}"`);
       await this.assertSessionOwnership(input.sessionId, input.adminUser);
     }
 
