@@ -394,6 +394,54 @@ describe('RunTurnUseCase.handleTurn', () => {
     await expect(useCase.handleTurn(input as any)).rejects.not.toThrow('No pending approval');
   });
 
+  it('rejects a normal turn on a session the user does not own, before creating a turn', async () => {
+    const { useCase, sessions, llm } = buildUseCase({
+      sessionOwnerPk: 'someone-else',
+      streamFor: () => streamOf(text('secret')),
+    });
+    const { input } = makeInput();
+
+    await expect(useCase.handleTurn(input as any)).rejects.toThrow(/does not belong/);
+    // Nothing about the victim's session may be touched or streamed back.
+    expect(sessions.calls.createNewTurn).toHaveLength(0);
+    expect(llm.calls).toHaveLength(0);
+  });
+
+  it('rejects a turn on a session that does not exist', async () => {
+    const { useCase } = buildUseCase({ sessionOwnerPk: null });
+    const { input } = makeInput();
+
+    await expect(useCase.handleTurn(input as any)).rejects.toThrow(/not found/);
+  });
+
+  it('rejects an approval resume on a session the user does not own, before resolving interrupts', async () => {
+    const { useCase, llm } = buildUseCase({
+      sessionOwnerPk: 'someone-else',
+      hasPersistentCheckpointer: true,
+      pendingInterrupts: [{ id: 'int-1', count: 1 }],
+    });
+    const { input } = makeInput({ prompt: '', approvalDecision: 'approve' });
+
+    // An attacker must not be able to approve a dangerous tool call pending in
+    // someone else's session.
+    await expect(useCase.handleTurn(input as any)).rejects.toThrow(/does not belong/);
+    expect(llm.getPendingInterruptsCalls).toHaveLength(0);
+    expect(llm.calls).toHaveLength(0);
+  });
+
+  it('allows a chat-surface turn whose session is shared with other linked users', async () => {
+    const { useCase, llm } = buildUseCase({
+      sessionOwnerPk: 'someone-else',
+      streamFor: () => streamOf(text('ok')),
+    });
+    const { input } = makeInput({ chatSurface: 'telegram' });
+
+    const result = await useCase.handleTurn(input as any);
+
+    expect(result.text).toBe('ok');
+    expect(llm.calls).toHaveLength(1);
+  });
+
   it('rejects (does not swallow) an approval with no pending interrupt, after emitting turn-started', async () => {
     const { useCase } = buildUseCase();
     const { input, events } = makeInput({ prompt: '', approvalDecision: 'approve' });

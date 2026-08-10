@@ -178,6 +178,10 @@ export class RunTurnUseCase {
     return this.pendingInterrupts.get(sessionId) ?? [];
   }
 
+  private requiresSessionOwnership(input: BaseAgentTurnInput) {
+    return !input.chatSurface;
+  }
+
   /** Verify the session exists and belongs to the requesting admin user. */
   private async assertSessionOwnership(sessionId: string, adminUser: BaseAgentTurnInput["adminUser"]) {
     const s = this.deps.sessionResource;
@@ -193,9 +197,9 @@ export class RunTurnUseCase {
   }
 
   /**
-   * Prepare an edit/branch turn: validate ownership, resolve the fork checkpoint from
-   * the previous turn, truncate the conversation after the edited turn, and reuse the
-   * edited turn's id for the regenerated response.
+   * Prepare an edit/branch turn: resolve the fork checkpoint from the previous turn,
+   * truncate the conversation after the edited turn, and reuse the edited turn's id
+   * for the regenerated response. Ownership is already asserted by `prepareTurn`.
    */
   private async prepareEditTurn(input: RunAndPersistAgentResponseInput): Promise<PreparedTurn> {
     const sequenceDebugSink = this.deps.createDebugSink();
@@ -205,7 +209,6 @@ export class RunTurnUseCase {
     if (!this.deps.turnCheckpointsEnabled) {
       throw new Error("Edit/fork requires checkpointIdField to be configured on turnResource.");
     }
-    await this.assertSessionOwnership(input.sessionId, input.adminUser);
 
     const agentTurns = await this.deps.sessions.getAgentTurns(input.sessionId);
     const targetIndex = agentTurns.findIndex((turn) => turn.id === editTurnId);
@@ -265,6 +268,12 @@ export class RunTurnUseCase {
     const mode = this.resolveMode(input.modeName);
     const approvalDecision = getApprovalDecision(input);
     const shouldResume = Boolean(approvalDecision);
+
+    console.log(`Preparing turn for session "${input.sessionId}" (resume=${shouldResume})`);
+    if (this.requiresSessionOwnership(input)) {
+      console.log(`Asserting session ownership for session "${input.sessionId}"`);
+      await this.assertSessionOwnership(input.sessionId, input.adminUser);
+    }
 
     if (input.editTurnId && !shouldResume) {
       return this.prepareEditTurn(input);
