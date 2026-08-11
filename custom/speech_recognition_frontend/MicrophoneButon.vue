@@ -126,8 +126,10 @@ async function onStartRecording() {
   agentAudio.playBeep(1000);
 }
 
-function onStopRecording() {
-  agentAudio.playBeep(600);
+function onStopRecording(playBeep = true) {
+  if (playBeep) {
+    agentAudio.playBeep(600);
+  }
   stopUserMedia();
   audioAmplitude.value = 0;
   showAudioWavesAnimation.value = false;
@@ -180,7 +182,7 @@ async function sendRecordForTranscription() {
 onBeforeUnmount(() => {
   stopUserMedia();
   agentStore.setIsAudioChatMode(false);
-  onStopRecording();
+  onStopRecording(false);
   hideAnimationDebounced.cancel();
   sendUserRecordDebounced.cancel();
 });
