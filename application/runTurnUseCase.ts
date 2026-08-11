@@ -183,7 +183,7 @@ export class RunTurnUseCase {
   }
 
   /** Verify the session exists and belongs to the requesting admin user. */
-  private async assertSessionOwnership(sessionId: string, adminUser: BaseAgentTurnInput["adminUser"]) {
+  public async assertSessionOwnership(sessionId: string, adminUser: BaseAgentTurnInput["adminUser"]) {
     const s = this.deps.sessionResource;
     const session = await this.deps.getAdminforth().resource(s.resourceId).get(
       [Filters.EQ(s.idField, sessionId)],

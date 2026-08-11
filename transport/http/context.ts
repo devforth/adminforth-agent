@@ -26,7 +26,7 @@ export type AgentEndpointsContext = {
   handleTurn(input: HandleTurnInput): Promise<RunAndPersistAgentResponseResult>;
   handleEditTurn(input: HandleEditTurnInput): Promise<RunAndPersistAgentResponseResult>;
   handleSpeechTurn(input: HandleSpeechTurnInput): Promise<RunAndPersistAgentResponseResult | null>;
-  steer(input: { sessionId: string; message: string }): { id: string; queued: number };
+  steer(input: { sessionId: string; message: string; adminUser: any }): Promise<{ id: string; queued: number }>;
   runAndPersistAgentResponse(input: RunAndPersistAgentResponseInput): Promise<RunAndPersistAgentResponseResult>;
   getSessionTurns(sessionId: string): Promise<SessionTurn[]>;
   createNewTurn(sessionId: string, prompt: string, response?: string): Promise<string>;

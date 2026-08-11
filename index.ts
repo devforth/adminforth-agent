@@ -189,7 +189,8 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       handleTurn: this.runTurnUseCase.handleTurn.bind(this.runTurnUseCase),
       handleEditTurn: this.runTurnUseCase.handleEditTurn.bind(this.runTurnUseCase),
       handleSpeechTurn: this.speechTurnService.handle.bind(this.speechTurnService),
-      steer: ({ sessionId, message }) => {
+      steer: async ({ sessionId, message, adminUser }) => {
+        await this.runTurnUseCase.assertSessionOwnership(sessionId, adminUser);
         const { id } = this.steerBuffer.add(sessionId, message);
         return { id, queued: this.steerBuffer.size(sessionId) };
       },

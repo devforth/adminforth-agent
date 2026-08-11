@@ -182,14 +182,15 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
     method: 'POST',
     path: `/agent/steer`,
     request_schema: agentSteerBodySchema,
-    handler: async ({ body }) => {
+    handler: async ({ body, adminUser }) => {
       const data = body as z.infer<typeof agentSteerBodySchema>;
       // Fire-and-forget: the steer is buffered and folded into the running turn by the
       // beforeModel steer middleware, which signals `data-steer-applied` on that turn's
       // SSE stream once consumed. This endpoint only confirms it was received/queued.
-      const { id, queued } = ctx.steer({
+      const { id, queued } = await ctx.steer({ 
         sessionId: data.sessionId,
         message: data.message,
+        adminUser: adminUser
       });
       return { ok: true, id, queued };
     }
