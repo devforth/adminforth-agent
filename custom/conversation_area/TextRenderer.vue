@@ -3,7 +3,7 @@
     class="flex items-center justify-center rounded-xl border px-6 border-gray-200 dark:border-gray-700 min-w-0 transition-shadow duration-150 z-20"
     @click="handleMarkdownLinkClick"
     :class="[
-      hasVegaLite ? 'w-full my-2' : 'm-2',
+      hasVegaLite ? 'w-full my-2' : 'my-2',
       props.role === 'user' ? 'bg-lightListTableHeading dark:bg-darkListTableHeading self-end max-w-[80%] mr-4'
         : 'border-none self-start max-w-full',
       props.editMode ? 'ring-2 ring-lightPrimary dark:ring-darkPrimary w-full max-w-[calc(100%-2rem)] flex-col items-stretch py-3' : ''
@@ -162,6 +162,7 @@
   text-decoration-style:dotted;
   color: rgb(0, 0, 0);
   transition: color 0.2s ease;
+  word-break: break-all;
 }
 
 .incremark a.incremark-link:hover {
