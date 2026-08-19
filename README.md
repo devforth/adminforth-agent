@@ -19,6 +19,10 @@ API-based tools, streams its answers token-by-token, and keeps persistent chat s
   by Markdown *skills* you can extend.
 - **Human-in-the-loop approvals** — tools you mark as dangerous pause for explicit
   approve/reject from the user before running.
+- **Mid-turn steering** — send another instruction while the agent is still working; it is
+  folded into the *running* turn before its next model call instead of waiting in line.
+- **Message editing & branching** — edit an earlier message to fork the conversation from
+  that turn's checkpoint: later turns are dropped and the answer is regenerated.
 - **Multiple modes** — expose several models (e.g. *Fast*, *Balanced*, *Smart Thinking*)
   and let users switch between them.
 - **Persistent sessions** — conversations are stored in your database; an optional
@@ -35,6 +39,124 @@ For each user message the plugin creates a *turn*, builds the system prompt (inc
 list of your resources and available skills), streams the model's output back over SSE, and
 persists the prompt/response to your turn resource. Tools are executed through AdminForth's
 API endpoints; conversation memory is kept per session (`thread_id = sessionId`).
+
+## Architecture
+
+The plugin is layered so that the provider-specific parts (LangChain/LangGraph, the
+completion adapter, the checkpointer) sit behind ports and never leak into the turn logic:
+
+| Layer | Directory | Depends on |
+| --- | --- | --- |
+| Domain — prompt building, event vocabulary, buffers | [domain/](domain/) | adminforth types only |
+| Application — the turn use case + ports | [application/](application/) | domain |
+| LLM runtime — LangChain/LangGraph behind `LlmPort` | [llm/](llm/) | application, domain, tools |
+| Tools & skills — API tools, progressive disclosure | [tools/](tools/) | AdminForth API layer |
+| Persistence — sessions, turns, checkpoints | [persistence/](persistence/) | AdminForth resources |
+| Transport — HTTP endpoints, SSE, external surfaces | [transport/](transport/) | application |
+| Frontend — Vue 3 + Pinia chat surface | [custom/](custom/) | HTTP + SSE contract |
+
+```mermaid
+flowchart TB
+    UI["Admin UI - custom/<br/>Vue 3 + Pinia chat surface"]
+    TR["transport/<br/>HTTP endpoints, SSE, external surfaces"]
+    APP["application/<br/>RunTurnUseCase + LlmPort"]
+    DOM["domain/<br/>prompt building, steer buffer,<br/>events, language detection"]
+    LLMS["llm/<br/>LangGraph agent, middleware chain, models"]
+    TLS["tools/<br/>API tools + skills,<br/>progressive disclosure"]
+    PRS["persistence/<br/>sessions, turns, checkpoints"]
+
+    AF[("AdminForth core<br/>resources, API layer, auth")]
+    MODEL(["Completion adapter<br/>OpenAI / Anthropic / Gemini"])
+    ADPT(["Audio and chat surface adapters<br/>STT / TTS, Telegram"])
+
+    UI <-->|"POST + SSE"| TR
+    TR <--> ADPT
+    TR --> APP
+    TR -->|"session CRUD"| PRS
+    APP --> DOM
+    APP --> PRS
+    APP -->|"LlmPort"| LLMS
+    LLMS --> MODEL
+    LLMS --> TLS
+    LLMS -->|"checkpointer"| PRS
+    TLS --> AF
+    PRS --> AF
+```
+
+Every arrow into `AdminForth core` goes through its ordinary resource/API layer, so your
+access rules, hooks and validation apply to the agent exactly as they do to a human admin.
+
+### One turn, end to end
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as User
+    participant UI as Chat UI (useAgentChat)
+    participant EP as POST /agent/response
+    participant UC as RunTurnUseCase
+    participant DB as sessions and turns
+    participant LLM as LangGraphLlm + AgentRuntime
+    participant M as Model (completion adapter)
+    participant T as API tool (AdminForth API layer)
+
+    U->>UI: type a message
+    UI->>EP: message, sessionId, mode, timeZone, currentPage
+    EP->>UC: handleTurn
+    UC->>DB: assert session ownership
+    UC->>DB: create turn, response = not_finished
+    UC-->>UI: data-turn-persisted with turnId
+    UC->>M: detect user language (small side call)
+    UC->>LLM: streamTurn with system prompt, messages, context
+
+    loop agent loop, recursionLimit 100
+        LLM->>LLM: steer middleware drains SteerBuffer
+        LLM->>M: model call with currently enabled tools
+        M-->>LLM: reasoning and text deltas
+        LLM-->>UI: reasoning-delta and text-delta frames
+        M-->>LLM: tool call
+        alt tool has agent.isDangerous
+            LLM-->>UI: data-interrupt, generation pauses
+            U->>UI: approve or reject
+            UI->>EP: POST /agent/approval
+            EP->>UC: resume the interrupted graph
+        else safe tool
+            LLM->>T: execute through the API layer
+            T-->>LLM: YAML result plus durationMs
+            LLM-->>UI: data-tool-call start and end
+        end
+    end
+
+    LLM-->>UC: stream ends
+    UC->>LLM: getLatestCheckpointId, the fork point for edits
+    UC->>DB: save response, debug trace, checkpointId
+    UC-->>UI: data-response then finish
+```
+
+Two side channels run on top of that flow:
+
+- **Steering** — `POST /agent/steer` buffers a message in the in-process `SteerBuffer`;
+  the `beforeModel` steer middleware folds it in as a user message before the next model
+  call and emits `data-steer-applied` on the turn's already-open stream.
+- **Editing / branching** — `POST /agent/edit` forks from the previous turn's stored
+  checkpoint id, truncates the later turns, and regenerates. Requires both
+  `checkpointResource` and `turnResource.checkpointIdField`.
+
+### Progressive tool & skill disclosure
+
+```mermaid
+flowchart LR
+    A["Turn starts"] --> B["Exposed tools:<br/>get_resource, get_user_location,<br/>navigate_user, fetch_skill, fetch_tool_schema"]
+    B --> C{"Needs more than<br/>reading schema?"}
+    C -- no --> D["Answer with the base tools"]
+    C -- yes --> E["fetch_skill returns the SKILL.md<br/>for the matching skill"]
+    E --> F["fetch_tool_schema loads one<br/>API tool schema by name"]
+    F --> G["ApiBasedToolsMiddleware sees the<br/>status 200 tool message and adds that<br/>tool to the next model call"]
+    G --> H{"agent.isDangerous?"}
+    H -- yes --> I["humanInTheLoopMiddleware interrupt,<br/>approve or reject in the UI"]
+    H -- no --> J["Execute through the AdminForth API layer"]
+    I -- approved --> J
+```
 
 ## Requirements
 
@@ -78,7 +200,6 @@ const sessionsResource: AdminForthResourceInput = {
   columns: [
     { name: 'id', primaryKey: true, type: AdminForthDataTypes.STRING, fillOnCreate: () => randomUUID() },
     { name: 'title', type: AdminForthDataTypes.STRING },
-    { name: 'turns', type: AdminForthDataTypes.INTEGER },
     { name: 'asker_id', type: AdminForthDataTypes.STRING },
     { name: 'created_at', type: AdminForthDataTypes.DATETIME, fillOnCreate: () => new Date().toISOString() },
   ],
@@ -106,6 +227,9 @@ const turnsResource: AdminForthResourceInput = {
     { name: 'created_at', type: AdminForthDataTypes.DATETIME, fillOnCreate: () => new Date().toISOString() },
     { name: 'prompt', type: AdminForthDataTypes.TEXT },
     { name: 'response', type: AdminForthDataTypes.TEXT },
+    // Optional: map via turnResource.checkpointIdField. Stores each turn's tip
+    // checkpoint id — required for message editing / branching.
+    { name: 'checkpoint_id', type: AdminForthDataTypes.STRING },
     // Optional: add a `debug` TEXT column and map it via turnResource.debugField
     // to store per-turn debug traces.
   ],
@@ -180,7 +304,6 @@ export const globalPlugins = [
       resourceId: 'sessions',
       idField: 'id',
       titleField: 'title',
-      turnsField: 'turns',
       askerIdField: 'asker_id',
       createdAtField: 'created_at',
     },
@@ -191,6 +314,8 @@ export const globalPlugins = [
       createdAtField: 'created_at',
       promptField: 'prompt',
       responseField: 'response',
+      // Enables message editing / branching (together with checkpointResource below).
+      checkpointIdField: 'checkpoint_id',
     },
 
     // Optional but recommended in production:
@@ -254,12 +379,21 @@ That's it — a chat panel now appears in the admin UI.
 
 ### `sessionResource` fields
 
-`resourceId`, `idField`, `titleField`, `turnsField`, `askerIdField`, `createdAtField`.
+`resourceId`, `idField`, `titleField`, `askerIdField`, `createdAtField`.
+
+> `turnsField` is **deprecated** and ignored — session turns are looked up through
+> `turnResource.sessionIdField`. It still type-checks for backward compatibility and will be
+> removed in a future major version.
 
 ### `turnResource` fields
 
 `resourceId`, `idField`, `sessionIdField`, `createdAtField`, `promptField`, `responseField`,
-and optional `debugField` (when set, per-turn debug traces are written to it).
+plus two optional ones:
+
+| Field | Effect |
+| --- | --- |
+| `debugField` | Per-turn debug traces are written to this column. |
+| `checkpointIdField` | Each successful turn's tip checkpoint id is stored, which is what **message editing / branching** forks from. Editing needs this *and* `checkpointResource`; without both, the chat UI hides the edit action and `POST /agent/edit` rejects the request. |
 
 > **Reasoning effort** is set on the completion adapter (e.g.
 > `extraRequestBodyParameters: { reasoning: { effort } }`), not on the plugin.
@@ -273,7 +407,8 @@ permissions and validation are enforced.
 
 To keep the model focused, tools are disclosed progressively:
 
-- `get_resource` is always available (to inspect resource structure).
+- Always available: `get_resource` (inspect resource structure), `get_user_location`,
+  `navigate_user`, and the two discovery tools `fetch_skill` / `fetch_tool_schema`.
 - The agent reads a **skill** (a `SKILL.md` file) to learn which tools a task needs, then
   loads those tool schemas on demand.
 
@@ -287,7 +422,11 @@ directories are also discovered.
 Tools whose definition marks them dangerous (`agent.isDangerous === true`) trigger an
 approval interrupt: generation pauses and the UI shows an approve/reject prompt. The client
 resolves it via `POST /agent/approval`, and the run resumes (or, on reject, the model is
-told the action was declined). Approval state is currently held per process instance.
+told the action was declined).
+
+Where the pending approval lives depends on your setup: with `checkpointResource` configured
+the LangGraph checkpoint is authoritative, so a resume survives a restart and works across
+instances; with the in-memory fallback the state is held per process instance.
 
 ## Voice
 
@@ -311,7 +450,9 @@ All routes are registered under your AdminForth API base path.
 | Method & path | Purpose |
 | --- | --- |
 | `POST /agent/response` | Send a message; streams the answer over SSE. |
+| `POST /agent/edit` | Edit a previous message: forks from its turn's checkpoint, truncates later turns, regenerates. |
 | `POST /agent/approval` | Approve/reject a pending human-in-the-loop tool call. |
+| `POST /agent/steer` | Buffer a mid-turn instruction; folded into the running turn before the next model call. |
 | `POST /agent/speech-response` | Multipart audio upload; streams transcript + answer (+ audio). |
 | `POST /agent/get-placeholder-messages` | Placeholder prompts for the chat textarea. |
 | `POST /agent/get-sessions` | List chat sessions. |
@@ -319,22 +460,26 @@ All routes are registered under your AdminForth API base path.
 | `POST /agent/create-session` | Create a new session. |
 | `POST /agent/delete-session` | Delete a session and its turns. |
 | `POST /agent/add-system-message-to-turns` | Append a system message turn. |
+| `POST /agent/append-steer-to-turn` | Persist a steer into the running turn's stored prompt. |
 | `POST /agent/surface/<name>/webhook` | Inbound webhook for an external chat surface. |
 
-The `/agent/response` and `/agent/approval` streams use the Vercel AI UI message stream
-format (`x-vercel-ai-ui-message-stream: v1`); the frontend consumes them directly.
+The `/agent/response`, `/agent/edit` and `/agent/approval` streams use the Vercel AI UI
+message stream format (`x-vercel-ai-ui-message-stream: v1`); the frontend consumes them
+directly. `/agent/speech-response` uses the plugin's own bare event names instead.
 
 ## Contributing / tests
 
 This package is developed inside the [AdminForth monorepo](https://github.com/devforth/adminforth).
-Unit and characterization tests for the plugin live in `tests/jest_tests/`
-(`adminforth_agent_*.test.ts`) and run with:
+The plugin carries its own self-contained Jest suite in [tests/](tests/) — run it from the
+plugin root:
 
 ```bash
-cd tests/jest_tests
 pnpm install
 pnpm test
 ```
+
+A couple of integration-level agent tests (`adminforth_agent_*.test.ts`) still live in the
+monorepo's `tests/jest_tests/` and run from that directory.
 
 ## About AdminForth
 
