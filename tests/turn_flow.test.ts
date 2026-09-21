@@ -1,6 +1,6 @@
 import { RunTurnUseCase, buildResumeValue } from '../application/runTurnUseCase.js';
 import { SteerBuffer } from '../domain/steerBuffer.js';
-import type { AgentStreamChunk } from '../domain/turnTypes.js';
+import type { AgentStreamChunk, PendingInterrupt } from '../domain/turnTypes.js';
 
 // Characterization tests for the turn-orchestration flow (the layer between the HTTP
 // endpoint and the LLM). We drive the REAL RunTurnUseCase, faking only the two true
@@ -18,14 +18,13 @@ const text = (delta: string): AgentStreamChunk => ({ kind: 'text', delta });
 const reasoning = (delta: string): AgentStreamChunk => ({ kind: 'reasoning', delta });
 const interrupt = (
   value: unknown,
-  descriptors: Array<{ id: string; count: number }> = [{ id: 'int-1', count: 1 }],
-  requests: Array<{ toolName: string; args: Record<string, unknown> }> = [],
-): AgentStreamChunk => ({ kind: 'interrupt', interrupt: value, descriptors, requests });
+  descriptors: PendingInterrupt[] = [{ id: 'int-1', count: 1, requests: [] }],
+): AgentStreamChunk => ({ kind: 'interrupt', interrupt: value, descriptors });
 
 function fakeLlm(
   opts: {
     streamFor?: (call: number, input: any) => AsyncIterable<AgentStreamChunk>;
-    pendingInterrupts?: Array<{ id: string; count: number }>;
+    pendingInterrupts?: PendingInterrupt[];
     pendingInterruptsError?: Error;
     latestCheckpointId?: string | null;
     detectedLanguage?: any;
@@ -115,7 +114,7 @@ const SESSION_RESOURCE = {
 function buildUseCase(opts: {
   streamFor?: (call: number, input: any) => AsyncIterable<AgentStreamChunk>;
   initialResponse?: string;
-  pendingInterrupts?: Array<{ id: string; count: number }>;
+  pendingInterrupts?: PendingInterrupt[];
   pendingInterruptsError?: Error;
   hasPersistentCheckpointer?: boolean;
   turnCheckpointsEnabled?: boolean;
@@ -370,7 +369,7 @@ describe('RunTurnUseCase.handleTurn', () => {
     const { useCase, llm } = buildUseCase({
       hasPersistentCheckpointer: true,
       initialResponse: 'prev ',
-      pendingInterrupts: [{ id: 'int-1', count: 1 }],
+      pendingInterrupts: [{ id: 'int-1', count: 1, requests: [] }],
       streamFor: () => streamOf(text('Resumed')),
     });
     // No interrupt cached in this process (restart / other instance); the checkpoint is authoritative.
@@ -419,7 +418,7 @@ describe('RunTurnUseCase.handleTurn', () => {
     const { useCase, llm } = buildUseCase({
       sessionOwnerPk: 'someone-else',
       hasPersistentCheckpointer: true,
-      pendingInterrupts: [{ id: 'int-1', count: 1 }],
+      pendingInterrupts: [{ id: 'int-1', count: 1, requests: [] }],
     });
     const { input } = makeInput({ prompt: '', approvalDecision: 'approve' });
 
@@ -566,5 +565,115 @@ describe('buildResumeValue', () => {
 
   it('throws when there is no interrupt to resume', () => {
     expect(() => buildResumeValue({ decision: 'approve', interrupts: [] })).toThrow('No pending approval interrupt');
+  });
+});
+
+// A pending approval leaves the provider thread holding a tool call with no result. If a
+// new message were simply appended, the provider would reject the whole thread ("No tool
+// output found for function call ..."), which is unrecoverable for the session. Sending a
+// message means the user moved on, so the pending call must be rejected with it.
+describe('RunTurnUseCase — a new message while an approval is pending', () => {
+  it('rejects the pending call and carries the new prompt in the rejection', async () => {
+    const { useCase, llm, sessions } = buildUseCase({
+      streamFor: (call) =>
+        call === 1
+          ? streamOf(interrupt([{ id: 'int-1', value: {} }]))
+          : streamOf(text('ok')),
+    });
+
+    await useCase.handleTurn(makeInput().input as any);
+    await useCase.handleTurn(makeInput({ prompt: 'never mind, do X instead' }).input as any);
+
+    expect(llm.calls[1].input.resume).toEqual({
+      decisions: [{
+        type: 'reject',
+        message: expect.stringContaining('never mind, do X instead'),
+      }],
+    });
+    // The prompt still gets its own turn, so the conversation history stays complete.
+    expect(sessions.calls.createNewTurn).toHaveLength(2);
+    expect(sessions.calls.createNewTurn[1]).toEqual({ sessionId: 's1', prompt: 'never mind, do X instead' });
+    expect(sessions.calls.getResumeState).toBe(0);
+  });
+
+  it('reads the pending call from the checkpoint (page reloaded, or another instance)', async () => {
+    const { useCase, llm, sessions } = buildUseCase({
+      hasPersistentCheckpointer: true,
+      pendingInterrupts: [{ id: 'int-1', count: 2, requests: [] }],
+      streamFor: () => streamOf(text('ok')),
+    });
+
+    await useCase.handleTurn(makeInput({ prompt: 'forget it' }).input as any);
+
+    // Nothing is cached in this process, yet the orphan tool call must still be answered —
+    // one decision per pending call.
+    expect(llm.calls[0].input.resume.decisions).toHaveLength(2);
+    expect(sessions.calls.createNewTurn).toHaveLength(1);
+  });
+
+  it('detects the language of the new prompt (it is a real user message, not a resume)', async () => {
+    const { useCase, llm } = buildUseCase({
+      hasPersistentCheckpointer: true,
+      pendingInterrupts: [{ id: 'int-1', count: 1, requests: [] }],
+      detectedLanguage: { language: 'Ukrainian', code: 'UK', ambiguous: false },
+      streamFor: () => streamOf(text('ok')),
+    });
+
+    await useCase.handleTurn(makeInput({ prompt: 'забудь' }).input as any);
+
+    expect(llm.detectLanguageCalls).toHaveLength(1);
+    expect(llm.calls[0].context.userLanguage).toEqual({
+      language: 'Ukrainian',
+      code: 'UK',
+      ambiguous: false,
+    });
+  });
+
+  it('starts an ordinary turn when nothing is pending', async () => {
+    const { useCase, llm } = buildUseCase({
+      hasPersistentCheckpointer: true,
+      pendingInterrupts: [],
+      streamFor: () => streamOf(text('ok')),
+    });
+
+    await useCase.handleTurn(makeInput().input as any);
+
+    expect('messages' in llm.calls[0].input).toBe(true);
+  });
+});
+
+// The approval prompt lives only in the browser, so a client that (re)loads a conversation
+// has to be able to rebuild it from the agent's persisted state.
+describe('RunTurnUseCase.getPendingApprovals', () => {
+  it('describes the pending tool calls in plain language', async () => {
+    const { useCase } = buildUseCase({
+      hasPersistentCheckpointer: true,
+      pendingInterrupts: [{
+        id: 'int-1',
+        count: 1,
+        requests: [{ toolName: 'delete_record', args: { resourceId: 'cars', primaryKey: '10' } }],
+      }],
+    });
+
+    expect(await useCase.getPendingApprovals('s1')).toEqual([
+      'Delete record with id:10 from cars — this cannot be undone',
+    ]);
+  });
+
+  it('is empty when nothing is pending', async () => {
+    const { useCase } = buildUseCase({ hasPersistentCheckpointer: true, pendingInterrupts: [] });
+
+    expect(await useCase.getPendingApprovals('s1')).toEqual([]);
+  });
+
+  it('does not fail the conversation load when the checkpoint store is unavailable', async () => {
+    const { useCase } = buildUseCase({
+      hasPersistentCheckpointer: true,
+      pendingInterruptsError: new Error('checkpoint DB unavailable'),
+    });
+
+    // Unlike a resume, this is a read for display: the user still gets their history, and
+    // the implicit reject in `prepareTurn` keeps the session recoverable.
+    expect(await useCase.getPendingApprovals('s1')).toEqual([]);
   });
 });

@@ -72,12 +72,18 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
           error: 'Unauthorized'
         };
       }
-      const turns = await ctx.getSessionTurns(sessionId);
+      const [turns, pendingApprovals] = await Promise.all([
+        ctx.getSessionTurns(sessionId),
+        // The approval prompt lives only in the browser, so a reload has to rebuild it
+        // from the agent's persisted state — otherwise the user cannot answer it.
+        ctx.getPendingApprovals(sessionId),
+      ]);
       return {
         session: {
           sessionId,
           title: session[ctx.options.sessionResource.titleField],
           timestamp: session[ctx.options.sessionResource.createdAtField],
+          pendingApprovals,
           messages: turns.flatMap(turn => {
             const messages: Array<{ text: string; role: 'user' | 'assistant' | 'system'; turnId: string }> = [];
             if (turn.prompt === AGENT_SYSTEM_TURN_PROMPT) {

@@ -10,8 +10,23 @@ function getInterruptItems(interrupt: unknown): unknown[] {
 }
 
 /**
- * Normalize raw LangGraph interrupt object(s) into provider-agnostic descriptors.
- * Kept in the llm layer so the LangGraph interrupt shape never reaches the app.
+ * Pull the tool calls out of one interrupt's action requests so they can be described
+ * to the user. Drops entries the provider did not name.
+ */
+function toApprovalRequests(actionRequests: unknown[]): ApprovalRequest[] {
+  return actionRequests.flatMap((actionRequest: any) => {
+    const toolName = actionRequest?.name ?? actionRequest?.action;
+
+    return typeof toolName === "string" && toolName
+      ? [{ toolName, args: (actionRequest?.args ?? {}) as Record<string, unknown> }]
+      : [];
+  });
+}
+
+/**
+ * Normalize raw LangGraph interrupt object(s) into provider-agnostic descriptors, each
+ * carrying the tool calls it is waiting on. Kept in the llm layer so the LangGraph
+ * interrupt shape never reaches the app.
  */
 export function normalizeInterrupts(interrupt: unknown): PendingInterrupt[] {
   return getInterruptItems(interrupt).flatMap((item) => {
@@ -26,36 +41,12 @@ export function normalizeInterrupts(interrupt: unknown): PendingInterrupt[] {
       : undefined;
 
     return typeof interruptId === "string" && Array.isArray(actionRequests)
-      ? [{ id: interruptId, count: actionRequests.length }]
+      ? [{
+          id: interruptId,
+          count: actionRequests.length,
+          requests: toApprovalRequests(actionRequests),
+        }]
       : [];
-  });
-}
-
-/**
- * Pull the tool calls out of the raw interrupt so the application layer can describe
- * them to the user. Like {@link normalizeInterrupts}, this keeps the LangGraph shape
- * from leaking past the llm layer.
- */
-export function extractApprovalRequests(interrupt: unknown): ApprovalRequest[] {
-  return getInterruptItems(interrupt).flatMap((item) => {
-    const value = item && typeof item === "object" && "value" in item
-      ? (item as { value: unknown }).value
-      : item;
-    const actionRequests = value && typeof value === "object"
-      ? (value as { actionRequests?: unknown }).actionRequests
-      : undefined;
-
-    if (!Array.isArray(actionRequests)) {
-      return [];
-    }
-
-    return actionRequests.flatMap((actionRequest: any) => {
-      const toolName = actionRequest?.name ?? actionRequest?.action;
-
-      return typeof toolName === "string" && toolName
-        ? [{ toolName, args: (actionRequest?.args ?? {}) as Record<string, unknown> }]
-        : [];
-    });
   });
 }
 
@@ -87,7 +78,6 @@ export function parseRawStreamChunk(entry: RawStreamEntry): AgentStreamChunk[] {
         kind: "interrupt",
         interrupt,
         descriptors: normalizeInterrupts(interrupt),
-        requests: extractApprovalRequests(interrupt),
       }];
     }
     return [];

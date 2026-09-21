@@ -31,6 +31,8 @@ type PreparedTurn = {
   mode: AgentMode;
   context: AgentTurnContext;
   observability: AgentTurnObservability;
+  /** True when this turn carries a new user prompt (as opposed to an approval resume). */
+  freshPrompt: boolean;
   resume?: { decision: "approve" | "reject"; interrupts?: PendingInterrupt[] };
   initialResponse?: string;
   branchFromCheckpointId?: string;
@@ -179,6 +181,31 @@ export class RunTurnUseCase {
     return this.pendingInterrupts.get(sessionId) ?? [];
   }
 
+  /** Describe pending tool calls in plain language an admin (not a developer) can act on. */
+  private describeApprovals(interrupts: PendingInterrupt[]): string[] {
+    const adminforth = this.deps.getAdminforth();
+
+    return interrupts
+      .flatMap((interrupt) => interrupt.requests)
+      .map((request: ApprovalRequest) => formatApprovalRequest(adminforth, request));
+  }
+
+  /**
+   * Describe what a session is still waiting for approval on, so a client that (re)loads
+   * the conversation can rebuild the approval prompt — it lives only in the browser, so a
+   * page reload would otherwise leave the user with no way to answer it. Empty when
+   * nothing is pending.
+   */
+  public async getPendingApprovals(sessionId: string, modeName?: string | null): Promise<string[]> {
+    // Loading a conversation must not fail because the checkpoint store is unhappy
+    // (already logged by resolvePendingInterrupts). Without the prompt the user simply
+    // falls back to the implicit reject in `prepareTurn`.
+    const interrupts = await this.resolvePendingInterrupts(sessionId, this.resolveMode(modeName))
+      .catch(() => [] as PendingInterrupt[]);
+
+    return this.describeApprovals(interrupts);
+  }
+
   private requiresSessionOwnership(input: BaseAgentTurnInput) {
     return !input.chatSurface;
   }
@@ -260,6 +287,7 @@ export class RunTurnUseCase {
       mode,
       context: this.buildContext(input, editTurnId),
       observability: { emit: input.emit, sequenceDebugSink },
+      freshPrompt: true,
       branchFromCheckpointId,
     };
   }
@@ -281,20 +309,31 @@ export class RunTurnUseCase {
     let turnId: string;
     let previousUserMessages: PreviousUserMessage[] = [];
     let initialResponse: string | undefined;
-    let resumeInterrupts: PendingInterrupt[] | undefined;
+    let resume: PreparedTurn["resume"];
 
     if (shouldResume) {
-      resumeInterrupts = await this.resolvePendingInterrupts(input.sessionId, mode);
+      const resumeInterrupts = await this.resolvePendingInterrupts(input.sessionId, mode);
       if (resumeInterrupts.length === 0) {
         throw new Error(`No pending approval interrupt found for session "${input.sessionId}".`);
       }
       const resumeState = await this.deps.sessions.getResumeState(input.sessionId);
       turnId = resumeState.turnId;
       initialResponse = resumeState.initialResponse;
+      resume = { decision: approvalDecision!, interrupts: resumeInterrupts };
     } else {
+      // A pending approval leaves the provider thread with a tool call that has no
+      // result, so a plain new message would be rejected wholesale ("No tool output
+      // found for function call ..."). Sending one means the user moved on, so the
+      // pending call is rejected as part of this turn and the prompt rides along in
+      // the rejection. Reached whenever the approval UI is gone — after a page
+      // reload, from a second tab, or from a chat surface.
+      const pending = await this.resolvePendingInterrupts(input.sessionId, mode);
       previousUserMessages = await this.deps.sessions.getPreviousUserMessages(input.sessionId);
       turnId = await this.deps.sessions.createNewTurn(input.sessionId, input.prompt);
       await this.deps.sessions.touchSession(input.sessionId);
+      if (pending.length > 0) {
+        resume = { decision: "reject", interrupts: pending };
+      }
     }
 
     return {
@@ -308,15 +347,14 @@ export class RunTurnUseCase {
         emit: input.emit,
         sequenceDebugSink,
       },
-      resume: shouldResume
-        ? { decision: approvalDecision!, interrupts: resumeInterrupts }
-        : undefined,
+      freshPrompt: !shouldResume,
+      resume,
       initialResponse,
     };
   }
 
   private async resolveUserLanguage(prepared: PreparedTurn): Promise<DetectedLanguage | null> {
-    if (prepared.resume) {
+    if (!prepared.freshPrompt) {
       return this.lastDetectedLanguage.get(prepared.sessionId) ?? null;
     }
 
@@ -346,26 +384,21 @@ export class RunTurnUseCase {
     prepared: PreparedTurn,
     interrupt: unknown,
     descriptors: PendingInterrupt[],
-    requests: ApprovalRequest[],
   ) {
     if (!this.deps.hasPersistentCheckpointer) {
       const existing = this.pendingInterrupts.get(prepared.sessionId) ?? [];
-      const merged = new Map(existing.map((item) => [item.id, item.count]));
+      const merged = new Map(existing.map((item) => [item.id, item]));
       for (const item of descriptors) {
-        merged.set(item.id, item.count);
+        merged.set(item.id, item);
       }
-      this.pendingInterrupts.set(
-        prepared.sessionId,
-        [...merged.entries()].map(([id, count]) => ({ id, count })),
-      );
+      this.pendingInterrupts.set(prepared.sessionId, [...merged.values()]);
     }
-    const adminforth = this.deps.getAdminforth();
 
     await prepared.observability.emit?.({
       type: "interrupt",
       sessionId: prepared.sessionId,
       interrupt,
-      approvals: requests.map((request) => formatApprovalRequest(adminforth, request)),
+      approvals: this.describeApprovals(descriptors),
     });
   }
 
@@ -404,7 +437,7 @@ export class RunTurnUseCase {
 
         if (chunk.kind === "interrupt") {
           interrupted = true;
-          await this.handleInterrupt(prepared, chunk.interrupt, chunk.descriptors, chunk.requests ?? []);
+          await this.handleInterrupt(prepared, chunk.interrupt, chunk.descriptors);
           continue;
         }
 

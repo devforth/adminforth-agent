@@ -59,9 +59,10 @@ export interface LlmPort {
   /**
    * Rebuild the pending human-in-the-loop interrupts for a session from persisted
    * checkpoint state (used when the in-process cache is empty — after a restart or
-   * on another instance). Returns already-normalized descriptors; the LangGraph
-   * interrupt shape never leaves the llm layer. Throws on a checkpoint/runtime
-   * failure (the caller must not treat that as "no pending interrupt").
+   * on another instance). Returns already-normalized descriptors, each carrying the
+   * tool calls it is waiting on; the LangGraph interrupt shape never leaves the llm
+   * layer. Throws on a checkpoint/runtime failure (the caller must not treat that as
+   * "no pending interrupt").
    */
   getPendingInterrupts(input: {
     completionAdapter: AgentModeCompletionAdapter;

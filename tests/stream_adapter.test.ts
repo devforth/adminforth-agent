@@ -1,4 +1,4 @@
-import { extractApprovalRequests, parseRawStreamChunk } from '../llm/streamAdapter.js';
+import { normalizeInterrupts, parseRawStreamChunk } from '../llm/streamAdapter.js';
 
 // Characterization tests for the raw LangGraph -> typed AgentStreamChunk conversion
 // (the parsing that previously lived inside TurnStreamConsumer).
@@ -51,8 +51,7 @@ describe('parseRawStreamChunk', () => {
       {
         kind: 'interrupt',
         interrupt: [{ id: 'i1', value: { actionRequests: [{}, {}] } }],
-        descriptors: [{ id: 'i1', count: 2 }],
-        requests: [],
+        descriptors: [{ id: 'i1', count: 2, requests: [] }],
       },
     ]);
   });
@@ -60,7 +59,7 @@ describe('parseRawStreamChunk', () => {
   it('yields empty descriptors when the interrupt has no actionRequests', () => {
     const out = parseRawStreamChunk(['updates', { __interrupt__: [{ id: 'i1' }] }]);
     expect(out).toEqual([
-      { kind: 'interrupt', interrupt: [{ id: 'i1' }], descriptors: [], requests: [] },
+      { kind: 'interrupt', interrupt: [{ id: 'i1' }], descriptors: [] },
     ]);
   });
 
@@ -75,9 +74,9 @@ describe('parseRawStreamChunk', () => {
   });
 });
 
-describe('extractApprovalRequests', () => {
+describe('normalizeInterrupts', () => {
   it('normalizes the pending tool calls out of the interrupt payload', () => {
-    expect(extractApprovalRequests([
+    expect(normalizeInterrupts([
       {
         id: 'i1',
         value: {
@@ -87,15 +86,26 @@ describe('extractApprovalRequests', () => {
         },
       },
     ])).toEqual([
-      { toolName: 'delete_record', args: { resourceId: 'cars', primaryKey: '10' } },
+      {
+        id: 'i1',
+        count: 1,
+        requests: [{ toolName: 'delete_record', args: { resourceId: 'cars', primaryKey: '10' } }],
+      },
     ]);
   });
 
   it('defaults missing args and drops action requests without a tool name', () => {
-    expect(extractApprovalRequests({
+    expect(normalizeInterrupts({
+      id: 'i1',
       value: { actionRequests: [{ name: 'create_record' }, { args: { a: 1 } }] },
     })).toEqual([
-      { toolName: 'create_record', args: {} },
+      {
+        id: 'i1',
+        // `count` stays the number of decisions the provider expects, even for the
+        // action request that could not be described.
+        count: 2,
+        requests: [{ toolName: 'create_record', args: {} }],
+      },
     ]);
   });
 });

@@ -123,18 +123,13 @@ export const useAgentStore = defineStore('agent', () => {
     });
   }
 
-  function addToolApprovalMessage(sessionId: string, interrupt: unknown, approvals?: unknown) {
-    // The backend describes each pending tool call in plain language; its raw
-    // descriptions are only the fallback when it could not.
-    const formatted = Array.isArray(approvals)
-      ? approvals.filter((line): line is string => typeof line === 'string' && Boolean(line))
-      : [];
+  function addToolApprovalPart(sessionId: string, messages: string[]) {
     const approvalPart = {
       type: 'data-tool-approval' as const,
       data: {
         sessionId,
         status: 'pending' as const,
-        messages: formatted.length ? formatted : getToolApprovalMessages(interrupt),
+        messages,
       },
     };
     const lastChatMessage = currentChat.value?.lastMessage;
@@ -149,6 +144,16 @@ export const useAgentStore = defineStore('agent', () => {
       role: 'assistant',
       parts: [approvalPart],
     });
+  }
+
+  function addToolApprovalMessage(sessionId: string, interrupt: unknown, approvals?: unknown) {
+    // The backend describes each pending tool call in plain language; its raw
+    // descriptions are only the fallback when it could not.
+    const formatted = Array.isArray(approvals)
+      ? approvals.filter((line): line is string => typeof line === 'string' && Boolean(line))
+      : [];
+
+    addToolApprovalPart(sessionId, formatted.length ? formatted : getToolApprovalMessages(interrupt));
   }
 
   async function submitToolApproval(sessionId: string, decision: 'approve' | 'reject') {
@@ -172,6 +177,9 @@ export const useAgentStore = defineStore('agent', () => {
     try {
       await submitToolApprovalResponse(sessionId, decision);
 
+      if (currentSession.value?.sessionId === sessionId) {
+        currentSession.value.pendingApprovals = [];
+      }
       if (approvalPart?.data) {
         approvalPart.data.status = decision === 'approve' ? 'approved' : 'rejected';
       }
@@ -236,6 +244,7 @@ export const useAgentStore = defineStore('agent', () => {
     blockCloseOfChat,
     adminforth,
     setCurrentChat,
+    restorePendingToolApproval: addToolApprovalPart,
   });
 
   // "Turn active" = a request is in flight (submitted or streaming) or paused for HITL

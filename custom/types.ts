@@ -47,6 +47,8 @@ export interface IAgentSession {
   title: string;
   timestamp: string;
   messages: IMessage[];
+  /** Tool calls this session is still waiting for the user to approve, in plain language. */
+  pendingApprovals?: string[];
 }
 
 export interface ISessionsListItem {

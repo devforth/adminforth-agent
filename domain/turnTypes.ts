@@ -18,7 +18,10 @@ export type DebugSink = {
 /** A pending human-in-the-loop approval, normalized (provider-agnostic). */
 export type PendingInterrupt = {
   id: string;
+  /** Number of decisions the provider expects on resume (one per pending tool call). */
   count: number;
+  /** The pending tool calls, normalized so they can be described to the user. */
+  requests: ApprovalRequest[];
 };
 
 export type BaseAgentTurnInput = {
@@ -105,6 +108,4 @@ export type AgentStreamChunk =
       kind: "interrupt";
       interrupt: unknown;
       descriptors: PendingInterrupt[];
-      /** The pending tool calls, normalized so they can be described to the user. */
-      requests: ApprovalRequest[];
     };

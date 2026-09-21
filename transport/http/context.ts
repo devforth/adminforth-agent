@@ -29,6 +29,7 @@ export type AgentEndpointsContext = {
   steer(input: { sessionId: string; message: string; adminUser: any }): Promise<{ id: string; queued: number }>;
   runAndPersistAgentResponse(input: RunAndPersistAgentResponseInput): Promise<RunAndPersistAgentResponseResult>;
   getSessionTurns(sessionId: string): Promise<SessionTurn[]>;
+  getPendingApprovals(sessionId: string): Promise<string[]>;
   createNewTurn(sessionId: string, prompt: string, response?: string): Promise<string>;
   createSystemTurn(sessionId: string, systemMessage: string): Promise<string>;
   appendSteerToCurrentTurn(sessionId: string, steerText: string): Promise<void>;
@@ -47,7 +48,7 @@ export type CoreEndpointsContext = Pick<
 
 export type SessionEndpointsContext = Pick<
   AgentEndpointsContext,
-  "adminforth" | "options" | "getSessionTurns" | "createNewTurn"
+  "adminforth" | "options" | "getSessionTurns" | "getPendingApprovals" | "createNewTurn"
   | "createSystemTurn" | "appendSteerToCurrentTurn"
 >;
 

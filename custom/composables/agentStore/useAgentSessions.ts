@@ -23,6 +23,7 @@ type CreateAgentSessionManagerOptions = {
   blockCloseOfChat: Ref<boolean>;
   adminforth: AdminforthLike;
   setCurrentChat: (sessionId: string) => void;
+  restorePendingToolApproval: (sessionId: string, messages: string[]) => void;
 };
 
 export function createAgentSessionManager({
@@ -39,6 +40,7 @@ export function createAgentSessionManager({
   blockCloseOfChat,
   adminforth,
   setCurrentChat,
+  restorePendingToolApproval,
 }: CreateAgentSessionManagerOptions) {
   function sortSessionsListByTimestamp(sessionsListToSort: ISessionsListItem[]) {
     return [...sessionsListToSort].sort((a: ISessionsListItem, b: ISessionsListItem) => b.timestamp.localeCompare(a.timestamp));
@@ -113,6 +115,12 @@ export function createAgentSessionManager({
       // The session fetch can bail out (deleted/expired session), leaving no stored
       // messages — keep `messages` an array so consumers can iterate it safely.
       currentChat.value.messages = (currentSession.value?.messages ?? []).flatMap(mapStoredMessage);
+      // Only the turns are stored; an approval the agent is still waiting on is replayed
+      // from the backend so the user can answer it after a reload instead of being stuck.
+      const pendingApprovals = currentSession.value?.pendingApprovals ?? [];
+      if (pendingApprovals.length) {
+        restorePendingToolApproval(sessionId, pendingApprovals);
+      }
     }
   }
 
