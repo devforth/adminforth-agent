@@ -79,8 +79,10 @@ function formatRecord(record: unknown, resource: AdminForthResource | undefined)
     return `${column?.label || humanize(name)}: ${formatValue(value, column)}`;
   });
   const hidden = entries.length - shown.length;
+  const lines = hidden > 0 ? [...shown, `and ${hidden} more`] : shown;
 
-  return hidden > 0 ? `${shown.join(", ")} and ${hidden} more` : shown.join(", ");
+  // One field per line: a wide record is unreadable as a single run-on sentence.
+  return lines.join(",\n");
 }
 
 function actionLabel(resource: AdminForthResource | undefined, actionId: unknown): string {
@@ -110,13 +112,13 @@ export function formatApprovalRequest(
     case "create_record": {
       const fields = formatRecord(args.record, resource);
 
-      return `Create a new record in ${label}${fields ? ` — ${fields}` : ""}`;
+      return `Create a new record in ${label}${fields ? `:\n${fields}` : ""}`;
     }
 
     case "update_record": {
       const fields = formatRecord(args.record, resource);
 
-      return `Update record with id:${formatValue(args.recordId)} in ${label}${fields ? ` — set ${fields}` : ""}`;
+      return `Update record with id:${formatValue(args.recordId)} in ${label}${fields ? `, set:\n${fields}` : ""}`;
     }
 
     case "delete_record":
@@ -135,7 +137,7 @@ export function formatApprovalRequest(
     default: {
       const fields = formatRecord(args, resource);
 
-      return `${humanize(toolName)}${fields ? ` — ${fields}` : ""}`;
+      return `${humanize(toolName)}${fields ? `:\n${fields}` : ""}`;
     }
   }
 }

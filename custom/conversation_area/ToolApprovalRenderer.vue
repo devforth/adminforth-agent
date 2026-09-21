@@ -19,7 +19,7 @@
             class="flex gap-2"
           >
             <span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-lightListTableHeadingText dark:bg-darkListTableHeadingText" />
-            <span class="min-w-0 break-words">{{ message }}</span>
+            <span class="min-w-0 whitespace-pre-line break-words">{{ message }}</span>
           </li>
         </ul>
         <div class="mt-4 flex flex-wrap gap-2">

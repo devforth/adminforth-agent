@@ -32,16 +32,21 @@ describe('formatApprovalRequest', () => {
         record: { brand: 'Tesla', model_year: 2024, is_sold: false, body_type: 'suv', vin_code: 'XYZ' },
         requiredColumnsToSkip: ['x'],
       },
-    })).toBe(
-      'Create a new record in Cars — Brand: Tesla, Model year: 2024, Sold: No, Body type: SUV, VIN: ••••••',
-    );
+    })).toBe([
+      'Create a new record in Cars:',
+      'Brand: Tesla,',
+      'Model year: 2024,',
+      'Sold: No,',
+      'Body type: SUV,',
+      'VIN: ••••••',
+    ].join('\n'));
   });
 
   it('spells out the update as the values being set', () => {
     expect(formatApprovalRequest(adminforth, {
       toolName: 'update_record',
       args: { resourceId: 'cars_sl', recordId: '10', record: { brand: 'Ford' } },
-    })).toBe('Update record with id:10 in Cars — set Brand: Ford');
+    })).toBe('Update record with id:10 in Cars, set:\nBrand: Ford');
   });
 
   it('warns that a delete cannot be undone', () => {
@@ -76,13 +81,13 @@ describe('formatApprovalRequest', () => {
     expect(formatApprovalRequest(adminforth, {
       toolName: 'wipe_everything',
       args: { target: 'all', dry_run: true },
-    })).toBe('Wipe everything — Target: all, Dry run: Yes');
+    })).toBe('Wipe everything:\nTarget: all,\nDry run: Yes');
   });
 
   it('reports blank values as empty instead of dropping them', () => {
     expect(formatApprovalRequest(adminforth, {
       toolName: 'update_record',
       args: { resourceId: 'cars_sl', recordId: '10', record: { brand: null } },
-    })).toBe('Update record with id:10 in Cars — set Brand: empty');
+    })).toBe('Update record with id:10 in Cars, set:\nBrand: empty');
   });
 });
