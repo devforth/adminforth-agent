@@ -26,6 +26,8 @@ export type AgentEvent =
       type: "interrupt";
       sessionId: string;
       interrupt: unknown;
+      /** One plain-language line per pending tool call, for the approval card. */
+      approvals: string[];
     }
   | {
       type: "steer-applied";

@@ -123,13 +123,18 @@ export const useAgentStore = defineStore('agent', () => {
     });
   }
 
-  function addToolApprovalMessage(sessionId: string, interrupt: unknown) {
+  function addToolApprovalMessage(sessionId: string, interrupt: unknown, approvals?: unknown) {
+    // The backend describes each pending tool call in plain language; its raw
+    // descriptions are only the fallback when it could not.
+    const formatted = Array.isArray(approvals)
+      ? approvals.filter((line): line is string => typeof line === 'string' && Boolean(line))
+      : [];
     const approvalPart = {
       type: 'data-tool-approval' as const,
       data: {
         sessionId,
         status: 'pending' as const,
-        messages: getToolApprovalMessages(interrupt),
+        messages: formatted.length ? formatted : getToolApprovalMessages(interrupt),
       },
     };
     const lastChatMessage = currentChat.value?.lastMessage;

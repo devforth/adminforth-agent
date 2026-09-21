@@ -123,13 +123,14 @@ function createAgentEventStream(
       });
     },
 
-    interrupt(sessionId: string, interrupt: unknown) {
+    interrupt(sessionId: string, interrupt: unknown, approvals: string[]) {
       stream.endActiveBlock();
       stream.send({
         type: isAiUiMessageStream ? "data-interrupt" : "interrupt",
         data: {
           sessionId,
           interrupt,
+          approvals,
         },
       });
     },
@@ -306,7 +307,7 @@ export function createSseEventEmitter(
         stream.rendering(event.phase, event.label);
         break;
       case "interrupt":
-        stream.interrupt(event.sessionId, event.interrupt);
+        stream.interrupt(event.sessionId, event.interrupt, event.approvals);
         break;
       case "steer-applied":
         stream.steerApplied(event.count, event.ids);

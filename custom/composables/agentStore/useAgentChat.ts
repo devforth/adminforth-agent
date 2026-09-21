@@ -14,7 +14,7 @@ type CreateAgentChatManagerOptions = {
   lastMessage: Ref<string>;
   activeModeName: Ref<string | null>;
   onOpenPage: (targetPath: string) => void;
-  onToolApprovalRequest: (sessionId: string, interrupt: unknown) => void;
+  onToolApprovalRequest: (sessionId: string, interrupt: unknown, approvals?: unknown) => void;
 };
 
 export function createAgentChatManager({
@@ -119,7 +119,7 @@ export function createAgentChatManager({
     }
 
     if (dataPart?.type === 'data-interrupt' && typeof dataPart.data?.sessionId === 'string') {
-      onToolApprovalRequest(dataPart.data.sessionId, dataPart.data.interrupt);
+      onToolApprovalRequest(dataPart.data.sessionId, dataPart.data.interrupt, dataPart.data.approvals);
       return;
     }
 
@@ -165,7 +165,7 @@ export function createAgentChatManager({
     }
 
     if (dataPart?.type === 'data-interrupt' && typeof dataPart.data?.sessionId === 'string') {
-      onToolApprovalRequest(dataPart.data.sessionId, dataPart.data.interrupt);
+      onToolApprovalRequest(dataPart.data.sessionId, dataPart.data.interrupt, dataPart.data.approvals);
       return;
     }
 

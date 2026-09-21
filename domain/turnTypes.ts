@@ -2,6 +2,7 @@ import type { AdminUser, AudioAdapter } from "adminforth";
 import type { DetectedLanguage } from "./languageDetect.js";
 import type { CurrentPageContext } from "../tools/getUserLocation.js";
 import type { AgentEventEmitter } from "./agentEvents.js";
+import type { ApprovalRequest } from "../tools/approvalFormatter.js";
 
 /**
  * Minimal sink the application layer uses to persist per-turn debug traces. The
@@ -100,4 +101,10 @@ export type AgentMessage = {
 export type AgentStreamChunk =
   | { kind: "text"; delta: string }
   | { kind: "reasoning"; delta: string }
-  | { kind: "interrupt"; interrupt: unknown; descriptors: PendingInterrupt[] };
+  | {
+      kind: "interrupt";
+      interrupt: unknown;
+      descriptors: PendingInterrupt[];
+      /** The pending tool calls, normalized so they can be described to the user. */
+      requests: ApprovalRequest[];
+    };

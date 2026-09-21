@@ -1,4 +1,4 @@
-import { parseRawStreamChunk } from '../llm/streamAdapter.js';
+import { extractApprovalRequests, parseRawStreamChunk } from '../llm/streamAdapter.js';
 
 // Characterization tests for the raw LangGraph -> typed AgentStreamChunk conversion
 // (the parsing that previously lived inside TurnStreamConsumer).
@@ -52,13 +52,16 @@ describe('parseRawStreamChunk', () => {
         kind: 'interrupt',
         interrupt: [{ id: 'i1', value: { actionRequests: [{}, {}] } }],
         descriptors: [{ id: 'i1', count: 2 }],
+        requests: [],
       },
     ]);
   });
 
   it('yields empty descriptors when the interrupt has no actionRequests', () => {
     const out = parseRawStreamChunk(['updates', { __interrupt__: [{ id: 'i1' }] }]);
-    expect(out).toEqual([{ kind: 'interrupt', interrupt: [{ id: 'i1' }], descriptors: [] }]);
+    expect(out).toEqual([
+      { kind: 'interrupt', interrupt: [{ id: 'i1' }], descriptors: [], requests: [] },
+    ]);
   });
 
   it('ignores non-interrupt update entries', () => {
@@ -69,5 +72,30 @@ describe('parseRawStreamChunk', () => {
     expect(
       parseRawStreamChunk(['messages', [{ content: [] }, { langgraph_node: 'model' }]]),
     ).toEqual([]);
+  });
+});
+
+describe('extractApprovalRequests', () => {
+  it('normalizes the pending tool calls out of the interrupt payload', () => {
+    expect(extractApprovalRequests([
+      {
+        id: 'i1',
+        value: {
+          actionRequests: [
+            { name: 'delete_record', args: { resourceId: 'cars', primaryKey: '10' } },
+          ],
+        },
+      },
+    ])).toEqual([
+      { toolName: 'delete_record', args: { resourceId: 'cars', primaryKey: '10' } },
+    ]);
+  });
+
+  it('defaults missing args and drops action requests without a tool name', () => {
+    expect(extractApprovalRequests({
+      value: { actionRequests: [{ name: 'create_record' }, { args: { a: 1 } }] },
+    })).toEqual([
+      { toolName: 'create_record', args: {} },
+    ]);
   });
 });

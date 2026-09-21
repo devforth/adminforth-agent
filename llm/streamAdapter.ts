@@ -1,3 +1,4 @@
+import type { ApprovalRequest } from "../tools/approvalFormatter.js";
 import type { AgentStreamChunk, PendingInterrupt } from "../domain/turnTypes.js";
 
 // Only tokens emitted by the model node(s) are surfaced to the user; other
@@ -30,6 +31,34 @@ export function normalizeInterrupts(interrupt: unknown): PendingInterrupt[] {
   });
 }
 
+/**
+ * Pull the tool calls out of the raw interrupt so the application layer can describe
+ * them to the user. Like {@link normalizeInterrupts}, this keeps the LangGraph shape
+ * from leaking past the llm layer.
+ */
+export function extractApprovalRequests(interrupt: unknown): ApprovalRequest[] {
+  return getInterruptItems(interrupt).flatMap((item) => {
+    const value = item && typeof item === "object" && "value" in item
+      ? (item as { value: unknown }).value
+      : item;
+    const actionRequests = value && typeof value === "object"
+      ? (value as { actionRequests?: unknown }).actionRequests
+      : undefined;
+
+    if (!Array.isArray(actionRequests)) {
+      return [];
+    }
+
+    return actionRequests.flatMap((actionRequest: any) => {
+      const toolName = actionRequest?.name ?? actionRequest?.action;
+
+      return typeof toolName === "string" && toolName
+        ? [{ toolName, args: (actionRequest?.args ?? {}) as Record<string, unknown> }]
+        : [];
+    });
+  });
+}
+
 type RawStreamEntry =
   | ["messages", [any, any]]
   | ["updates", Record<string, any>];
@@ -54,7 +83,12 @@ export function parseRawStreamChunk(entry: RawStreamEntry): AgentStreamChunk[] {
   if (mode === "updates") {
     if (chunk && typeof chunk === "object" && "__interrupt__" in chunk) {
       const interrupt = (chunk as Record<string, unknown>).__interrupt__;
-      return [{ kind: "interrupt", interrupt, descriptors: normalizeInterrupts(interrupt) }];
+      return [{
+        kind: "interrupt",
+        interrupt,
+        descriptors: normalizeInterrupts(interrupt),
+        requests: extractApprovalRequests(interrupt),
+      }];
     }
     return [];
   }

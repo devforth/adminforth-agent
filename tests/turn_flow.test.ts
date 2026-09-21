@@ -19,7 +19,8 @@ const reasoning = (delta: string): AgentStreamChunk => ({ kind: 'reasoning', del
 const interrupt = (
   value: unknown,
   descriptors: Array<{ id: string; count: number }> = [{ id: 'int-1', count: 1 }],
-): AgentStreamChunk => ({ kind: 'interrupt', interrupt: value, descriptors });
+  requests: Array<{ toolName: string; args: Record<string, unknown> }> = [],
+): AgentStreamChunk => ({ kind: 'interrupt', interrupt: value, descriptors, requests });
 
 function fakeLlm(
   opts: {

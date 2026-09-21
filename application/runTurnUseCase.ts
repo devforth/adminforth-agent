@@ -7,6 +7,7 @@ import type { AgentSessionStore } from "../persistence/sessionStore.js";
 import type { SteerBuffer } from "../domain/steerBuffer.js";
 import type { PluginOptions } from "../types.js";
 import type { LlmPort } from "./ports.js";
+import { formatApprovalRequest, type ApprovalRequest } from "../tools/approvalFormatter.js";
 import type {
   AgentMessage,
   AgentTurnContext,
@@ -345,6 +346,7 @@ export class RunTurnUseCase {
     prepared: PreparedTurn,
     interrupt: unknown,
     descriptors: PendingInterrupt[],
+    requests: ApprovalRequest[],
   ) {
     if (!this.deps.hasPersistentCheckpointer) {
       const existing = this.pendingInterrupts.get(prepared.sessionId) ?? [];
@@ -357,10 +359,13 @@ export class RunTurnUseCase {
         [...merged.entries()].map(([id, count]) => ({ id, count })),
       );
     }
+    const adminforth = this.deps.getAdminforth();
+
     await prepared.observability.emit?.({
       type: "interrupt",
       sessionId: prepared.sessionId,
       interrupt,
+      approvals: requests.map((request) => formatApprovalRequest(adminforth, request)),
     });
   }
 
@@ -399,7 +404,7 @@ export class RunTurnUseCase {
 
         if (chunk.kind === "interrupt") {
           interrupted = true;
-          await this.handleInterrupt(prepared, chunk.interrupt, chunk.descriptors);
+          await this.handleInterrupt(prepared, chunk.interrupt, chunk.descriptors, chunk.requests ?? []);
           continue;
         }
 

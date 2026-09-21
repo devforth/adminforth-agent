@@ -7,25 +7,10 @@
       <div class="min-w-0 flex-1">
         <h3 class="text-sm font-semibold leading-5">{{ $t('Approval required') }}</h3>
         <p class="mt-1 text-sm leading-5 text-lightListTableText dark:text-darkListTableText">
-          {{ $t('Review the agent message before continuing.') }}
+          {{ $t('Review what the agent is about to do before continuing.') }}
         </p>
-        <button
-          v-if="data.messages?.length"
-          type="button"
-          class="mt-3 inline-flex items-center gap-2 text-sm font-medium text-lightListTableHeadingText transition hover:opacity-80 dark:text-darkListTableHeadingText"
-          @click="isExpanded = !isExpanded"
-        >
-          <IconChevronDownOutline
-            class="h-4 w-4 transition-transform"
-            :class="isExpanded ? 'rotate-180' : ''"
-          />
-          {{ isExpanded ? $t('Hide details') : $t('Show details') }}
-          <span class="rounded-full bg-lightListTableText/10 px-2 py-0.5 text-xs text-lightListTableHeadingText dark:bg-darkListTableText/10 dark:text-darkListTableHeadingText">
-            {{ data.messages.length }}
-          </span>
-        </button>
         <ul
-          v-if="isExpanded && data.messages?.length"
+          v-if="data.messages?.length"
           class="mt-3 space-y-1 text-sm leading-5 text-lightListTableHeadingText dark:text-darkListTableHeadingText"
         >
           <li
@@ -34,7 +19,7 @@
             class="flex gap-2"
           >
             <span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-lightListTableHeadingText dark:bg-darkListTableHeadingText" />
-            <span>{{ message }}</span>
+            <span class="min-w-0 break-words">{{ message }}</span>
           </li>
         </ul>
         <div class="mt-4 flex flex-wrap gap-2">
@@ -58,15 +43,11 @@
           </template>
           <span
             v-else
-            class="inline-flex h-8 items-center gap-2 rounded-md border px-2.5 text-sm font-medium"
-            :class="data.status === 'processing'
-              ? 'border-lightListTableText/20 bg-lightListTableText/10 text-lightListTableHeadingText dark:border-darkListTableText/20 dark:bg-darkListTableText/10 dark:text-darkListTableHeadingText'
-              : data.status === 'approved'
-              ? 'border-lightListTableText/20 bg-lightListTableText/10 text-lightListTableHeadingText dark:border-darkListTableText/20 dark:bg-darkListTableText/10 dark:text-darkListTableHeadingText'
-              : 'border-lightListTableText/20 bg-lightListTableText/10 text-lightListTableHeadingText dark:border-darkListTableText/20 dark:bg-darkListTableText/10 dark:text-darkListTableHeadingText'"
+            class="inline-flex h-8 items-center gap-2 rounded-md border border-lightListTableText/20 bg-lightListTableText/10 px-2.5 text-sm font-medium text-lightListTableHeadingText dark:border-darkListTableText/20 dark:bg-darkListTableText/10 dark:text-darkListTableHeadingText"
           >
-            <IconCheckOutline v-if="data.status === 'approved'" class="h-4 w-4" />
-            <IconCloseOutline v-else-if="data.status === 'rejected'" class="h-4 w-4" />
+            <Spinner v-if="data.status === 'processing'" class="h-4 w-4" />
+            <IconCheckOutline v-else-if="data.status === 'approved'" class="h-4 w-4" />
+            <IconCloseOutline v-else class="h-4 w-4" />
             {{ data.status === 'processing' ? $t('Processing') : data.status === 'approved' ? $t('Approved') : $t('Rejected') }}
           </span>
         </div>
@@ -84,15 +65,14 @@
 <script setup lang="ts">
 import type { IPartData } from '../types';
 import { useAgentStore } from '../composables/useAgentStore';
-import { ref } from 'vue';
-import { IconCheckOutline, IconChevronDownOutline, IconCloseOutline, IconExclamationCircleOutline } from '@iconify-prerendered/vue-flowbite';
+import { Spinner } from '@/afcl';
+import { IconCheckOutline, IconCloseOutline, IconExclamationCircleOutline } from '@iconify-prerendered/vue-flowbite';
 
 const props = defineProps<{
   data: IPartData;
 }>();
 
 const agentStore = useAgentStore();
-const isExpanded = ref(false);
 
 function submit(decision: 'approve' | 'reject') {
   if (!props.data.sessionId || props.data.status !== 'pending') {
