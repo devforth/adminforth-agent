@@ -36,7 +36,7 @@
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/node": "latest",
-    "adminforth": "^3.8.2",
+    "adminforth": "^3.32.0",
     "jest": "^30.3.0",
     "semantic-release": "^24.2.1",
     "semantic-release-slack-bot": "^4.0.2",
@@ -80,6 +80,6 @@
     }
   ],
   "peerDependencies": {
-    "adminforth": "^3.8.2"
+    "adminforth": "^3.32.0"
   }
 }

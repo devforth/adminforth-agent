@@ -79,6 +79,9 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
   server.endpoint({
     method: 'POST',
     path: `/agent/get-placeholder-messages`,
+    agent: {
+      hiddenFromAgents: true,
+    },
     handler: async ({ headers, adminUser }) => {
       if (!ctx.options.placeholderMessages) {
         return {
@@ -100,6 +103,9 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
   server.endpoint({
     method: 'POST',
     path: `/agent/response`,
+    agent: {
+      hiddenFromAgents: true,
+    },
     request_schema: agentResponseBodySchema,
     handler: async ({ body, adminUser, _raw_express_res, abortSignal }) => {
       const data = body as z.infer<typeof agentResponseBodySchema>;
@@ -127,6 +133,9 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
   server.endpoint({
     method: 'POST',
     path: `/agent/edit`,
+    agent: {
+      hiddenFromAgents: true,
+    },
     request_schema: agentEditBodySchema,
     handler: async ({ body, adminUser, _raw_express_res, abortSignal }) => {
       const data = body as z.infer<typeof agentEditBodySchema>;
@@ -155,6 +164,9 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
   server.endpoint({
     method: 'POST',
     path: `/agent/approval`,
+    agent: {
+      hiddenFromAgents: true,
+    },
     request_schema: agentApprovalBodySchema,
     handler: async ({ body, adminUser, _raw_express_res, abortSignal }) => {
       const data = body as z.infer<typeof agentApprovalBodySchema>;
@@ -181,6 +193,9 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
   server.endpoint({
     method: 'POST',
     path: `/agent/steer`,
+    agent: {
+      hiddenFromAgents: true,
+    },
     request_schema: agentSteerBodySchema,
     handler: async ({ body, adminUser }) => {
       const data = body as z.infer<typeof agentSteerBodySchema>;
@@ -199,6 +214,9 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
   server.endpoint({
     method: 'POST',
     path: `/agent/speech-response`,
+    agent: {
+      hiddenFromAgents: true,
+    },
     target: 'upload',
     request_schema: agentSpeechResponseShapeSchema,
     handler: async ({ body, adminUser, response, _raw_express_req, _raw_express_res, abortSignal }) => {

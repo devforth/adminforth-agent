@@ -31,6 +31,9 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
   server.endpoint({
     method: 'POST',
     path: `/agent/get-sessions`,
+    agent: {
+      hiddenFromAgents: true,
+    },
     request_schema: getSessionsBodySchema,
     handler: async ({body, adminUser, response }) => {
       const data = body as z.infer<typeof getSessionsBodySchema>;
@@ -52,6 +55,9 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
   server.endpoint({
     method: 'POST',
     path: `/agent/get-session-info`,
+    agent: {
+      hiddenFromAgents: true,
+    },
     request_schema: sessionIdBodySchema,
     handler: async ({body, adminUser, response }) => {
       const data = body as z.infer<typeof sessionIdBodySchema>;
@@ -118,6 +124,9 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
   server.endpoint({
     method: 'POST',
     path: `/agent/create-session`,
+    agent: {
+      hiddenFromAgents: true,
+    },
     request_schema: createSessionBodySchema,
     handler: async ({body, adminUser, response }) => {
       const data = body as z.infer<typeof createSessionBodySchema>;
@@ -142,6 +151,9 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
   server.endpoint({
     method: 'POST',
     path: `/agent/delete-session`,
+    agent: {
+      hiddenFromAgents: true,
+    },
     request_schema: sessionIdBodySchema,
     handler: async ({body, adminUser, response }) => {
       const data = body as z.infer<typeof sessionIdBodySchema>;
@@ -176,6 +188,9 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
   server.endpoint({
     method: 'POST',
     path: `/agent/add-system-message-to-turns`,
+    agent: {
+      hiddenFromAgents: true,
+    },
     request_schema: addSystemMessageBodySchema,
     handler: async ({body, adminUser, response }) => {
       const data = body as z.infer<typeof addSystemMessageBodySchema>;
@@ -204,6 +219,9 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
   server.endpoint({
     method: 'POST',
     path: `/agent/append-steer-to-turn`,
+    agent: {
+      hiddenFromAgents: true,
+    },
     request_schema: appendSteerBodySchema,
     handler: async ({ body, adminUser, response }) => {
       const data = body as z.infer<typeof appendSteerBodySchema>;

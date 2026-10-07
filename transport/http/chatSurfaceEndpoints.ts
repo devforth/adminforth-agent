@@ -35,6 +35,9 @@ export function setupChatSurfaceEndpoints(ctx: ChatSurfaceEndpointsContext, serv
       method: "POST",
       noAuth: true,
       path: `/agent/surface/${adapter.name}/webhook`,
+      agent: {
+        hiddenFromAgents: true,
+      },
       handler: async (endpointInput: IAdminForthEndpointHandlerInput) => {
         const surfaceContext = {
           body: endpointInput.body,

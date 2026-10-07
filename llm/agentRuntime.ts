@@ -23,7 +23,7 @@ function createHumanInTheLoopInterrupts(
 ): Record<string, { allowedDecisions: ("approve" | "reject" | "edit")[] }> {
   return Object.fromEntries(
     Object.entries(apiBasedTools)
-      .filter(([, apiBasedTool]) => apiBasedTool.agent?.isDangerous === true)
+      .filter(([, { agent }]) => agent?.requiresHumanApproval || agent?.isDangerous)
       .map(([toolName]) => [
         toolName,
         {

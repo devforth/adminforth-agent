@@ -115,7 +115,7 @@ sequenceDiagram
         M-->>LLM: reasoning and text deltas
         LLM-->>UI: reasoning-delta and text-delta frames
         M-->>LLM: tool call
-        alt tool has agent.isDangerous
+        alt tool has agent.requiresHumanApproval
             LLM-->>UI: data-interrupt, generation pauses
             U->>UI: approve or reject
             UI->>EP: POST /agent/approval
@@ -152,7 +152,7 @@ flowchart LR
     C -- yes --> E["fetch_skill returns the SKILL.md<br/>for the matching skill"]
     E --> F["fetch_tool_schema loads one<br/>API tool schema by name"]
     F --> G["ApiBasedToolsMiddleware sees the<br/>status 200 tool message and adds that<br/>tool to the next model call"]
-    G --> H{"agent.isDangerous?"}
+    G --> H{"agent.requiresHumanApproval?"}
     H -- yes --> I["humanInTheLoopMiddleware interrupt,<br/>approve or reject in the UI"]
     H -- no --> J["Execute through the AdminForth API layer"]
     I -- approved --> J
@@ -419,7 +419,7 @@ directories are also discovered.
 
 ## Human-in-the-loop approvals
 
-Tools whose definition marks them dangerous (`agent.isDangerous === true`) trigger an
+Tools whose endpoint sets `agent.requiresHumanApproval` (or the older `agent.isDangerous`) trigger an
 approval interrupt: generation pauses and the UI shows an approve/reject prompt. The client
 resolves it via `POST /agent/approval`, and the run resumes (or, on reject, the model is
 told the action was declined).

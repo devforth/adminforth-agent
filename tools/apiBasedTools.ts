@@ -45,7 +45,10 @@ type RegisteredApiToolSchema = IRegisteredApiSchema & {
 const DEFAULT_USER_TIME_ZONE = 'UTC';
 
 type AgentToolMeta = {
+  requiresHumanApproval?: boolean;
+  /** @deprecated Older name of `requiresHumanApproval`, still set by endpoints built for earlier AdminForth versions. */
   isDangerous?: boolean;
+  hiddenFromAgents?: boolean;
 };
 
 function hasRegisteredApiToolHandler(schema: IRegisteredApiSchema): schema is RegisteredApiToolSchema {
@@ -653,7 +656,7 @@ export function prepareApiBasedTools(
 
   for (const schema of openApiSchemas) {
     const toolName = openApiSchemaPathToToolName(schema.path, adminforth);
-    if (hasRegisteredApiToolHandler(schema)) {
+    if (hasRegisteredApiToolHandler(schema) && !schema.agent?.hiddenFromAgents) {
       openApiSchemasByToolName.set(toolName, schema);
     }
   }
