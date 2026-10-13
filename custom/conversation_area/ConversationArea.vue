@@ -8,7 +8,7 @@
     class="absolute bg-black/10 backdrop-blur-md z-10 h-full w-full"
   >
   </div>
-  <div ref="chatContainerRef" class="relative flex-1 min-h-0 overflow-hidden" @click="recalculateScroll()">
+  <div class="relative flex-1 min-h-0 overflow-hidden [container-type:size]" @click="recalculateScroll()">
     <CustomAutoScrollContainer
       v-if="showScrollContainer"
       class="relative h-full flex flex-col overflow-y-auto translate-x-[-50%] left-1/2"
@@ -26,6 +26,7 @@
       }"
       :style="{ 
         maxWidth: agentStore.isFullScreen ? agentStore.MAX_WIDTH+'rem' : '100%',
+        paddingBottom: showBottomSpacer ? `max(0px, 100cqh - ${lastTurnHeight}px)` : undefined,
         transition: `
           max-width ${agentTransitions.TRANSITION_DURATION}ms ease-in-out,
           transform ${agentTransitions.TRANSITION_DURATION}ms ease-in-out
@@ -41,17 +42,14 @@
       >
         <MessageRenderer :message="message" :isLastMessageInChat="index === props.messages.length - 1"/>
       </div>
-      <div 
+      <!-- absolute, so it doesn't resize the scroll content when the container resizes (see the spacer comment) -->
+      <div
         v-if="props.messages.length === 0"
-        class="flex-1 flex flex-col items-center justify-center text-gray-400 tracking-widest text-xl font-medium h-max"
-        :style="{
-          height: chatContainerRef ? chatContainerRef.clientHeight + 'px' : '100%',
-        }"
+        class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 tracking-widest text-xl font-medium"
       >
         <p>{{ $t('Start the conversation') }}</p>
         <p class="tracking-normal text-base text">{{ $t('Give any input to begin') }}</p>
       </div>
-      <div v-if="showBottomSpacer" class="w-full" :style="{ height: spacerHeight + 'px' }"></div>
     </CustomAutoScrollContainer>
     <Transition
       enter-active-class="transition-all duration-250 ease-out"
@@ -113,7 +111,6 @@ const innerScrollContainerRef = ref<HTMLElement | null>(null);
 const agentStore = useAgentStore();
 const agentTransitions = useAgentTransitions();
 const showScrollContainer = ref(true);
-const chatContainerRef = ref<HTMLElement | null>(null);
 const messagesRefs = ref<Array<HTMLElement | null>>([]);
 /*
 * Whenever user sends a message, it adds a bottom spacer, that takes the remaining height
@@ -121,11 +118,17 @@ const messagesRefs = ref<Array<HTMLElement | null>>([]);
 * 
 * On send message, happens the following logic: 
 * 1) showBottomSpacer is set to true
-* 2) updateSpacerHeight is called, which calculates the height for spacer based on scroll container height and messages height
-* 3) Spacer moves text up  
+* 2) updateSpacerHeight is called, which measures the last turn (last user + last agent message)
+* 3) Spacer moves text up
+*
+* The spacer is the scroll element's padding-bottom, resolved in CSS (100cqh minus the last turn), so
+* it follows the container height in the same layout pass, e.g. when the prompt textarea grows.
+* It is padding rather than a child element on purpose: custom-vue-scrollbar measures the viewport and
+* the content with separate debounced observers, and when both resize together it briefly computes a
+* wrong scroll range and flashes the scrollbar thumb. Padding keeps the content size unchanged.
 */
 const showBottomSpacer = ref(false);
-const spacerHeight = ref(0);
+const lastTurnHeight = ref(0);
 const MASK_HEIGHT = 20;
 const EMPTY_MESSAGE_HEIGHT = 18;
 const THRESHOLD_TO_SHOW_BUTTON = 10;
@@ -195,7 +198,7 @@ watch(scrollContainer, async () => {
 
 function resetSpacer() {
   showBottomSpacer.value = false;
-  spacerHeight.value = 0;
+  lastTurnHeight.value = 0;
 }
 
 function getLastMessageElement(role: 'user' | 'assistant') {
@@ -230,15 +233,7 @@ async function updateSpacerHeight() {
     return;
   }
 
-  const clientHeight = getScrollClientHeight();
-  if (!clientHeight) {
-    return;
-  }
-
-  const lastUserMessageHeight = getHeightOfLastUserMessage();
-  const lastAgentMessageHeight = getHeightOfLastAgentMessage();
-  const newSpacerHeight = Math.max(0, clientHeight - (lastUserMessageHeight + MASK_HEIGHT + lastAgentMessageHeight));
-  spacerHeight.value = newSpacerHeight;
+  lastTurnHeight.value = getHeightOfLastUserMessage() + MASK_HEIGHT + getHeightOfLastAgentMessage();
 }
 
 function scheduleSpacerHeightUpdate() {
@@ -328,7 +323,8 @@ async function handleSendMessage() {
 
 function recalculateScroll() {
   if (scrollContainer.value) {
-    scrollContainer.value.handleScroll(false,spacerHeight.value + THRESHOLD_TO_SHOW_BUTTON);
+    const spacerHeight = parseFloat(getComputedStyle(scrollContainer.value.container.scrollEl).paddingBottom);
+    scrollContainer.value.handleScroll(false, spacerHeight + THRESHOLD_TO_SHOW_BUTTON);
     const isScrolledUp = scrollContainer.value.isUserScrolledUp();
     showScrollToBottomButton.value = !!isScrolledUp;
   }
