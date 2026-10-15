@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 
 import type { AgentEvent, AgentEventEmitter } from "../../domain/agentEvents.js";
 import type { ToolCallEvent } from "../../domain/toolCallEvents.js";
+import type { ApprovalDescription } from "../../tools/approvalFormatter.js";
 
 type AgentEventStreamResponse = {
   writeHead: (statusCode: number, headers: Record<string, string>) => void;
@@ -123,7 +124,7 @@ function createAgentEventStream(
       });
     },
 
-    interrupt(sessionId: string, interrupt: unknown, approvals: string[]) {
+    interrupt(sessionId: string, interrupt: unknown, approvals: ApprovalDescription[]) {
       stream.endActiveBlock();
       stream.send({
         type: isAiUiMessageStream ? "data-interrupt" : "interrupt",

@@ -135,6 +135,7 @@ export function createAgentPlaceholderController({
 
   return {
     userMessagePlaceholder,
+    placeholderMessages,
     hasTypedMessageInPageSession,
     fetchPlaceholderMessages,
     stopPlaceholderAnimation,

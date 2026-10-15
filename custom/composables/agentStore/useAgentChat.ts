@@ -2,6 +2,7 @@ import { DefaultChatTransport } from 'ai';
 import { ref, shallowRef, watch, type Ref } from 'vue';
 import { Chat } from '../../chat';
 import { getCurrentPageContext } from './pageContext';
+import type { IApprovalDescription } from '../../types';
 // const { DefaultChatTransport } = await import('ai');
 
 type AgentImportMeta = ImportMeta & {
@@ -14,7 +15,7 @@ type CreateAgentChatManagerOptions = {
   lastMessage: Ref<string>;
   activeModeName: Ref<string | null>;
   onOpenPage: (targetPath: string) => void;
-  onToolApprovalRequest: (sessionId: string, interrupt: unknown, approvals?: unknown) => void;
+  onToolApprovalRequest: (sessionId: string, approvals: IApprovalDescription[]) => void;
 };
 
 export function createAgentChatManager({
@@ -119,7 +120,7 @@ export function createAgentChatManager({
     }
 
     if (dataPart?.type === 'data-interrupt' && typeof dataPart.data?.sessionId === 'string') {
-      onToolApprovalRequest(dataPart.data.sessionId, dataPart.data.interrupt, dataPart.data.approvals);
+      onToolApprovalRequest(dataPart.data.sessionId, dataPart.data.approvals);
       return;
     }
 
@@ -165,7 +166,7 @@ export function createAgentChatManager({
     }
 
     if (dataPart?.type === 'data-interrupt' && typeof dataPart.data?.sessionId === 'string') {
-      onToolApprovalRequest(dataPart.data.sessionId, dataPart.data.interrupt, dataPart.data.approvals);
+      onToolApprovalRequest(dataPart.data.sessionId, dataPart.data.approvals);
       return;
     }
 

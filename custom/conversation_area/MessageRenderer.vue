@@ -26,20 +26,20 @@
           <button
             v-if="canCopy"
             type="button"
-            class="flex items-center justify-center w-8 h-8 rounded-md text-gray-400 hover:text-lightPrimary dark:hover:text-darkPrimary opacity-60 group-hover/msg:opacity-100 transition-opacity duration-150 hover:scale-110"
+            :class="ACTION_BUTTON_CLASSES"
             :title="$t('Copy message')"
             @click="copyMessageToClipboard"
           >
-            <IconFileCopySolid class="w-5 h-5" />
+            <IconFileCopyOutline class="w-4 h-4" />
           </button>
           <button
             v-if="canEdit"
             type="button"
-            class="flex items-center justify-center w-8 h-8 rounded-md text-gray-400 hover:text-lightPrimary dark:hover:text-darkPrimary opacity-60 group-hover/msg:opacity-100 transition-opacity duration-150 hover:scale-110"
+            :class="ACTION_BUTTON_CLASSES"
             :title="$t('Edit message')"
             @click="agentStore.startEditMessage(message)"
           >
-            <IconPenSolid class="w-5 h-5" />
+            <IconPenOutline class="w-4 h-4" />
           </button>
         </div>
       </Transition>
@@ -83,7 +83,7 @@
 
 <script setup lang="ts">
   import { computed, ref } from 'vue';
-  import { IconPenSolid, IconFileCopySolid } from '@iconify-prerendered/vue-flowbite';
+  import { IconPenOutline, IconFileCopyOutline } from '@iconify-prerendered/vue-flowbite';
   import TextRenderer from './TextRenderer.vue';
   import type { IMessage } from '../types';
   import { getMessageParts } from '../utils';
@@ -98,6 +98,10 @@
     message: IMessage
     isLastMessageInChat: boolean
   }>();
+
+  const ACTION_BUTTON_CLASSES = `flex items-center justify-center w-7 h-7 rounded-md transition-colors duration-150
+    text-gray-500 hover:bg-gray-100 hover:text-gray-800
+    dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200`;
 
   const agentStore = useAgentStore();
   const { alert } = useAdminforth();

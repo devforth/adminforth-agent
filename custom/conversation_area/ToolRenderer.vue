@@ -1,68 +1,56 @@
 <template>
-  <div
-    ref="toolRendererRef" 
-    class="py-1 inline-flex justify-center m-2 max-w-full min-w-0
-      flex-col gap-3 rounded-xl px-2 text-lightListTableHeadingText
-      dark:text-darkListTableHeadingText select-none
-    "
-    :class="[
-      isInputOutputExpanded ? 'items-start border-none' : '', 
-      activateShrinkedStyle ? 'border items-center' : '',
-      activateFullWidth ? 'w-full' : '',
-    ]"
-    :style="{
-      maxWidth: activateShrinkedStyle ? toolRendererInitialWidth + 'px' : '',
-    }"
-  >
-    <div 
-      class="flex items-center gap-1 cursor-pointer"     
-      @click="toggleInputOutput()"
+  <li>
+    <button
+      type="button"
+      class="flex items-center gap-2 w-full py-0.5 text-left text-[0.8125rem] leading-5 select-none"
+      :class="hasToolSections ? 'cursor-pointer' : 'cursor-default'"
+      @click="hasToolSections && (isInputOutputExpanded = !isInputOutputExpanded)"
     >
-      <div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-lightNavbar dark:bg-darkNavbar">
-        <Spinner v-if="isRunning" class="h-4 w-4" />
-        <IconCheckOutline v-else-if="!props.data.toolInfo.error" class="h-4 w-4 text-lightPrimary dark:text-darkPrimary" />
-        <IconCloseOutline v-else class="h-4 w-4 text-red-500" />
-      </div>
-
-      <div class="min-w-0">
-        <p class="break-words font-mono text-sm leading-5">
-          {{ props.data?.toolInfo?.toolInfo ? props.data.toolInfo.toolInfo : props.data?.toolInfo?.toolName}}
-        </p>
-      </div>
-      <IconAngleDownOutline
+      <span class="flex items-center justify-center w-4 h-4 shrink-0 rounded-full" :class="statusClasses">
+        <Spinner v-if="isRunning" class="w-3 h-3" />
+        <IconXMark16Solid v-else-if="props.data.toolInfo.error" class="w-3 h-3" />
+        <IconCheck16Solid v-else class="w-3 h-3" />
+      </span>
+      <span class="max-w-[55%] shrink-0 truncate font-mono text-xs text-gray-800 dark:text-gray-200">
+        {{ props.data.toolInfo.toolName }}
+      </span>
+      <span class="flex-1 min-w-0 truncate text-gray-500 dark:text-gray-400" :title="props.data.toolInfo.toolInfo">
+        {{ props.data.toolInfo.toolInfo }}
+      </span>
+      <span v-if="durationLabel" class="shrink-0 tabular-nums text-gray-500 dark:text-gray-400">{{ durationLabel }}</span>
+      <IconChevronDown
         v-if="hasToolSections"
+        class="w-3.5 h-3.5 shrink-0 text-gray-400 transition-transform duration-200"
         :class="isInputOutputExpanded ? 'rotate-180' : 'rotate-0'"
-        @transitionend="finishTransition()"
-        class="shrink-0 cursor-pointer transition-transform duration-300 hover:scale-105"
       />
-    </div>
+    </button>
     <transition name="expand">
-      <div v-if="isInputOutputExpanded" v-show="isInputOutputExpanded" class="max-h-72 space-y-3 overflow-y-auto pr-1 w-full">
+      <div v-if="isInputOutputExpanded" class="max-h-72 mt-1.5 mb-1 ml-6 space-y-2 overflow-y-auto">
         <section
           v-for="section in toolSections"
           :key="section.label"
-          class="overflow-hidden rounded-xl border border-black/5 bg-white/70 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-slate-900/50"
+          class="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900/40"
         >
-          <header class="border-b border-black/5 px-3 py-2 text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-gray-500 dark:border-white/10 dark:text-gray-400">
+          <header class="border-b border-gray-200 px-2.5 py-1.5 text-[0.7rem] font-semibold uppercase tracking-wider text-gray-500 dark:border-gray-700 dark:text-gray-400">
             {{ section.label }}
           </header>
-          <div class="select-all grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 px-3 py-3 font-mono text-xs leading-5 text-gray-700 dark:text-gray-200">
+          <div class="select-all grid grid-cols-[auto,1fr] gap-x-3 gap-y-0.5 px-2.5 py-2 font-mono text-xs leading-5 text-gray-700 dark:text-gray-200">
             <template v-for="line in section.lines" :key="`${section.label}-${line.number}`">
-              <span class=" text-[0.7rem] text-gray-400 dark:text-gray-500 select-none">{{ line.number }}</span>
+              <span class="text-[0.7rem] text-gray-400 dark:text-gray-500 select-none">{{ line.number }}</span>
               <span class="whitespace-pre-wrap break-words">{{ line.content || ' ' }}</span>
             </template>
           </div>
         </section>
       </div>
     </transition>
-  </div>
+  </li>
 </template>
 
 <script setup lang="ts">
-  import { computed, ref, watch, onMounted, nextTick } from 'vue';
+  import { computed, ref } from 'vue';
   import { type IFormattedToolCallPart } from '../types';
   import { Spinner } from '@/afcl';
-  import { IconAngleDownOutline, IconCheckOutline, IconCloseOutline } from '@iconify-prerendered/vue-flowbite';
+  import { IconCheck16Solid, IconChevronDown, IconXMark16Solid } from '@iconify-prerendered/vue-heroicons';
 
   const props = defineProps<{
     data: IFormattedToolCallPart
@@ -77,14 +65,20 @@
   }
 
   const isInputOutputExpanded = ref(false);
-  const activateShrinkedStyle = ref(true);
-  const toolRendererInitialWidth = ref<number | null>(null);
-  const toolRendererRef = ref<HTMLElement | null>(null);
-  const activateFullWidth = ref(false);
-  const blockClicksDuringAnimation = ref(false);
-  const ANIMATION_DURATION = 300;
 
-  const isRunning = computed(() => props.data?.toolInfo?.phase === 'start');
+  const isRunning = computed(() => props.data.toolInfo.phase === 'start');
+  const durationLabel = computed(() => {
+    const { durationMs } = props.data.toolInfo;
+    return durationMs === undefined ? null : `${(durationMs / 1000).toFixed(1)}s`;
+  });
+  const statusClasses = computed(() => {
+    if (isRunning.value) {
+      return 'text-gray-500 dark:text-gray-400';
+    }
+    return props.data.toolInfo.error
+      ? 'bg-red-100 text-red-600 dark:bg-red-500/20 dark:text-red-400'
+      : 'bg-lightPrimary/10 text-lightPrimary dark:bg-darkPrimary/20 dark:text-darkPrimary';
+  });
   const toolSections = computed<IToolSection[]>(() => {
     const sections = [
       {
@@ -108,38 +102,6 @@
       }));
   });
   const hasToolSections = computed(() => toolSections.value.length > 0);
-
-  onMounted(async () => {
-    await nextTick();
-    if (toolRendererRef.value && props.data.toolInfo) {
-      const contentWidth = Math.ceil(toolRendererRef.value.getBoundingClientRect().width);
-      const parentWidth = toolRendererRef.value.parentElement?.clientWidth ?? Infinity;
-      toolRendererInitialWidth.value = Math.min(contentWidth, parentWidth);
-    }
-  });
-
-  watch(isInputOutputExpanded, (newValue) => {
-    if (newValue) {
-      activateShrinkedStyle.value = false;
-      activateFullWidth.value = true;
-    }
-  });
-
-  function finishTransition() {
-    if (!isInputOutputExpanded.value) {
-      activateFullWidth.value = false;
-      activateShrinkedStyle.value = true;
-    }
-  }
-
-  function toggleInputOutput() {
-    if (blockClicksDuringAnimation.value) return;
-    isInputOutputExpanded.value = !isInputOutputExpanded.value;
-    blockClicksDuringAnimation.value = true;
-    setTimeout(() => {
-      blockClicksDuringAnimation.value = false;
-    }, ANIMATION_DURATION);
-  }
 
   const normalizeToolPayload = (value: unknown): string | null => {
     if (value === null || value === undefined || value === '') {

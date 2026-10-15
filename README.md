@@ -424,6 +424,10 @@ approval interrupt: generation pauses and the UI shows an approve/reject prompt.
 resolves it via `POST /agent/approval`, and the run resumes (or, on reject, the model is
 told the action was declined).
 
+The prompt names the resource and columns by their labels and lists every value the tool
+would write; for `update_record` each field shows its current value next to the new one.
+Values of `masked` and `backendOnly` columns are never shown.
+
 Where the pending approval lives depends on your setup: with `checkpointResource` configured
 the LangGraph checkpoint is authoritative, so a resume survives a restart and works across
 instances; with the in-memory fallback the state is held per process instance.

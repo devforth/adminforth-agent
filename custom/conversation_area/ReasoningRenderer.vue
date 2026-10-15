@@ -1,36 +1,34 @@
 <template>
-  <li class="mb-6 mx-2 mt-2 px-2 z-50 overflow-hidden">
-    <span class="bg-lightNavbar dark:bg-darkNavbar absolute flex items-center text-listTableHeadingText dark:text-darkListTableHeadingText justify-center w-5 h-5 bg-brand-softer rounded-full -start-[0.68rem] ring-4 ring-lightNavbar dark:ring-darkNavbar ring-default">
-      <div class="w-5 h-5 rounded-full flex items-center justify-center">
-        <IconBrainOutline class="w-4 h-4" />
-      </div>
-    </span>
-    <h3 
-      class=" flex items-center mb-1 text-sm ml-3 gap-1 cursor-pointer select-none hover:opacity-80 text-listTableHeadingText dark:text-darkListTableHeadingText"      
+  <li class="overflow-hidden">
+    <button
+      type="button"
+      class="flex items-center gap-2 w-full py-0.5 text-left text-[0.8125rem] leading-5 select-none"
       @click="isExpanded = !isExpanded"
     >
-      <span class="font-semibold">{{ reasoningTitle }}</span>
+      <IconBrainOutline class="w-4 h-4 shrink-0 text-gray-500 dark:text-gray-400" />
+      <span class="min-w-0 truncate font-medium text-gray-700 dark:text-gray-300">{{ reasoningTitle || $t('Reasoning') }}</span>
       <ThreeDotsAnimation v-if="isStreaming"/>
-      <IconAngleDownOutline           
+      <IconChevronDown
         :class="isExpanded ? 'rotate-180' : 'rotate-0'"
-        class="transition-transform duration-200"
+        class="ml-auto w-3.5 h-3.5 shrink-0 text-gray-400 transition-transform duration-200"
       />
-    </h3>
+    </button>
     <transition name="expand">
       <IncremarkContent
-        v-if="isExpanded" 
+        v-if="isExpanded"
         v-show="isExpanded"
-        class="pl-4 text-sm"
+        class="ml-6 mb-1 text-sm text-gray-600 dark:text-gray-400"
         :content="reasoningText"
       />
-    </transition>    
+    </transition>
   </li>
 </template>
 
 
 
 <script setup lang="ts">
-import { IconBrainOutline, IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
+import { IconBrainOutline } from '@iconify-prerendered/vue-flowbite';
+import { IconChevronDown } from '@iconify-prerendered/vue-heroicons';
 import type { IPart } from '../types';
 import { ref, computed, watch, defineAsyncComponent } from 'vue';
 import ThreeDotsAnimation from './ThreeDotsAnimation.vue';

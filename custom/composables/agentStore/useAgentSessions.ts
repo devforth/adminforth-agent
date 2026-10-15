@@ -1,7 +1,7 @@
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { callAdminForthApi } from '@/utils';
 import type { Chat } from '../../chat';
-import type { IAgentSession, ISessionsListItem, IPart } from '../../types';
+import type { IAgentSession, IApprovalDescription, ISessionsListItem, IPart } from '../../types';
 import { PRE_SESSION_ID, STEER_PERSIST_PREFIX } from './constants';
 import { i18nInstance } from '@/i18n';
 
@@ -23,7 +23,7 @@ type CreateAgentSessionManagerOptions = {
   blockCloseOfChat: Ref<boolean>;
   adminforth: AdminforthLike;
   setCurrentChat: (sessionId: string) => void;
-  restorePendingToolApproval: (sessionId: string, messages: string[]) => void;
+  restorePendingToolApproval: (sessionId: string, approvals: IApprovalDescription[]) => void;
 };
 
 export function createAgentSessionManager({

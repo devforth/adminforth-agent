@@ -1,3 +1,16 @@
+/** One value on the approval card; `from` is the stored value an update replaces. */
+export interface IApprovalField {
+  label: string;
+  from?: string;
+  to: string;
+}
+
+/** A tool call awaiting approval, as described by the backend. */
+export interface IApprovalDescription {
+  summary: string;
+  fields: IApprovalField[];
+}
+
 export interface IPartData {
   toolCallId?: string;
   toolName?: string;
@@ -9,7 +22,7 @@ export interface IPartData {
   durationMs?: number;
   toolInfo?: string;
   status?: 'pending' | 'processing' | 'approved' | 'rejected';
-  messages?: string[];
+  approvals?: IApprovalDescription[];
   error?: string;
 }
 export interface IPart {
@@ -22,11 +35,6 @@ export interface IPart {
 export interface IFormattedToolCallPart {
   type: 'data-tool-call';
   toolInfo: IPartData;
-}
-
-export interface IToolGroup {
-  title: string;
-  groupedTools: IFormattedToolCallPart[];
 }
 
 export interface IMessage {
@@ -47,8 +55,8 @@ export interface IAgentSession {
   title: string;
   timestamp: string;
   messages: IMessage[];
-  /** Tool calls this session is still waiting for the user to approve, in plain language. */
-  pendingApprovals?: string[];
+  /** Tool calls this session is still waiting for the user to approve. */
+  pendingApprovals?: IApprovalDescription[];
 }
 
 export interface ISessionsListItem {

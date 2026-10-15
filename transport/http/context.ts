@@ -13,6 +13,7 @@ import type {
   RunAndPersistAgentResponseResult,
 } from "../../domain/turnTypes.js";
 import type { PluginOptions } from "../../types.js";
+import type { ApprovalDescription } from "../../tools/approvalFormatter.js";
 
 export type SessionTurn = {
   id: string;
@@ -29,7 +30,7 @@ export type AgentEndpointsContext = {
   steer(input: { sessionId: string; message: string; adminUser: any }): Promise<{ id: string; queued: number }>;
   runAndPersistAgentResponse(input: RunAndPersistAgentResponseInput): Promise<RunAndPersistAgentResponseResult>;
   getSessionTurns(sessionId: string): Promise<SessionTurn[]>;
-  getPendingApprovals(sessionId: string): Promise<string[]>;
+  getPendingApprovals(sessionId: string): Promise<ApprovalDescription[]>;
   createNewTurn(sessionId: string, prompt: string, response?: string): Promise<string>;
   createSystemTurn(sessionId: string, systemMessage: string): Promise<string>;
   appendSteerToCurrentTurn(sessionId: string, steerText: string): Promise<void>;

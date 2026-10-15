@@ -1,4 +1,5 @@
 import type { ToolCallEvent } from "./toolCallEvents.js";
+import type { ApprovalDescription } from "../tools/approvalFormatter.js";
 
 export type AgentEvent =
   | {
@@ -26,8 +27,8 @@ export type AgentEvent =
       type: "interrupt";
       sessionId: string;
       interrupt: unknown;
-      /** One plain-language line per pending tool call, for the approval card. */
-      approvals: string[];
+      /** One description per pending tool call, for the approval card. */
+      approvals: ApprovalDescription[];
     }
   | {
       type: "steer-applied";

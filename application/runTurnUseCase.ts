@@ -7,7 +7,7 @@ import type { AgentSessionStore } from "../persistence/sessionStore.js";
 import type { SteerBuffer } from "../domain/steerBuffer.js";
 import type { PluginOptions } from "../types.js";
 import type { LlmPort } from "./ports.js";
-import { formatApprovalRequest, type ApprovalRequest } from "../tools/approvalFormatter.js";
+import { formatApprovalRequest, type ApprovalDescription, type ApprovalRequest } from "../tools/approvalFormatter.js";
 import type {
   AgentMessage,
   AgentTurnContext,
@@ -182,12 +182,12 @@ export class RunTurnUseCase {
   }
 
   /** Describe pending tool calls in plain language an admin (not a developer) can act on. */
-  private describeApprovals(interrupts: PendingInterrupt[]): string[] {
+  private describeApprovals(interrupts: PendingInterrupt[]): Promise<ApprovalDescription[]> {
     const adminforth = this.deps.getAdminforth();
 
-    return interrupts
+    return Promise.all(interrupts
       .flatMap((interrupt) => interrupt.requests)
-      .map((request: ApprovalRequest) => formatApprovalRequest(adminforth, request));
+      .map((request: ApprovalRequest) => formatApprovalRequest(adminforth, request)));
   }
 
   /**
@@ -196,7 +196,7 @@ export class RunTurnUseCase {
    * page reload would otherwise leave the user with no way to answer it. Empty when
    * nothing is pending.
    */
-  public async getPendingApprovals(sessionId: string, modeName?: string | null): Promise<string[]> {
+  public async getPendingApprovals(sessionId: string, modeName?: string | null): Promise<ApprovalDescription[]> {
     // Loading a conversation must not fail because the checkpoint store is unhappy
     // (already logged by resolvePendingInterrupts). Without the prompt the user simply
     // falls back to the implicit reject in `prepareTurn`.
@@ -398,7 +398,7 @@ export class RunTurnUseCase {
       type: "interrupt",
       sessionId: prepared.sessionId,
       interrupt,
-      approvals: this.describeApprovals(descriptors),
+      approvals: await this.describeApprovals(descriptors),
     });
   }
 

@@ -1,4 +1,5 @@
-import type { AdminForthResource, IAdminForth } from "adminforth";
+import { logger, type AdminForthResource, type IAdminForth } from "adminforth";
+import { getErrorMessage } from "../shared/errors.js";
 
 /** One tool call awaiting approval, normalized out of the provider interrupt payload. */
 export type ApprovalRequest = {
@@ -6,10 +7,24 @@ export type ApprovalRequest = {
   args: Record<string, unknown>;
 };
 
+/** One value on the approval card; `from` is the stored value an update replaces. */
+export type ApprovalField = {
+  label: string;
+  from?: string;
+  to: string;
+};
+
+/** A tool call awaiting approval, described for the approval card. */
+export type ApprovalDescription = {
+  /** What the call does and to which record, e.g. `Update record with id:10 in Cars`. */
+  summary: string;
+  /** The values the call writes, in the resource's own wording. */
+  fields: ApprovalField[];
+};
+
 /** Argument keys that address the call itself rather than the data being changed. */
 const NON_FIELD_KEYS = new Set(["resourceId", "recordId", "primaryKey", "requiredColumnsToSkip", "meta", "extra"]);
 const MAX_VALUE_LENGTH = 80;
-const MAX_FIELDS = 12;
 
 function truncate(text: string, limit = MAX_VALUE_LENGTH): string {
   return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
@@ -64,25 +79,54 @@ function formatValue(value: unknown, column?: any): string {
   return truncate(String(value));
 }
 
-/** `Brand: Tesla, Price: 45000` — the record payload in the resource's own wording. */
-function formatRecord(record: unknown, resource: AdminForthResource | undefined): string {
+/**
+ * The record payload as labelled values in the resource's own wording. Every field is
+ * listed: the admin approves exactly what will be written. With `oldRecord` each value is
+ * paired with the one it replaces.
+ */
+function describeFields(
+  record: unknown,
+  resource: AdminForthResource | undefined,
+  oldRecord?: Record<string, unknown>,
+): ApprovalField[] {
   if (record === null || typeof record !== "object" || Array.isArray(record)) {
-    return "";
+    return [];
   }
 
   const columnsByName = new Map((resource?.columns ?? []).map((column) => [column.name, column]));
-  const entries = Object.entries(record as Record<string, unknown>)
-    .filter(([key]) => !NON_FIELD_KEYS.has(key));
-  const shown = entries.slice(0, MAX_FIELDS).map(([name, value]) => {
-    const column = columnsByName.get(name);
 
-    return `${column?.label || humanize(name)}: ${formatValue(value, column)}`;
-  });
-  const hidden = entries.length - shown.length;
-  const lines = hidden > 0 ? [...shown, `and ${hidden} more`] : shown;
+  return Object.entries(record as Record<string, unknown>)
+    .filter(([key]) => !NON_FIELD_KEYS.has(key))
+    .map(([name, value]) => {
+      const column = columnsByName.get(name);
 
-  // One field per line: a wide record is unreadable as a single run-on sentence.
-  return lines.join(",\n");
+      return {
+        label: column?.label || humanize(name),
+        from: oldRecord ? formatValue(oldRecord[name], column) : undefined,
+        to: formatValue(value, column),
+      };
+    });
+}
+
+/**
+ * The stored record an update would change, read the same way the update endpoint reads it.
+ * The preview must never block the approval prompt, so a failed read only drops the old values.
+ */
+async function loadRecord(
+  adminforth: IAdminForth,
+  resource: AdminForthResource | undefined,
+  recordId: unknown,
+): Promise<Record<string, unknown> | undefined> {
+  if (!resource) {
+    return undefined;
+  }
+
+  try {
+    return await adminforth.connectors[resource.dataSource].getRecordByPrimaryKey(resource, String(recordId)) ?? undefined;
+  } catch (error) {
+    logger.warn(`Approval preview: failed to read record ${String(recordId)} of "${resource.resourceId}": ${getErrorMessage(error)}`);
+    return undefined;
+  }
 }
 
 function actionLabel(resource: AdminForthResource | undefined, actionId: unknown): string {
@@ -96,48 +140,58 @@ function actionLabel(resource: AdminForthResource | undefined, actionId: unknown
 }
 
 /**
- * Describe a tool call awaiting approval in a sentence an admin (not a developer) can
- * act on — resource and column labels instead of ids, values instead of raw JSON.
- * Falls back to a key/value dump for tool calls it does not recognize.
+ * Describe a tool call awaiting approval so an admin (not a developer) can act on it —
+ * resource and column labels instead of ids, values instead of raw JSON, and for an
+ * update the current value next to each new one. Tool calls it does not recognize are
+ * shown as their arguments.
  */
-export function formatApprovalRequest(
+export async function formatApprovalRequest(
   adminforth: IAdminForth,
   request: ApprovalRequest,
-): string {
+): Promise<ApprovalDescription> {
   const { args, toolName } = request;
   const resource = findResource(adminforth, args.resourceId);
   const label = resourceLabel(resource, args);
 
   switch (toolName) {
-    case "create_record": {
-      const fields = formatRecord(args.record, resource);
+    case "create_record":
+      return {
+        summary: `Create a new record in ${label}`,
+        fields: describeFields(args.record, resource),
+      };
 
-      return `Create a new record in ${label}${fields ? `:\n${fields}` : ""}`;
-    }
-
-    case "update_record": {
-      const fields = formatRecord(args.record, resource);
-
-      return `Update record with id:${formatValue(args.recordId)} in ${label}${fields ? `, set:\n${fields}` : ""}`;
-    }
+    case "update_record":
+      return {
+        summary: `Update record with id:${formatValue(args.recordId)} in ${label}`,
+        fields: describeFields(args.record, resource, await loadRecord(adminforth, resource, args.recordId)),
+      };
 
     case "delete_record":
-      return `Delete record with id:${formatValue(args.primaryKey)} from ${label} — this cannot be undone`;
+      return {
+        summary: `Delete record with id:${formatValue(args.primaryKey)} from ${label} — this cannot be undone`,
+        fields: [],
+      };
 
     case "start_custom_action":
-      return `Run ${actionLabel(resource, args.actionId)} on record ${formatValue(args.recordId)} in ${label}`;
+      return {
+        summary: `Run ${actionLabel(resource, args.actionId)} on record ${formatValue(args.recordId)} in ${label}`,
+        fields: [],
+      };
 
     case "start_custom_bulk_action":
     case "start_bulk_action": {
       const count = Array.isArray(args.recordIds) ? args.recordIds.length : 0;
 
-      return `Run ${actionLabel(resource, args.actionId)} on ${count} record(s) in ${label}`;
+      return {
+        summary: `Run ${actionLabel(resource, args.actionId)} on ${count} record(s) in ${label}`,
+        fields: [],
+      };
     }
 
-    default: {
-      const fields = formatRecord(args, resource);
-
-      return `${humanize(toolName)}${fields ? `:\n${fields}` : ""}`;
-    }
+    default:
+      return {
+        summary: humanize(toolName),
+        fields: describeFields(args, resource),
+      };
   }
 }

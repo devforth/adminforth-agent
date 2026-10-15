@@ -3,8 +3,8 @@
     ref="headerRef"
     class="flex items-center justify-between h-14 border-b border-gray-200 dark:border-gray-700"         
   >
-    <div 
-      class="flex items-center"
+    <div
+      class="flex items-center shrink-0"
     >
       <IconBarsOutline 
         class="m-2 w-8 h-8 p-1 cursor-pointer hover:scale-110 rounded transition-colors duration-200
@@ -47,7 +47,10 @@
         @click="agentStore.setFullScreen(false)" 
       />
     </div>
-    <div class="flex items-center justify-center">
+    <p class="flex-1 min-w-0 truncate px-1 text-sm font-semibold text-lightNavbarText dark:text-darkNavbarText">
+      {{ isNewChat ? $t('New chat') : agentStore.currentSession.title }}
+    </p>
+    <div class="flex items-center justify-center shrink-0">
       <Button 
         @click="agentStore.createPreSession(); agentStore.setSessionHistoryOpen(false); agentStore.focusTextInput();" 
         class="!py-1 !px-2 max-w-64 mr-2"
@@ -67,12 +70,16 @@
 
 
 <script setup>
+  import { computed } from 'vue';
   import { IconArrowsPointingOut, IconArrowsPointingIn } from '@iconify-prerendered/vue-heroicons';
   import { IconCloseOutline, IconBarsOutline, IconCloseSidebarSolid, IconOpenSidebarSolid, IconPlusOutline } from '@iconify-prerendered/vue-flowbite';
   import { useAgentStore } from './composables/useAgentStore';
   import { useCoreStore } from '@/stores/core';
   import { Button } from '@/afcl';
+  import { PRE_SESSION_ID } from './composables/agentStore/constants';
 
   const agentStore = useAgentStore();
   const coreStore = useCoreStore();
+
+  const isNewChat = computed(() => !agentStore.currentSession || agentStore.currentSession.sessionId === PRE_SESSION_ID);
 </script>

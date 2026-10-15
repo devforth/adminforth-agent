@@ -45,10 +45,32 @@
       <!-- absolute, so it doesn't resize the scroll content when the container resizes (see the spacer comment) -->
       <div
         v-if="props.messages.length === 0"
-        class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 tracking-widest text-xl font-medium"
+        class="absolute inset-0 flex flex-col items-center justify-center px-7 pb-10 text-center"
       >
-        <p>{{ $t('Start the conversation') }}</p>
-        <p class="tracking-normal text-base text">{{ $t('Give any input to begin') }}</p>
+        <div class="flex items-center justify-center w-11 h-11 rounded-xl bg-lightPrimary/10 text-lightPrimary dark:bg-darkPrimary/15 dark:text-darkPrimary">
+          <IconSparkles class="w-6 h-6" />
+        </div>
+        <h2 class="mt-4 text-xl font-semibold text-lightNavbarText dark:text-darkNavbarText">
+          {{ $t('How can I help?') }}
+        </h2>
+        <p class="mt-1.5 max-w-xs text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+          {{ $t('Ask about your data, build charts or update records.') }}
+        </p>
+        <div v-if="suggestions.length" class="mt-7 w-full max-w-sm flex flex-col gap-2 text-left">
+          <p class="pl-0.5 text-xs font-medium text-gray-500 dark:text-gray-400">{{ $t('Try asking') }}</p>
+          <button
+            v-for="suggestion in suggestions"
+            :key="suggestion"
+            type="button"
+            class="group flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl border text-sm text-left transition-colors duration-150
+              border-gray-200 text-lightNavbarText hover:border-gray-300 hover:bg-gray-50
+              dark:border-gray-700 dark:text-darkNavbarText dark:hover:border-gray-600 dark:hover:bg-gray-800"
+            @click="applySuggestion(suggestion)"
+          >
+            <span class="flex-1 min-w-0">{{ suggestion }}</span>
+            <IconArrowRight class="w-4 h-4 shrink-0 text-gray-400 transition-transform duration-150 group-hover:translate-x-0.5" />
+          </button>
+        </div>
       </div>
     </CustomAutoScrollContainer>
     <Transition
@@ -89,6 +111,7 @@
 import type { IMessage } from '../types';
 import { useTemplateRef, ref, onMounted, onUnmounted, watch, nextTick, defineAsyncComponent, computed } from 'vue';
 import { IconArrowDownOutline } from '@iconify-prerendered/vue-flowbite';
+import { IconArrowRight, IconSparkles } from '@iconify-prerendered/vue-heroicons';
 import SessionsHistory from '../SessionsHistory.vue';
 import { useAgentStore } from '../composables/useAgentStore';
 import { useAgentTransitions } from '../composables/useAgentTransitions';
@@ -132,6 +155,7 @@ const lastTurnHeight = ref(0);
 const MASK_HEIGHT = 20;
 const EMPTY_MESSAGE_HEIGHT = 18;
 const THRESHOLD_TO_SHOW_BUTTON = 10;
+const MAX_SUGGESTIONS = 3;
 let messageResizeObserver: ResizeObserver | null = null;
 let observedLastUserMessageElement: HTMLElement | null = null;
 let observedLastAgentMessageElement: HTMLElement | null = null;
@@ -142,6 +166,14 @@ let spacerUpdateQueued = false;
 const showAnimationInScrollToBottomButton = computed(() => {
   return agentStore.isResponseInProgress && showScrollToBottomButton.value;
 });
+
+// The configured placeholder examples double as clickable starters on an empty chat.
+const suggestions = computed(() => agentStore.placeholderMessages.slice(0, MAX_SUGGESTIONS));
+
+function applySuggestion(suggestion: string) {
+  agentStore.userMessageInput = suggestion;
+  agentStore.focusTextInput();
+}
 
 onMounted(async () => {
   messageResizeObserver = new ResizeObserver(() => {

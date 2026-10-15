@@ -656,7 +656,7 @@ describe('RunTurnUseCase.getPendingApprovals', () => {
     });
 
     expect(await useCase.getPendingApprovals('s1')).toEqual([
-      'Delete record with id:10 from cars — this cannot be undone',
+      { summary: 'Delete record with id:10 from cars — this cannot be undone', fields: [] },
     ]);
   });
 

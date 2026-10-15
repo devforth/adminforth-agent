@@ -1,58 +1,69 @@
 <template>
-  <template v-if="ToolOrReasoningParts.length > 0 || inProgress">
-    <div 
-      class="shine-text-container ml-2 px-4 flex items-center gap-1 select-none hover:opacity-80 tracking-wide font-medium text-sm text-listTableHeadingText dark:text-darkListTableHeadingText"
-      :class="[ToolOrReasoningParts.length > 0 ? 'cursor-pointer' : '']"
+  <template v-if="timelineParts.length > 0 || inProgress">
+    <button
+      type="button"
+      class="z-20 self-start flex items-center gap-1.5 mx-4 my-1 select-none text-[0.9375rem] font-medium transition-colors duration-150
+        text-gray-600 dark:text-gray-400"
+      :class="timelineParts.length > 0 ? 'hover:text-gray-900 dark:hover:text-gray-200' : 'cursor-default'"
       @click="isExpanded = !isExpanded"
     >
-      <p 
-        :class="[
-          inProgress ? `
-            shine-text text-listTableHeadingText dark:text-darkListTableHeadingText 
-            bg-[linear-gradient(-65deg,currentColor,_rgb(120,120,120)_50%,currentColor)] 
-            dark:bg-[linear-gradient(-65deg,currentColor,_rgb(250,250,250,0.8)_70%,currentColor)]
-            ` 
-          : '']"
-      >
-        {{ inProgress ? $t('Thinking') : $t('Thoughts') }} 
-      </p>
-      <ThreeDotsAnimation v-if="inProgress" />      
-      <span v-if="thinkingDuration > 0">({{ (thinkingDuration/1000).toFixed(2) }} s)</span>
-      <IconAngleDownOutline 
-        v-if="ToolOrReasoningParts.length > 0"
-        :class="isExpanded ? 'rotate-180' : 'rotate-0'"
-        class="transition-transform duration-200"
+      <IconChevronRight
+        v-if="timelineParts.length > 0"
+        class="w-4 h-4 transition-transform duration-200"
+        :class="isExpanded ? 'rotate-90' : 'rotate-0'"
       />
-    </div>
-    <transition name="expand" class="sm:max-h-96 max-h-48 overflow-y-auto mb-4 pt-1">
-      <CustomAutoScrollContainer
-        ref="scrollContainerRef"
-        :enabled="isResponseInProgress"
-        behavior="smooth"
-        v-if="ToolOrReasoningParts.length > 0" 
+      <template v-if="inProgress">
+        <span
+          class="shine-text text-listTableHeadingText dark:text-darkListTableHeadingText
+            bg-[linear-gradient(-65deg,currentColor,_rgb(120,120,120)_50%,currentColor)]
+            dark:bg-[linear-gradient(-65deg,currentColor,_rgb(250,250,250,0.8)_70%,currentColor)]"
+        >
+          {{ $t('Thinking') }}
+        </span>
+        <ThreeDotsAnimation />
+      </template>
+      <template v-else>
+        <span>{{ thinkingSeconds ? $t('Thought for {seconds}s', { seconds: thinkingSeconds }) : $t('Thoughts') }}</span>
+        <span v-if="toolCallsCount">
+          · {{ toolCallsCount === 1 ? $t('1 tool') : $t('{count} tools', { count: toolCallsCount }) }}
+        </span>
+      </template>
+    </button>
+    <transition name="expand">
+      <!-- the box is inset from the message edge, so its own scrollbar never sits on top of the conversation scrollbar -->
+      <div
+        v-if="timelineParts.length > 0"
         v-show="isExpanded"
-        :threshold="5"
-        :wrapperStyle="{
-          marginRight: '1rem',
-        }"
-        :scrollBarAutoHide="false"
+        class="z-20 mx-4 mt-1 mb-3 overflow-hidden rounded-xl border
+          border-gray-100 bg-gray-50/70 dark:border-gray-700 dark:bg-gray-800/50"
       >
-        <ol class="ml-8 my-2 relative border-l border-l-2 border-black border-default border-listTableHeadingText dark:border-darkListTableHeadingText">
-          <template v-for="(part, index) in ToolOrReasoningParts" :key="index">
-            <ReasoningRenderer v-if="part.type === 'reasoning'" :state="part.state" :text="part.text" />
-            <ToolsGroup v-else-if="part.type==='data-tool-call'" :toolGroup="groupToolCallParts(message, part)" :isExpanded="isExpanded" />
-            <li v-else-if="part.type === 'data-rendering'" class="mb-6 mx-2 mt-2 px-2 z-50 overflow-hidden">
-              <span class="bg-lightNavbar dark:bg-darkNavbar absolute flex items-center text-listTableHeadingText dark:text-darkListTableHeadingText justify-center w-5 h-5 rounded-full -start-[0.68rem] ring-4 ring-lightNavbar dark:ring-darkNavbar">
-                <div class="w-2 h-2 rounded-full bg-current animate-pulse"></div>
-              </span>
-              <h3 class="flex items-center mb-1 text-sm ml-3 gap-1 text-listTableHeadingText dark:text-darkListTableHeadingText">
-                <span class="font-semibold">{{ part.data?.label ?? 'Rendering...' }}</span>
+        <CustomAutoScrollContainer
+          ref="scrollContainerRef"
+          class="max-h-48 sm:max-h-96 overflow-y-auto"
+          :enabled="isResponseInProgress"
+          behavior="smooth"
+          :threshold="5"
+          :scrollBarAutoHide="false"
+        >
+          <!-- wider right padding keeps the row chevrons clear of the box's scrollbar -->
+          <ul class="flex flex-col gap-1 pl-2.5 pr-5 py-2">
+            <template v-for="(part, index) in timelineParts" :key="index">
+              <ReasoningRenderer v-if="part.type === 'reasoning'" :state="part.state" :text="part.text" />
+              <ToolRenderer v-else-if="part.type === 'data-tool-call'" :data="formatToolCallPart(part)" />
+              <li
+                v-else-if="part.type === 'data-rendering'"
+                class="flex items-center gap-2 py-0.5 text-[0.8125rem] text-gray-700 dark:text-gray-300"
+              >
+                <span class="flex items-center justify-center w-4 h-4 shrink-0">
+                  <span class="w-2 h-2 rounded-full bg-current animate-pulse" />
+                </span>
+                {{ part.data?.label ?? 'Rendering...' }}
                 <ThreeDotsAnimation />
-              </h3>
-            </li>
-          </template>
-        </ol>
-      </CustomAutoScrollContainer>
+              </li>
+            </template>
+          </ul>
+        </CustomAutoScrollContainer>
+      </div>
     </transition>
   </template>
 </template>
@@ -60,14 +71,13 @@
 
 
 <script setup lang="ts">
-  import type { IFormattedToolCallPart, IMessage, IPart, IToolGroup } from '../types';
+  import type { IFormattedToolCallPart, IMessage, IPart } from '../types';
   import { ref, computed, watch, onUnmounted, onMounted, defineAsyncComponent } from 'vue';
+  import { IconChevronRight } from '@iconify-prerendered/vue-heroicons';
   import ReasoningRenderer from './ReasoningRenderer.vue';
-  import { IconAngleDownOutline } from '@iconify-prerendered/vue-flowbite';
+  import ToolRenderer from './ToolRenderer.vue';
   import ThreeDotsAnimation from './ThreeDotsAnimation.vue';
   import { useAgentStore } from '../composables/useAgentStore';
-  import { getMessageParts } from '../utils';
-  import ToolsGroup from './ToolsGroup.vue';
 
   const CustomAutoScrollContainer = defineAsyncComponent(() => import('../CustomAutoScrollContainer.vue'));
 
@@ -83,17 +93,23 @@
   const innerScrollContainerRef = ref<HTMLElement | null>(null);
   const isExpanded = ref(true);
   let isUserScrolled = false;
-  const ToolOrReasoningParts = computed(() => {
+  // One step per reasoning block and per tool call (its 'start' part; the matching 'end'
+  // part is merged in by formatToolCallPart), plus a rendering step while it is running.
+  const timelineParts = computed(() => {
     return props.message.parts.filter((part: IPart) => {
-      return part.type === 'data-tool-call'
-        || part.type === 'reasoning'
+      return part.type === 'reasoning'
+        || (part.type === 'data-tool-call' && part.data?.phase === 'start')
         || isActiveRenderingPart(part);
     });
   });
+  const toolCallsCount = computed(() => timelineParts.value.filter(part => part.type === 'data-tool-call').length);
+  const thinkingSeconds = computed(() => (
+    thinkingDuration.value > 0 ? Math.max(1, Math.round(thinkingDuration.value / 1000)) : 0
+  ));
   const isResponseInProgress = computed(() =>{
-    return props.isLastMessageInChat && agentStore.isResponseInProgress; 
+    return props.isLastMessageInChat && agentStore.isResponseInProgress;
   });
-  
+
   const showFakeThinkingMessage = computed(() => {
     if (props.message.parts.length === 0 && props.isLastMessageInChat) return true;
     return false;
@@ -141,37 +157,28 @@
     }
   });
 
-  const formatToolCallPart = (part: IPart, currentMessage: IMessage): IFormattedToolCallPart | null => {
-    if (part.type !== 'data-tool-call' || part.data?.phase !== 'start') {
-      return null;
-    }
-
-    const finishedPart = currentMessage.parts.find(candidate => {
+  function formatToolCallPart(part: IPart): IFormattedToolCallPart {
+    const data = part.data!;
+    const finishedPart = props.message.parts.find(candidate => {
       return candidate.type === 'data-tool-call'
-        && candidate.data?.toolCallId === part.data?.toolCallId
+        && candidate.data?.toolCallId === data.toolCallId
         && candidate.data?.phase === 'end';
     });
 
     return {
       type: 'data-tool-call',
       toolInfo: {
-        toolCallId: part.data.toolCallId,
-        toolName: part.data.toolName,
+        toolCallId: data.toolCallId,
+        toolName: data.toolName,
         phase: finishedPart ? 'end' : 'start',
         durationMs: finishedPart?.data?.durationMs,
-        input: part.data.input,
+        input: data.input,
         output: finishedPart?.data?.output,
-        toolInfo: part.data.toolInfo,
+        toolInfo: data.toolInfo,
         error: finishedPart?.data?.error,
       }
     };
-  };
-
-  const getVisibleTimelineParts = (message: IMessage) => {
-    return getMessageParts(message).filter(part => {
-      return part.type === 'reasoning' || (part.type === 'data-tool-call' && part.data?.phase === 'start');
-    });
-  };
+  }
 
   function isActiveRenderingPart(part: IPart) {
     return part.type === 'data-rendering'
@@ -181,55 +188,8 @@
       });
   }
 
-  const groupToolCallParts = (message: IMessage, currentPart: IPart): IToolGroup[] => {
-    if (currentPart.type !== 'data-tool-call') {
-      return [];
-    }
-
-    const visibleParts = getVisibleTimelineParts(message);
-    const currentPartIndex = visibleParts.findIndex(part => part === currentPart);
-
-    if (currentPartIndex === -1) {
-      return [];
-    }
-
-    if (currentPartIndex > 0 && visibleParts[currentPartIndex - 1]?.type === 'data-tool-call') {
-      return [];
-    }
-
-    const groupedParts: IToolGroup[] = [];
-
-    for (let index = currentPartIndex; index < visibleParts.length; index += 1) {
-      const part = visibleParts[index];
-
-      if (part.type === 'reasoning') {
-        break;
-      }
-
-      const formattedPart = formatToolCallPart(part, message);
-
-      if (!formattedPart) {
-        continue;
-      }
-
-      const lastGroup = groupedParts[groupedParts.length - 1];
-
-      if (lastGroup?.title === formattedPart.toolInfo.toolName) {
-        lastGroup.groupedTools.push(formattedPart);
-        continue;
-      }
-
-      groupedParts.push({
-        title: formattedPart.toolInfo.toolName,
-        groupedTools: [formattedPart],
-      });
-    }
-
-    return groupedParts;
-  };
-
   function handleScroll() {
-    if (isUserScrolled) { 
+    if (isUserScrolled) {
       scrollContainerRef.value?.handleScroll();
     }
   }

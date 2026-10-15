@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { IAgentSession, ISessionsListItem } from '../types';
+import { IAgentSession, IApprovalDescription, ISessionsListItem } from '../types';
 import { ref, nextTick, computed, watch, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAdminforth } from '@/adminforth';
@@ -69,10 +69,11 @@ export const useAgentStore = defineStore('agent', () => {
     lastMessage,
     activeModeName,
     onOpenPage: openAgentPage,
-    onToolApprovalRequest: addToolApprovalMessage,
+    onToolApprovalRequest: addToolApprovalPart,
   });
   const {
     userMessagePlaceholder,
+    placeholderMessages,
     hasTypedMessageInPageSession,
     fetchPlaceholderMessages,
     stopPlaceholderAnimation,
@@ -108,28 +109,13 @@ export const useAgentStore = defineStore('agent', () => {
     isAudioChatMode.value = isAudioChat;
   }
 
-  function getToolApprovalMessages(interrupt: unknown): string[] {
-    const interrupts = Array.isArray(interrupt) ? interrupt : [interrupt];
-
-    return interrupts.flatMap((item: any) => {
-      const value = item?.value ?? item;
-      const actionRequests = Array.isArray(value?.actionRequests) ? value.actionRequests : [];
-
-      return actionRequests.map((actionRequest: any) => (
-        typeof actionRequest?.description === 'string'
-          ? actionRequest.description
-          : String(actionRequest?.name ?? 'Tool execution pending approval')
-      ));
-    });
-  }
-
-  function addToolApprovalPart(sessionId: string, messages: string[]) {
+  function addToolApprovalPart(sessionId: string, approvals: IApprovalDescription[]) {
     const approvalPart = {
       type: 'data-tool-approval' as const,
       data: {
         sessionId,
         status: 'pending' as const,
-        messages,
+        approvals,
       },
     };
     const lastChatMessage = currentChat.value?.lastMessage;
@@ -144,16 +130,6 @@ export const useAgentStore = defineStore('agent', () => {
       role: 'assistant',
       parts: [approvalPart],
     });
-  }
-
-  function addToolApprovalMessage(sessionId: string, interrupt: unknown, approvals?: unknown) {
-    // The backend describes each pending tool call in plain language; its raw
-    // descriptions are only the fallback when it could not.
-    const formatted = Array.isArray(approvals)
-      ? approvals.filter((line): line is string => typeof line === 'string' && Boolean(line))
-      : [];
-
-    addToolApprovalPart(sessionId, formatted.length ? formatted : getToolApprovalMessages(interrupt));
   }
 
   async function submitToolApproval(sessionId: string, decision: 'approve' | 'reject') {
@@ -628,6 +604,7 @@ export const useAgentStore = defineStore('agent', () => {
     submitToolApproval,
     userMessageInput,
     userMessagePlaceholder,
+    placeholderMessages,
     chatMessages: computed(() => currentChat.value?.messages || []),
     trimmedUserMessage,
     isResponseInProgress,

@@ -1,40 +1,35 @@
 <template>
   <div
     v-show="!agentStore.isResponseInProgress || isAudioChatMode"
-    class="absolute bottom-1 flex items-center justify-center z-10 gap-4"
-    :class="[!agentStore.isAudioChatMode ? 'right-16': agentStore.isMobile ? 'right-1/2 translate-x-1/2' : 'right-1/2 translate-x-1/2']"
-  > 
-    <button 
-      v-if="isAudioChatMode && microphoneButtonMode === 'generating'"
-      class="bg-red-500 hover:bg-red-600 dark:bg-red-700 dark:hover:bg-red-800 h-9 flex items-center justify-center rounded-full gap-2 text-white px-4"
-      @click="stopCurrentGeneration()"
-    >
-      <div class="w-3 h-3 bg-white rounded-full"/>
-      {{ $t('Stop') }}
-    </button>
+    class="flex items-center"
+  >
+    <!-- One button for the whole voice flow: the icon shows the state, the label what a click does -->
     <button
-      v-else 
-      class="h-7 bg-lightPrimary dark:bg-darkPrimary 
-        hover:opacity-90 rounded-full flex items-center justify-center
-        transition-all duration-300 ease-in-out overflow-hidden"
-      :class="[isAudioChatMode ? 'w-32 px-2': 'w-7']" 
-      @click="toggleChatMode"
+      type="button"
+      class="flex h-8 shrink-0 items-center justify-center rounded-full transition-colors duration-150"
+      :class="isAudioChatMode
+        ? `w-40 gap-2 px-3 text-sm font-medium
+          bg-lightPrimary/10 text-gray-800 hover:bg-lightPrimary/15
+          dark:bg-darkPrimary/20 dark:text-gray-100 dark:hover:bg-darkPrimary/30`
+        : 'w-8 text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'"
+      :title="$t(buttonTitle)"
+      :aria-label="$t(buttonTitle)"
+      @click="isGenerating ? stopCurrentGeneration() : toggleChatMode()"
     >
-      <div class="w-5 h-5 flex items-center justify-center">
-        <div v-if="microphoneButtonMode === 'listen' || microphoneButtonMode === 'off'" class="flex justify-evenly items-center gap-[0.1rem]">
-          <AudioLines
-            :showAnimation="showAudioWavesAnimation"
-            :isRecording="microphoneButtonMode === 'listen'"
-            :amplitude="audioAmplitude"
-          />
-          <Spinner v-if="isPolling" class="ml-2 w-4 h-4 text-lightButtonsText dark:text-darkButtonsText fill-lightButtonsBackground dark:fill-darkPrimary" />
-        </div>
-        <div v-else-if="microphoneButtonMode === 'generating'" class="flex items-center justify-center gap-2 text-white text-sm">
-          <span class="w-3 h-3 bg-white rounded-sm" />
-          {{ $t('End') }}
-        </div>
-        <Spinner v-else class="w-4 h-4 text-lightButtonsText dark:text-darkButtonsText fill-lightButtonsBackground dark:fill-darkPrimary" />
-      </div>
+      <span
+        class="flex h-5 items-center gap-[0.1rem]"
+        :class="isAudioChatMode ? 'text-lightPrimary dark:text-darkPrimary' : ''"
+      >
+        <span v-if="isGenerating" class="w-2.5 h-2.5 rounded-sm bg-current" />
+        <Spinner v-else-if="isPolling || microphoneButtonMode === 'transcribing'" class="w-4 h-4" />
+        <AudioLines
+          v-else
+          :showAnimation="showAudioWavesAnimation"
+          :isRecording="microphoneButtonMode === 'listen'"
+          :amplitude="audioAmplitude"
+        />
+      </span>
+      <template v-if="isAudioChatMode">{{ isGenerating ? $t('Stop') : $t('End') }}</template>
     </button>
   </div>
 </template>
@@ -69,6 +64,13 @@ const sendUserRecordDebounced = debounce(() => {
 const isPolling = ref(false);
 
 const isAudioChatMode = computed(() => agentStore.isAudioChatMode);
+const isGenerating = computed(() => microphoneButtonMode.value === 'generating');
+const buttonTitle = computed(() => {
+  if (!isAudioChatMode.value) {
+    return 'Start voice chat';
+  }
+  return isGenerating.value ? 'Stop response' : 'End voice chat';
+});
 
 onMounted(() => {
   agentStore.registerOnBeforeChatCloseCallback(async () => {

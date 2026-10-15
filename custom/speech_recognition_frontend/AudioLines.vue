@@ -2,10 +2,9 @@
   <div
     v-for="(height, index) in lineHeights"
     :key="index"
-    class="bg-white w-[0.2rem] rounded-sm transition-all duration-100 ease-out"
+    class="bg-current w-[0.2rem] rounded-sm transition-all duration-100 ease-out"
     :style="{ height }"
   />
-  <p v-if="isRecording" class="text-white ml-2">{{ $t('End') }}</p>
 </template>
 
 <script setup lang="ts">
