@@ -42,18 +42,12 @@ const scrollElement = ref<HTMLElement | null>(null)
 let lastScrollTop = 0
 let lastScrollHeight = 0
 let observer: MutationObserver | null = null
+let resizeObserver: ResizeObserver | null = null
 
-const INITIAL_SCROLL_DEBOUNCE = 200
-let initialScrollDone = false
-let initialScrollTimer: ReturnType<typeof setTimeout> | null = null
-
-function scheduleInitialScrollEnd(): void {
-  if (initialScrollTimer) clearTimeout(initialScrollTimer)
-  initialScrollTimer = setTimeout(() => {
-    initialScrollDone = true
-    initialScrollTimer = null
-  }, INITIAL_SCROLL_DEBOUNCE)
-}
+// Markdown, code highlighting and charts render asynchronously and keep growing the content after
+// it appears, with pauses longer than any debounce. So after mount the container stays at the bottom
+// on every resize until the user scrolls away or the parent scrolls it (a sent message).
+let keepAtBottom = false
 
 const scrollParams = ref({
   scrollTop: 0,
@@ -62,7 +56,10 @@ const scrollParams = ref({
 });
 
 defineExpose({
-  scrollToBottom: () => scrollToBottom(true),
+  scrollToBottom: () => {
+    keepAtBottom = false
+    scrollToBottom(true)
+  },
   isUserScrolledUp: () => isUserScrolledUp.value,
   container: containerRef,
   handleScroll,
@@ -90,11 +87,6 @@ onMounted(() => {
       scrollParams.value.clientHeight = containerRef.value.scrollEl.clientHeight
       if (props.enabled && !isUserScrolledUp.value) {
         scrollToBottom()
-      } else if (props.scrollToBottomOnMount && !initialScrollDone) {
-        // Delayed content is still settling in the initial scroll phase: keep
-        // pinning to the bottom and restart the quiet-period debounce.
-        scrollToBottom(true)
-        scheduleInitialScrollEnd()
       }
     })
   })
@@ -106,14 +98,23 @@ onMounted(() => {
   })
 
   if (props.scrollToBottomOnMount) {
-    nextTick(() => scrollToBottom(true))
-    scheduleInitialScrollEnd()
+    keepAtBottom = true
+    const scrollEl = containerRef.value.scrollEl
+    // fires once on observe, which is the initial scroll; instant, the user sees the latest messages right away.
+    // While enabled, the mutation observer above follows the content with the behavior of the container
+    resizeObserver = new ResizeObserver(() => {
+      if (keepAtBottom && !props.enabled) {
+        scrollEl.scrollTo({ top: scrollEl.scrollHeight, behavior: 'instant' })
+      }
+    })
+    resizeObserver.observe(scrollEl)
+    resizeObserver.observe(scrollEl.firstElementChild!)
   }
 })
 
 onUnmounted(() => {
   observer?.disconnect()
-  if (initialScrollTimer) clearTimeout(initialScrollTimer)
+  resizeObserver?.disconnect()
 })
 
 function isNearBottom(customThreshold?: number): boolean {
@@ -168,6 +169,7 @@ function handleScroll(detectScrollDown = true, customThreshold?: number): void {
     const isContentUnchanged = scrollHeight === lastScrollHeight
     if ((isScrollingUp || isScrollingDown) && isContentUnchanged) {
       isUserScrolledUp.value = true
+      keepAtBottom = false
     }
   }
   lastScrollTop = scrollTop
