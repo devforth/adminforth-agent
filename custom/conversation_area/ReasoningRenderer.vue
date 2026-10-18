@@ -5,19 +5,19 @@
       class="flex items-center gap-2 w-full py-0.5 text-left text-[0.8125rem] leading-5 select-none"
       @click="isExpanded = !isExpanded"
     >
-      <IconBrainOutline class="w-4 h-4 shrink-0 text-gray-500 dark:text-gray-400" />
-      <span class="min-w-0 truncate font-medium text-gray-700 dark:text-gray-300">{{ reasoningTitle || $t('Reasoning') }}</span>
+      <IconBrain class="w-4 h-4 shrink-0 text-lightInputIconColor dark:text-darkInputIconColor" />
+      <span class="min-w-0 truncate font-medium text-lightTableText dark:text-darkTableText">{{ reasoningTitle || $t('Reasoning') }}</span>
       <ThreeDotsAnimation v-if="isStreaming"/>
       <IconChevronDown
         :class="isExpanded ? 'rotate-180' : 'rotate-0'"
-        class="ml-auto w-3.5 h-3.5 shrink-0 text-gray-400 transition-transform duration-200"
+        class="ml-auto w-3.5 h-3.5 shrink-0 text-lightInputIconColor transition-transform duration-200 dark:text-darkInputIconColor"
       />
     </button>
     <transition name="expand">
       <IncremarkContent
         v-if="isExpanded"
         v-show="isExpanded"
-        class="ml-6 mb-1 text-sm text-gray-600 dark:text-gray-400"
+        class="ml-6 mb-1 text-sm text-lightInputIconColor dark:text-darkInputIconColor"
         :content="reasoningText"
       />
     </transition>
@@ -27,8 +27,7 @@
 
 
 <script setup lang="ts">
-import { IconBrainOutline } from '@iconify-prerendered/vue-flowbite';
-import { IconChevronDown } from '@iconify-prerendered/vue-heroicons';
+import { IconBrain, IconChevronDown } from '@iconify-prerendered/vue-lucide';
 import type { IPart } from '../types';
 import { ref, computed, watch, defineAsyncComponent } from 'vue';
 import ThreeDotsAnimation from './ThreeDotsAnimation.vue';

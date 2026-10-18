@@ -27,6 +27,11 @@ const createSessionBodySchema = z.object({
   triggerMessage: z.string().optional(),
 }).strict();
 
+const renameSessionBodySchema = z.object({
+  sessionId: z.string(),
+  title: z.string().trim().min(1).max(100),
+}).strict();
+
 export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHttpServer) {
   server.endpoint({
     method: 'POST',
@@ -181,6 +186,39 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
       await Promise.all(turns.map(turn => ctx.adminforth.resource(ctx.options.turnResource.resourceId).delete(turn[ctx.options.turnResource.idField])));
       return {
         ok: true
+      };
+    }
+  });
+
+  server.endpoint({
+    method: 'POST',
+    path: `/agent/rename-session`,
+    agent: {
+      hiddenFromAgents: true,
+    },
+    request_schema: renameSessionBodySchema,
+    handler: async ({ body, adminUser, response }) => {
+      const data = body as z.infer<typeof renameSessionBodySchema>;
+      const session = await ctx.adminforth.resource(ctx.options.sessionResource.resourceId).get(
+        [Filters.EQ(ctx.options.sessionResource.idField, data.sessionId)]
+      );
+      if (!session) {
+        response.setStatus(404, 'Session not found');
+        return {
+          error: 'Session not found'
+        };
+      }
+      if (session[ctx.options.sessionResource.askerIdField] !== adminUser!.pk) {
+        response.setStatus(403, 'Unauthorized');
+        return {
+          error: 'Unauthorized'
+        };
+      }
+      await ctx.adminforth.resource(ctx.options.sessionResource.resourceId).update(data.sessionId, {
+        [ctx.options.sessionResource.titleField]: data.title,
+      });
+      return {
+        title: data.title,
       };
     }
   });

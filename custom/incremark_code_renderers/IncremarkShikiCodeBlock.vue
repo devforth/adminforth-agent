@@ -205,6 +205,9 @@ async function renderHighlight() {
       const result = await embed(vegaContainer.value, spec, {
         actions: false,
         renderer: 'svg',
+        // the chart sits on the surface of the code block, so it takes the theme of the page
+        theme: codeTheme.value === 'dark' ? 'dark' : undefined,
+        config: { background: 'transparent' },
       });
 
       if (requestId !== renderRequestId) {
@@ -259,70 +262,36 @@ function clearVega() {
 
 <style scoped>
 .incremark-shiki-code {
-  --incremark-code-border: rgba(148, 163, 184, 0.24);
-  --incremark-code-toolbar-bg: rgba(248, 250, 252, 0.9);
-  --incremark-code-toolbar-text: #475569;
-  --incremark-code-copy-bg: rgba(226, 232, 240, 0.9);
-  --incremark-code-copy-text: #0f172a;
-  border: 1px solid var(--incremark-code-border);
-  border-radius: 16px;
+  @apply border border-lightCardBorder bg-lightCardBackground dark:border-darkCardBorder dark:bg-darkCardBackground;
+  border-radius: 8px;
   overflow: hidden;
   width: 100%;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.96));
-  box-shadow: 0 14px 30px -24px rgba(15, 23, 42, 0.45);
-  margin: 16px 0 ;
-}
-
-.dark .incremark-shiki-code {
-  --incremark-code-border: rgba(100, 116, 139, 0.38);
-  --incremark-code-toolbar-bg: rgba(15, 23, 42, 0.88);
-  --incremark-code-toolbar-text: #cbd5e1;
-  --incremark-code-copy-bg: rgba(30, 41, 59, 0.88);
-  --incremark-code-copy-text: #e2e8f0;
-  background:
-    linear-gradient(180deg, rgba(2, 6, 23, 0.96), rgba(15, 23, 42, 0.98));
-}
-
-.incremark-shiki-code[data-stream-state='pending'],
-.incremark-shiki-code[data-stream-state='stable'] {
-  box-shadow: 0 10px 24px -24px rgba(15, 23, 42, 0.8);
+  margin: 0 0 8px;
 }
 
 .incremark-shiki-toolbar {
+  @apply border-b border-lightCardBorder bg-lightCardBackgroundHover dark:border-darkCardBorder dark:bg-darkCardBackgroundHover;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--incremark-code-border);
-  background: var(--incremark-code-toolbar-bg);
-  backdrop-filter: blur(10px);
+  padding: 4px 4px 4px 12px;
 }
 
 .incremark-shiki-language {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--incremark-code-toolbar-text);
+  @apply text-xs font-medium text-lightInputIconColor dark:text-darkInputIconColor;
 }
 
 .incremark-shiki-copy {
-  border: none;
-  border-radius: 999px;
-  padding: 6px 10px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  background: var(--incremark-code-copy-bg);
-  color: var(--incremark-code-copy-text);
-  cursor: pointer;
-  transition: transform 0.16s ease, opacity 0.16s ease, background-color 0.16s ease;
+  @apply h-6 rounded-default px-2 text-xs font-medium transition-colors text-lightInputIconColor dark:text-darkInputIconColor;
 }
 
 .incremark-shiki-copy:hover:not(:disabled) {
-  transform: translateY(-1px);
+  @apply bg-lightSecondaryDarken text-lightInputText dark:bg-darkSecondaryLighten dark:text-darkInputText;
+}
+
+.incremark-shiki-copy:focus-visible {
+  @apply outline-none ring-[3px] ring-lightFocusRing dark:ring-darkFocusRing;
 }
 
 .incremark-shiki-copy:disabled {
@@ -331,13 +300,7 @@ function clearVega() {
 }
 
 .incremark-shiki-copy.is-copied {
-  background: rgba(16, 185, 129, 0.16);
-  color: #059669;
-}
-
-.dark .incremark-shiki-copy.is-copied {
-  background: rgba(16, 185, 129, 0.24);
-  color: #6ee7b7;
+  @apply text-lightSuccess dark:text-darkSuccess;
 }
 
 .incremark-shiki-body {
@@ -345,13 +308,13 @@ function clearVega() {
 }
 
 .incremark-vega {
-  padding: 18px;
+  padding: 12px;
   width: 100%;
 }
 
 .incremark-shiki-fallback {
   margin: 0;
-  padding: 18px;
+  padding: 12px;
   overflow-x: auto;
   background: transparent;
   color: inherit;
@@ -359,7 +322,7 @@ function clearVega() {
 
 .incremark-shiki-fallback code {
   display: block;
-  font-family: 'JetBrains Mono', 'Fira Code', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-family: theme('fontFamily.mono');
   font-size: 13px;
   line-height: 1.65;
   white-space: pre;
@@ -367,7 +330,7 @@ function clearVega() {
 
 :deep(.incremark-shiki-html pre.shiki) {
   margin: 0;
-  padding: 18px;
+  padding: 12px;
   overflow-x: auto;
   background: transparent !important;
   font-size: 13px;
@@ -376,7 +339,7 @@ function clearVega() {
 
 :deep(.incremark-shiki-html code) {
   display: block;
-  font-family: 'JetBrains Mono', 'Fira Code', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-family: theme('fontFamily.mono');
 }
 
 :deep(.incremark-shiki-html .line) {
@@ -387,7 +350,5 @@ function clearVega() {
   width: 100%;
 }
 
-:deep(.incremark-vega){
-  padding: 0;
-}
+
 </style>

@@ -1,13 +1,14 @@
 <template>
   <div
-    class="flex items-center justify-center min-w-0 transition-shadow duration-150 z-20"
+    class="flex items-center justify-center min-w-0 text-sm transition-shadow duration-150 z-20"
     @click="handleMarkdownLinkClick"
     :class="[
-      hasVegaLite ? 'w-full my-2' : 'my-2',
+      hasVegaLite && 'w-full',
       props.role === 'user'
-        ? 'self-end max-w-[82%] mr-4 px-3.5 py-0.5 rounded-2xl rounded-br-md bg-lightPrimary/10 dark:bg-darkPrimary/20'
+        ? 'self-end max-w-[82%] mr-4 px-3 py-2 rounded-xl rounded-br [&_.incremark-paragraph]:leading-5 bg-lightSecondaryDarken dark:bg-darkSecondaryLighten'
         : 'self-start max-w-full px-4',
-      props.editMode ? 'ring-2 ring-lightPrimary dark:ring-darkPrimary w-full max-w-[calc(100%-2rem)] flex-col items-stretch py-3' : ''
+      props.editMode ? `w-full max-w-[calc(100%-2rem)] flex-col items-stretch py-3 border bg-lightInputBackground border-lightInputFocusBorder ring-[3px] ring-lightInputFocusRing
+        dark:bg-darkInputBackground dark:border-darkInputFocusBorder dark:ring-darkInputFocusRing` : ''
     ]"
   >
     <IncremarkContent
@@ -19,13 +20,10 @@
       :components="incremarkComponents"
       :incremark-options="incremarkOptions"
     />
-    <!-- <p v-else class="text-red-500 py-2">
-      {{ $t('No content to render') }}
-    </p> -->
     <template v-if="props.editMode">
       <textarea
         v-model="agentStore.userMessageInput"
-        class="w-full min-h-24 resize-y bg-transparent text-sm text-gray-900 dark:text-gray-100 border-none focus:outline-none focus:ring-0 p-0"
+        class="w-full min-h-24 resize-y bg-transparent text-sm text-lightInputText dark:text-darkInputText border-none focus:outline-none focus:ring-0 p-0"
         @keydown.esc.prevent="agentStore.cancelEditMessage"
       />
       <EditActionButtons
@@ -155,31 +153,55 @@
 </script>
 
 <style lang="scss">
+// the incremark theme ships its own fonts and palette, point them to the design tokens
+.incremark {
+  --incremark-typography-font-family-base: theme('fontFamily.sans');
+  --incremark-typography-font-family-mono: theme('fontFamily.mono');
+  --incremark-color-text-primary: theme('colors.lightListTableText');
+  --incremark-color-text-secondary: theme('colors.lightInputIconColor');
+  --incremark-color-text-tertiary: theme('colors.lightInputPlaceholderText');
+  --incremark-color-border-default: theme('colors.lightCardBorder');
+  --incremark-color-border-strong: theme('colors.lightCardBorder');
+  --incremark-color-border-subtle: theme('colors.lightCardBorder');
+  --incremark-color-background-base: theme('colors.lightCardBackground');
+  --incremark-color-background-elevated: theme('colors.lightCardBackgroundHover');
+  --incremark-color-code-inline-background: theme('colors.lightSecondaryDarken');
+  --incremark-color-code-inline-text: theme('colors.lightInputText');
+  --incremark-color-brand-primary: theme('colors.lightPrimary');
+  --incremark-color-interactive-link: theme('colors.lightPrimary');
+  --incremark-color-interactive-link-hover: theme('colors.lightPrimary');
+  --incremark-color-interactive-link-visited: theme('colors.lightPrimary');
+}
+
+.dark .incremark {
+  --incremark-color-text-primary: theme('colors.darkListTableText');
+  --incremark-color-text-secondary: theme('colors.darkInputIconColor');
+  --incremark-color-text-tertiary: theme('colors.darkInputPlaceholderText');
+  --incremark-color-border-default: theme('colors.darkCardBorder');
+  --incremark-color-border-strong: theme('colors.darkCardBorder');
+  --incremark-color-border-subtle: theme('colors.darkCardBorder');
+  --incremark-color-background-base: theme('colors.darkCardBackground');
+  --incremark-color-background-elevated: theme('colors.darkCardBackgroundHover');
+  --incremark-color-code-inline-background: theme('colors.darkSecondaryLighten');
+  --incremark-color-code-inline-text: theme('colors.darkInputText');
+  --incremark-color-brand-primary: theme('colors.darkPrimary');
+  --incremark-color-interactive-link: theme('colors.darkPrimary');
+  --incremark-color-interactive-link-hover: theme('colors.darkPrimary');
+  --incremark-color-interactive-link-visited: theme('colors.darkPrimary');
+}
+
 .incremark a.incremark-link,
 .incremark a.incremark-link:visited {
+  @apply text-lightPrimary dark:text-darkPrimary;
   display: inline-block;
   text-decoration: underline;
   text-underline-offset: 4px;
-  text-decoration-style:dotted;
-  color: rgb(0, 0, 0);
-  transition: color 0.2s ease;
+  text-decoration-style: dotted;
   word-break: break-all;
 }
 
 .incremark a.incremark-link:hover {
-  color: rgb(74, 74, 255);
-  text-decoration: underline;
-  text-underline-offset: 4px;
-  text-decoration-style:dotted;
-}
-
-html[data-theme="dark"] .incremark a.incremark-link,
-html[data-theme="dark"] .incremark a.incremark-link:visited {
-  color: rgb(220, 220, 220);
-}
-
-html[data-theme="dark"] .incremark a.incremark-link:hover {
-  color: rgb(147, 147, 255);
+  text-decoration-style: solid;
 }
 
 a.incremark-link::after {
@@ -198,11 +220,27 @@ a.incremark-link::after {
   word-break: break-word;
 }
 
-.incremark-list {
+// scoped under .incremark: the incremark theme is imported lazily and would win an equal selector
+.incremark .incremark-list {
   list-style: disc;
+  margin: 0 0 8px;
+  padding-left: 18px;
 }
 
-.incremark-paragraph {
-  margin: 8px 0;
+.incremark .incremark-list-item {
+  margin: 2px 0;
+}
+
+.incremark .incremark-paragraph {
+  margin: 0 0 8px;
+}
+
+.incremark .incremark-list-item > .incremark-paragraph {
+  margin: 0;
+}
+
+// the gap between messages comes from the conversation, not from the last block of a message
+.incremark > .incremark-block:last-child > :last-child {
+  margin-bottom: 0;
 }
 </style>

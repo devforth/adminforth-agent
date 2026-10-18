@@ -2,21 +2,21 @@
   <template v-if="timelineParts.length > 0 || inProgress">
     <button
       type="button"
-      class="z-20 self-start flex items-center gap-1.5 mx-4 my-1 select-none text-[0.9375rem] font-medium transition-colors duration-150
-        text-gray-600 dark:text-gray-400"
-      :class="timelineParts.length > 0 ? 'hover:text-gray-900 dark:hover:text-gray-200' : 'cursor-default'"
+      class="z-20 self-start flex items-center gap-1 mx-4 mb-2 select-none text-[13px] font-medium transition-colors duration-150
+        text-lightInputIconColor dark:text-darkInputIconColor"
+      :class="timelineParts.length > 0 ? 'hover:text-lightInputText dark:hover:text-darkInputText' : 'cursor-default'"
       @click="isExpanded = !isExpanded"
     >
       <IconChevronRight
         v-if="timelineParts.length > 0"
-        class="w-4 h-4 transition-transform duration-200"
+        class="w-3.5 h-3.5 transition-transform duration-200"
         :class="isExpanded ? 'rotate-90' : 'rotate-0'"
       />
       <template v-if="inProgress">
         <span
-          class="shine-text text-listTableHeadingText dark:text-darkListTableHeadingText
-            bg-[linear-gradient(-65deg,currentColor,_rgb(120,120,120)_50%,currentColor)]
-            dark:bg-[linear-gradient(-65deg,currentColor,_rgb(250,250,250,0.8)_70%,currentColor)]"
+          class="shine-text
+            bg-[linear-gradient(-65deg,currentColor,theme(colors.lightInputPlaceholderText)_50%,currentColor)]
+            dark:bg-[linear-gradient(-65deg,currentColor,theme(colors.darkInputText)_70%,currentColor)]"
         >
           {{ $t('Thinking') }}
         </span>
@@ -34,8 +34,8 @@
       <div
         v-if="timelineParts.length > 0"
         v-show="isExpanded"
-        class="z-20 mx-4 mt-1 mb-3 overflow-hidden rounded-xl border
-          border-gray-100 bg-gray-50/70 dark:border-gray-700 dark:bg-gray-800/50"
+        class="z-20 mx-4 mb-3 overflow-hidden rounded-lg border
+          border-lightCardBorder bg-lightCardBackground dark:border-darkCardBorder dark:bg-darkCardBackground"
       >
         <CustomAutoScrollContainer
           ref="scrollContainerRef"
@@ -52,7 +52,7 @@
               <ToolRenderer v-else-if="part.type === 'data-tool-call'" :data="formatToolCallPart(part)" />
               <li
                 v-else-if="part.type === 'data-rendering'"
-                class="flex items-center gap-2 py-0.5 text-[0.8125rem] text-gray-700 dark:text-gray-300"
+                class="flex items-center gap-2 py-0.5 text-[0.8125rem] text-lightTableText dark:text-darkTableText"
               >
                 <span class="flex items-center justify-center w-4 h-4 shrink-0">
                   <span class="w-2 h-2 rounded-full bg-current animate-pulse" />
@@ -73,7 +73,7 @@
 <script setup lang="ts">
   import type { IFormattedToolCallPart, IMessage, IPart } from '../types';
   import { ref, computed, watch, onUnmounted, onMounted, defineAsyncComponent } from 'vue';
-  import { IconChevronRight } from '@iconify-prerendered/vue-heroicons';
+  import { IconChevronRight } from '@iconify-prerendered/vue-lucide';
   import ReasoningRenderer from './ReasoningRenderer.vue';
   import ToolRenderer from './ToolRenderer.vue';
   import ThreeDotsAnimation from './ThreeDotsAnimation.vue';

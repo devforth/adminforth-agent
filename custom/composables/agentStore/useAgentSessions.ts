@@ -203,6 +203,26 @@ export function createAgentSessionManager({
     setCurrentChat(PRE_SESSION_ID);
   }
 
+  async function renameSession(sessionId: string, title: string) {
+    const res = await callAdminForthApi({
+      method: 'POST',
+      path: '/agent/rename-session',
+      body: { sessionId, title },
+    });
+    if (res.error) {
+      console.error('Error renaming session:', res.error);
+      return;
+    }
+    sessionList.value.find((s: ISessionsListItem) => s.sessionId === sessionId)!.title = res.title;
+    // a loaded session is cached apart from the list, and the open one is shown in the header
+    if (sessions.value[sessionId]) {
+      sessions.value[sessionId].title = res.title;
+    }
+    if (currentSession.value?.sessionId === sessionId) {
+      currentSession.value.title = res.title;
+    }
+  }
+
   async function deleteSession(sessionId: string) {
     if (sessionId === PRE_SESSION_ID) {
       deletePreSession();
@@ -370,6 +390,7 @@ export function createAgentSessionManager({
     createPreSession,
     setActiveSession,
     fetchSessionsList,
+    renameSession,
     deleteSession,
     addDebugMessage,
     addSystemMessage,

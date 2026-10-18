@@ -1,28 +1,20 @@
 <template>
-  <div 
-    class="relative w-6 h-6 cursor-pointer mr-1 mt-1
-      text-lightNavbarIcons hover:text-lightNavbarIcons/80 
-      dark:text-darkNavbarIcons hover:text-darkNavbarIcons/80
-      hover:scale-110 transition-colors duration-200"       
+  <Button
+    variant="secondary"
+    :class="{ 'bg-lightButtonGroupActiveBackground hover:bg-lightButtonGroupActiveBackground dark:bg-darkButtonGroupActiveBackground dark:hover:bg-darkButtonGroupActiveBackground': agentStore.isChatOpen }"
+    :aria-expanded="agentStore.isChatOpen"
     @click="agentStore.setIsChatOpen(!agentStore.isChatOpen)"
   >
-    <IconChatBubbleLeft20Solid 
-      class="w-6 h-6" 
-    />
-    <div class="absolute w-4 h-4 bg-lightNavbar dark:bg-darkNavbar rounded-full -top-1 -right-2">
-      <IconSparklesSolid 
-        class="w-4 h-4"
-      />
-    </div>
-  </div>
+    <IconBot class="w-4 h-4" />
+    {{ $t('Agent') }}
+  </Button>
 
   <Teleport to="body">
     <div 
       ref="chatSurface"
       id="adminforth-agent-chat-surface"
-      class="fixed bg-lightNavbar dark:bg-darkNavbar top-0 right-0 border-x border-b border-gray-200 dark:border-gray-700 
-            flex flex z-40 h-screen"
-      :class="[agentStore.isChatOpen ? 'translate-x-0' : 'translate-x-full', !agentStore.isTeleportedToBody ? 'shadow-2xl' : '']"
+      class="fixed top-0 right-0 z-40 flex h-screen border-l border-lightNavbarBorder bg-lightNavbar dark:border-darkNavbarBorder dark:bg-darkNavbar"
+      :class="[agentStore.isChatOpen ? 'translate-x-0' : 'translate-x-full', !agentStore.isTeleportedToBody ? 'shadow-popover dark:shadow-darkPopover' : '']"
       :style="{ width: agentStore.chatWidth + 'rem' }"
     > 
       <div 
@@ -58,7 +50,8 @@
 </template>
 
 <script setup lang="ts">
-import { IconChatBubbleLeft20Solid, IconSparklesSolid } from '@iconify-prerendered/vue-heroicons';
+import { IconBot } from '@iconify-prerendered/vue-lucide';
+import { Button } from '@/afcl';
 import { useTemplateRef, onMounted, ref, onUnmounted } from 'vue';
 import { onClickOutside } from '@vueuse/core'
 import ConversationArea from './conversation_area/ConversationArea.vue';

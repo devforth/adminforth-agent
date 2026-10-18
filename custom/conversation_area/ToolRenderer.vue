@@ -8,19 +8,19 @@
     >
       <span class="flex items-center justify-center w-4 h-4 shrink-0 rounded-full" :class="statusClasses">
         <Spinner v-if="isRunning" class="w-3 h-3" />
-        <IconXMark16Solid v-else-if="props.data.toolInfo.error" class="w-3 h-3" />
-        <IconCheck16Solid v-else class="w-3 h-3" />
+        <IconX v-else-if="props.data.toolInfo.error" class="w-3 h-3" />
+        <IconCheck v-else class="w-3 h-3" />
       </span>
-      <span class="max-w-[55%] shrink-0 truncate font-mono text-xs text-gray-800 dark:text-gray-200">
+      <span class="max-w-[55%] shrink-0 truncate font-mono text-xs text-lightInputText dark:text-darkInputText">
         {{ props.data.toolInfo.toolName }}
       </span>
-      <span class="flex-1 min-w-0 truncate text-gray-500 dark:text-gray-400" :title="props.data.toolInfo.toolInfo">
+      <span class="flex-1 min-w-0 truncate text-lightInputIconColor dark:text-darkInputIconColor" :title="props.data.toolInfo.toolInfo">
         {{ props.data.toolInfo.toolInfo }}
       </span>
-      <span v-if="durationLabel" class="shrink-0 tabular-nums text-gray-500 dark:text-gray-400">{{ durationLabel }}</span>
+      <span v-if="durationLabel" class="shrink-0 tabular-nums text-lightInputIconColor dark:text-darkInputIconColor">{{ durationLabel }}</span>
       <IconChevronDown
         v-if="hasToolSections"
-        class="w-3.5 h-3.5 shrink-0 text-gray-400 transition-transform duration-200"
+        class="w-3.5 h-3.5 shrink-0 text-lightInputIconColor transition-transform duration-200 dark:text-darkInputIconColor"
         :class="isInputOutputExpanded ? 'rotate-180' : 'rotate-0'"
       />
     </button>
@@ -29,14 +29,14 @@
         <section
           v-for="section in toolSections"
           :key="section.label"
-          class="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900/40"
+          class="overflow-hidden rounded-default border border-lightCardBorder bg-lightCardBackground dark:border-darkCardBorder dark:bg-darkCardBackground"
         >
-          <header class="border-b border-gray-200 px-2.5 py-1.5 text-[0.7rem] font-semibold uppercase tracking-wider text-gray-500 dark:border-gray-700 dark:text-gray-400">
+          <header class="border-b border-lightCardBorder px-2.5 py-1.5 text-xs font-medium text-lightInputIconColor dark:border-darkCardBorder dark:text-darkInputIconColor">
             {{ section.label }}
           </header>
-          <div class="select-all grid grid-cols-[auto,1fr] gap-x-3 gap-y-0.5 px-2.5 py-2 font-mono text-xs leading-5 text-gray-700 dark:text-gray-200">
+          <div class="select-all grid grid-cols-[auto,1fr] gap-x-3 gap-y-0.5 px-2.5 py-2 font-mono text-xs leading-5 text-lightTableText dark:text-darkTableText">
             <template v-for="line in section.lines" :key="`${section.label}-${line.number}`">
-              <span class="text-[0.7rem] text-gray-400 dark:text-gray-500 select-none">{{ line.number }}</span>
+              <span class="text-[0.7rem] text-lightInputPlaceholderText dark:text-darkInputPlaceholderText select-none">{{ line.number }}</span>
               <span class="whitespace-pre-wrap break-words">{{ line.content || ' ' }}</span>
             </template>
           </div>
@@ -50,7 +50,7 @@
   import { computed, ref } from 'vue';
   import { type IFormattedToolCallPart } from '../types';
   import { Spinner } from '@/afcl';
-  import { IconCheck16Solid, IconChevronDown, IconXMark16Solid } from '@iconify-prerendered/vue-heroicons';
+  import { IconCheck, IconChevronDown, IconX } from '@iconify-prerendered/vue-lucide';
 
   const props = defineProps<{
     data: IFormattedToolCallPart
@@ -73,11 +73,11 @@
   });
   const statusClasses = computed(() => {
     if (isRunning.value) {
-      return 'text-gray-500 dark:text-gray-400';
+      return 'text-lightInputIconColor dark:text-darkInputIconColor';
     }
     return props.data.toolInfo.error
-      ? 'bg-red-100 text-red-600 dark:bg-red-500/20 dark:text-red-400'
-      : 'bg-lightPrimary/10 text-lightPrimary dark:bg-darkPrimary/20 dark:text-darkPrimary';
+      ? 'bg-lightDangerSoft text-lightDanger dark:bg-darkDangerSoft dark:text-darkDanger'
+      : 'bg-lightSuccessSoft text-lightSuccess dark:bg-darkSuccessSoft dark:text-darkSuccess';
   });
   const toolSections = computed<IToolSection[]>(() => {
     const sections = [

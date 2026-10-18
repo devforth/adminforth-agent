@@ -198,6 +198,7 @@ export const useAgentStore = defineStore('agent', () => {
     createPreSession,
     setActiveSession,
     fetchSessionsList,
+    renameSession,
     deleteSession,
     addDebugMessage,
     addSystemMessage,
@@ -590,6 +591,7 @@ export const useAgentStore = defineStore('agent', () => {
     sessionList,
     setActiveSession,
     fetchSessionsList,
+    renameSession,
     deleteSession,
     createPreSession,
     //____________________________________________

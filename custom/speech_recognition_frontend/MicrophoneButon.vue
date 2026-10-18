@@ -6,12 +6,14 @@
     <!-- One button for the whole voice flow: the icon shows the state, the label what a click does -->
     <button
       type="button"
-      class="flex h-8 shrink-0 items-center justify-center rounded-full transition-colors duration-150"
+      class="flex h-[2.125rem] shrink-0 items-center justify-center rounded-full transition-colors duration-150
+        focus:outline-none focus-visible:ring-[3px] focus-visible:ring-lightFocusRing dark:focus-visible:ring-darkFocusRing"
       :class="isAudioChatMode
         ? `w-40 gap-2 px-3 text-sm font-medium
-          bg-lightPrimary/10 text-gray-800 hover:bg-lightPrimary/15
-          dark:bg-darkPrimary/20 dark:text-gray-100 dark:hover:bg-darkPrimary/30`
-        : 'w-8 text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'"
+          bg-lightPrimary/10 text-lightInputText hover:bg-lightPrimary/15
+          dark:bg-darkPrimary/20 dark:text-darkInputText dark:hover:bg-darkPrimary/30`
+        : `w-[2.125rem] text-lightInputIconColor hover:bg-lightSecondaryDarken hover:text-lightInputText
+          dark:text-darkInputIconColor dark:hover:bg-darkSecondaryLighten dark:hover:text-darkInputText`"
       :title="$t(buttonTitle)"
       :aria-label="$t(buttonTitle)"
       @click="isGenerating ? stopCurrentGeneration() : toggleChatMode()"

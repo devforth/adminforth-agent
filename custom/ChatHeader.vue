@@ -1,82 +1,76 @@
 <template>
-  <div 
+  <div
     ref="headerRef"
-    class="flex items-center justify-between h-14 border-b border-gray-200 dark:border-gray-700"         
+    class="af-agent-header flex items-center gap-0.5 h-12 px-2 border-b border-lightNavbarBorder dark:border-darkNavbarBorder"
   >
-    <div
-      class="flex items-center shrink-0"
+    <Button
+      variant="ghost"
+      iconOnly
+      :class="agentStore.isSessionHistoryOpen && PRESSED_CLASSES"
+      :aria-pressed="agentStore.isSessionHistoryOpen"
+      :aria-label="$t('Chat history')"
+      :title="$t('Chat history')"
+      @click="agentStore.setSessionHistoryOpen(!agentStore.isSessionHistoryOpen)"
     >
-      <IconBarsOutline 
-        class="m-2 w-8 h-8 p-1 cursor-pointer hover:scale-110 rounded transition-colors duration-200
-          text-lightNavbarIcons hover:text-lightNavbarIcons/80 hover:bg-lightNavbarIcons/20 
-          dark:text-darkNavbarIcons hover:text-darkNavbarIcons/80 hover:bg-darkNavbarIcons/20 "
-        :class="agentStore.isSessionHistoryOpen ? 
-          'bg-lightNavbarIcons/20 text-lightNavbarIcons/80 dark:bg-darkNavbarIcons/20 dark:text-darkNavbarIcons/80' : 
-          ''" 
-        @click="agentStore.setSessionHistoryOpen(!agentStore.isSessionHistoryOpen)" 
-      />
-      <IconOpenSidebarSolid 
-        v-if="!agentStore.isTeleportedToBody && !coreStore.isMobile && !agentStore.isFullScreen"
-        class="m-2 w-8 h-8 p-1 cursor-pointer hover:scale-110 rounded transition-colors duration-200
-          text-lightNavbarIcons hover:text-lightNavbarIcons/80 hover:bg-lightNavbarIcons/20 
-          dark:text-darkNavbarIcons hover:text-darkNavbarIcons/80 hover:bg-darkNavbarIcons/20 " 
-        @click="agentStore.setIsTeleportedToBody(true)" 
-      />
-      <IconCloseSidebarSolid 
-        v-else-if="!coreStore.isMobile && !agentStore.isFullScreen"
-        class="m-2 w-8 h-8 p-1 cursor-pointer hover:scale-110 rounded transition-colors duration-200
-          text-lightNavbarIcons hover:text-lightNavbarIcons/80 bg-lightNavbarIcons/20 
-          dark:bg-darkNavbarIcons/20 dark:text-darkNavbarIcons/80 hover:text-darkNavbarIcons/80 hover:bg-darkNavbarIcons/20 " 
-        @click="agentStore.setIsTeleportedToBody(false)" 
-      />
-      <IconArrowsPointingOut 
-        v-if="!agentStore.isFullScreen && !coreStore.isMobile"
-        class="m-2 w-8 h-8 p-1 cursor-pointer hover:scale-110 rounded transition-colors duration-200
-          text-lightNavbarIcons hover:text-lightNavbarIcons/80 hover:bg-lightNavbarIcons/20 
-          dark:text-darkNavbarIcons hover:text-darkNavbarIcons/80 hover:bg-darkNavbarIcons/20 " 
-        @click="agentStore.setFullScreen(true)" 
-      />
-      <IconArrowsPointingIn 
-        v-else-if="!coreStore.isMobile"
-        class="m-2 w-8 h-8 p-1 cursor-pointer hover:scale-110 rounded transition-colors duration-200
-          text-lightNavbarIcons hover:text-lightNavbarIcons/80 hover:bg-lightNavbarIcons/20 
-          dark:text-darkNavbarIcons hover:text-darkNavbarIcons/80 hover:bg-darkNavbarIcons/20 "
-        :class="agentStore.isFullScreen ? 
-          'bg-lightNavbarIcons/20 text-lightNavbarIcons/80 dark:bg-darkNavbarIcons/20 dark:text-darkNavbarIcons/80' : 
-          ''" 
-        @click="agentStore.setFullScreen(false)" 
-      />
-    </div>
-    <p class="flex-1 min-w-0 truncate px-1 text-sm font-semibold text-lightNavbarText dark:text-darkNavbarText">
+      <IconHistory />
+    </Button>
+    <Button
+      v-if="!coreStore.isMobile && !agentStore.isFullScreen"
+      variant="ghost"
+      iconOnly
+      :class="agentStore.isTeleportedToBody && PRESSED_CLASSES"
+      :aria-pressed="agentStore.isTeleportedToBody"
+      :aria-label="$t('Dock to the side')"
+      :title="$t('Dock to the side')"
+      @click="agentStore.setIsTeleportedToBody(!agentStore.isTeleportedToBody)"
+    >
+      <IconPanelRight />
+    </Button>
+    <Button
+      v-if="!coreStore.isMobile"
+      variant="ghost"
+      iconOnly
+      :aria-label="agentStore.isFullScreen ? $t('Exit full screen') : $t('Full screen')"
+      :title="agentStore.isFullScreen ? $t('Exit full screen') : $t('Full screen')"
+      @click="agentStore.setFullScreen(!agentStore.isFullScreen)"
+    >
+      <IconMinimize2 v-if="agentStore.isFullScreen" />
+      <IconMaximize2 v-else />
+    </Button>
+    <p class="flex-1 min-w-0 truncate px-1 text-[13px] font-semibold text-lightNavbarText dark:text-darkNavbarText">
       {{ isNewChat ? $t('New chat') : agentStore.currentSession.title }}
     </p>
-    <div class="flex items-center justify-center shrink-0">
-      <Button 
-        @click="agentStore.createPreSession(); agentStore.setSessionHistoryOpen(false); agentStore.focusTextInput();" 
-        class="!py-1 !px-2 max-w-64 mr-2"
-      >
-        <IconPlusOutline class="w-5 h-5" />
-        {{ $t('New chat') }}
-      </Button>
-      <IconCloseOutline 
-        class="m-2 w-8 h-8 p-1 cursor-pointer hover:scale-110 rounded transition-colors duration-200
-          text-lightNavbarIcons hover:text-lightNavbarIcons/80 hover:bg-lightNavbarIcons/20 
-          dark:text-darkNavbarIcons hover:text-darkNavbarIcons/80 hover:bg-darkNavbarIcons/20 " 
-        @click="agentStore.setIsChatOpen(false)" 
-      />
-    </div>
+    <Button
+      variant="secondary"
+      class="shrink-0"
+      @click="agentStore.createPreSession(); agentStore.setSessionHistoryOpen(false); agentStore.focusTextInput();"
+    >
+      <IconPlus class="w-4 h-4" />
+      {{ $t('New chat') }}
+    </Button>
+    <Button
+      variant="ghost"
+      iconOnly
+      :aria-label="$t('Close')"
+      :title="$t('Close')"
+      @click="agentStore.setIsChatOpen(false)"
+    >
+      <IconX />
+    </Button>
   </div>
 </template>
 
 
 <script setup>
   import { computed } from 'vue';
-  import { IconArrowsPointingOut, IconArrowsPointingIn } from '@iconify-prerendered/vue-heroicons';
-  import { IconCloseOutline, IconBarsOutline, IconCloseSidebarSolid, IconOpenSidebarSolid, IconPlusOutline } from '@iconify-prerendered/vue-flowbite';
+  import { IconHistory, IconMaximize2, IconMinimize2, IconPanelRight, IconPlus, IconX } from '@iconify-prerendered/vue-lucide';
   import { useAgentStore } from './composables/useAgentStore';
   import { useCoreStore } from '@/stores/core';
   import { Button } from '@/afcl';
   import { PRE_SESSION_ID } from './composables/agentStore/constants';
+
+  // a toggle in the on state, same fill as the hover of a ghost button
+  const PRESSED_CLASSES = 'bg-lightSecondaryDarken text-lightInputText dark:bg-darkSecondaryLighten dark:text-darkInputText';
 
   const agentStore = useAgentStore();
   const coreStore = useCoreStore();

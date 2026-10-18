@@ -5,7 +5,7 @@
   <div 
     v-if="agentStore.isSessionHistoryOpen"
     @click="agentStore.setSessionHistoryOpen(false)"
-    class="absolute bg-black/10 backdrop-blur-md z-10 h-full w-full"
+    class="absolute z-10 h-full w-full bg-lightScrim dark:bg-darkScrim"
   >
   </div>
   <div class="relative flex-1 min-h-0 overflow-hidden [container-type:size]" @click="recalculateScroll()">
@@ -36,7 +36,7 @@
 
       <div 
         v-for="(message, index) in props.messages" :key="index"
-        class="flex flex-col w-full mt-2 pb-2"
+        class="flex flex-col w-full pt-5 first:pt-4"
         :class="message.role === 'user' ? 'self-end' : 'self-start'"
         ref="messagesRefs"
       >
@@ -50,25 +50,27 @@
         <div class="flex items-center justify-center w-11 h-11 rounded-xl bg-lightPrimary/10 text-lightPrimary dark:bg-darkPrimary/15 dark:text-darkPrimary">
           <IconSparkles class="w-6 h-6" />
         </div>
-        <h2 class="mt-4 text-xl font-semibold text-lightNavbarText dark:text-darkNavbarText">
+        <h2 class="mt-4 text-lg font-semibold tracking-tight text-lightNavbarText dark:text-darkNavbarText">
           {{ $t('How can I help?') }}
         </h2>
-        <p class="mt-1.5 max-w-xs text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+        <p class="mt-1.5 max-w-xs text-sm leading-relaxed text-lightInputIconColor dark:text-darkInputIconColor">
           {{ $t('Ask about your data, build charts or update records.') }}
         </p>
         <div v-if="suggestions.length" class="mt-7 w-full max-w-sm flex flex-col gap-2 text-left">
-          <p class="pl-0.5 text-xs font-medium text-gray-500 dark:text-gray-400">{{ $t('Try asking') }}</p>
+          <p class="pl-0.5 text-xs font-medium text-lightInputIconColor dark:text-darkInputIconColor">{{ $t('Try asking') }}</p>
           <button
             v-for="suggestion in suggestions"
             :key="suggestion"
             type="button"
-            class="group flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl border text-sm text-left transition-colors duration-150
-              border-gray-200 text-lightNavbarText hover:border-gray-300 hover:bg-gray-50
-              dark:border-gray-700 dark:text-darkNavbarText dark:hover:border-gray-600 dark:hover:bg-gray-800"
+            class="group flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg border text-sm text-left transition-colors duration-150
+              border-lightCardBorder bg-lightCardBackground text-lightNavbarText hover:bg-lightCardBackgroundHover
+              focus:outline-none focus-visible:ring-[3px] focus-visible:ring-lightFocusRing
+              dark:border-darkCardBorder dark:bg-darkCardBackground dark:text-darkNavbarText dark:hover:bg-darkCardBackgroundHover
+              dark:focus-visible:ring-darkFocusRing"
             @click="applySuggestion(suggestion)"
           >
             <span class="flex-1 min-w-0">{{ suggestion }}</span>
-            <IconArrowRight class="w-4 h-4 shrink-0 text-gray-400 transition-transform duration-150 group-hover:translate-x-0.5" />
+            <IconArrowRight class="w-4 h-4 shrink-0 text-lightInputIconColor transition-transform duration-150 group-hover:translate-x-0.5 dark:text-darkInputIconColor" />
           </button>
         </div>
       </div>
@@ -84,18 +86,17 @@
       <button 
         v-if="showScrollToBottomButton" 
         @click="scrollContainer.scrollToBottom();"
-        class="absolute z-10 bottom-8 left-1/2 -translate-x-1/2 
-          bg-lightPrimary/20 dark:bg-darkPrimary/10
-          border border-lightPrimary dark:border-darkPrimary 
-          text-lightPrimary dark:text-darkPrimary 
-          backdrop-blur-sm rounded-full
-          w-10 h-10 flex items-center justify-center gap-0.5"
-        :class="{ 'w-12 h-8': showAnimationInScrollToBottomButton }"
+        class="absolute z-10 bottom-8 left-1/2 -translate-x-1/2 flex items-center justify-center gap-0.5 w-[2.125rem] h-[2.125rem] rounded-full border
+          border-lightInputBorder bg-lightInputBackground text-lightInputIconColor shadow-popover hover:text-lightInputText
+          focus:outline-none focus-visible:ring-[3px] focus-visible:ring-lightFocusRing
+          dark:border-darkInputBorder dark:bg-darkInputBackground dark:text-darkInputIconColor dark:shadow-darkPopover dark:hover:text-darkInputText
+          dark:focus-visible:ring-darkFocusRing"
+        :class="{ 'w-12': showAnimationInScrollToBottomButton }"
+        :aria-label="$t('Scroll to the latest message')"
       >
-        <IconArrowDownOutline 
+        <IconArrowDown
           v-if="!showAnimationInScrollToBottomButton"
-          class="p-2 w-10 h-10 transition-opacity duration-100 ease-in " 
-          :disabled="!showScrollToBottomButton"
+          class="w-4 h-4"
         />
         <ThreeDotsAnimation 
           v-else
@@ -110,8 +111,7 @@
 <script setup lang="ts">
 import type { IMessage } from '../types';
 import { useTemplateRef, ref, onMounted, onUnmounted, watch, nextTick, defineAsyncComponent, computed } from 'vue';
-import { IconArrowDownOutline } from '@iconify-prerendered/vue-flowbite';
-import { IconArrowRight, IconSparkles } from '@iconify-prerendered/vue-heroicons';
+import { IconArrowDown, IconArrowRight, IconSparkles } from '@iconify-prerendered/vue-lucide';
 import SessionsHistory from '../SessionsHistory.vue';
 import { useAgentStore } from '../composables/useAgentStore';
 import { useAgentTransitions } from '../composables/useAgentTransitions';

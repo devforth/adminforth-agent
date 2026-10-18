@@ -18,34 +18,38 @@
       >
         <div
           v-if="showActionsBar && showEditButton"
-          class="absolute flex -bottom-6 p-1 mt-0.5 z-20"
+          class="absolute flex top-full -mt-1 p-1 z-20"
           :class="isUserMessage ? 'right-0 self-end mr-4' : 'left-0 self-start ml-4'"
           @mouseenter="showEditButtonOnHover"
           @mouseleave="hideEditButtonOnHover"
         >
-          <button
+          <Button
             v-if="canCopy"
-            type="button"
-            :class="ACTION_BUTTON_CLASSES"
+            variant="ghost"
+            size="sm"
+            iconOnly
             :title="$t('Copy message')"
+            :aria-label="$t('Copy message')"
             @click="copyMessageToClipboard"
           >
-            <IconFileCopyOutline class="w-4 h-4" />
-          </button>
-          <button
+            <IconCopy />
+          </Button>
+          <Button
             v-if="canEdit"
-            type="button"
-            :class="ACTION_BUTTON_CLASSES"
+            variant="ghost"
+            size="sm"
+            iconOnly
             :title="$t('Edit message')"
+            :aria-label="$t('Edit message')"
             @click="agentStore.startEditMessage(message)"
           >
-            <IconPenOutline class="w-4 h-4" />
-          </button>
+            <IconPencil />
+          </Button>
         </div>
       </Transition>
     <div
       v-if="message.role === 'user' && message.metadata?.steer && !isBeingEditedTurn"
-      class="self-end mr-4 mb-0.5 text-xs italic text-gray-400 dark:text-gray-500"
+      class="self-end mr-4 mb-0.5 text-xs italic text-lightInputPlaceholderText dark:text-darkInputPlaceholderText"
     >
       {{ $t('Steering instruction') }}
     </div>
@@ -83,7 +87,8 @@
 
 <script setup lang="ts">
   import { computed, ref } from 'vue';
-  import { IconPenOutline, IconFileCopyOutline } from '@iconify-prerendered/vue-flowbite';
+  import { IconCopy, IconPencil } from '@iconify-prerendered/vue-lucide';
+  import { Button } from '@/afcl';
   import TextRenderer from './TextRenderer.vue';
   import type { IMessage } from '../types';
   import { getMessageParts } from '../utils';
@@ -98,10 +103,6 @@
     message: IMessage
     isLastMessageInChat: boolean
   }>();
-
-  const ACTION_BUTTON_CLASSES = `flex items-center justify-center w-7 h-7 rounded-md transition-colors duration-150
-    text-gray-500 hover:bg-gray-100 hover:text-gray-800
-    dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200`;
 
   const agentStore = useAgentStore();
   const { alert } = useAdminforth();
