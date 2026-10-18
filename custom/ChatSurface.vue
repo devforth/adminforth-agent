@@ -14,8 +14,8 @@
       ref="chatSurface"
       id="adminforth-agent-chat-surface"
       class="fixed top-0 right-0 z-40 flex h-screen border-l border-lightNavbarBorder bg-lightNavbar dark:border-darkNavbarBorder dark:bg-darkNavbar"
-      :class="[agentStore.isChatOpen ? 'translate-x-0' : 'translate-x-full', !agentStore.isTeleportedToBody ? 'shadow-popover dark:shadow-darkPopover' : '']"
-      :style="{ width: agentStore.chatWidth + 'rem' }"
+      :class="[agentStore.isChatOpen ? 'translate-x-0' : 'translate-x-full', !agentStore.isTeleportedToBody && !agentStore.isFullScreen ? 'shadow-popover dark:shadow-darkPopover' : '']"
+      :style="{ width: agentStore.isFullScreen ? '100%' : agentStore.chatWidth + 'rem' }"
     > 
       <div 
         v-if="!(coreStore.isMobile || agentStore.isFullScreen)"

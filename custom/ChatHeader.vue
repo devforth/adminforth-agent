@@ -1,7 +1,9 @@
 <template>
+  <!-- in full screen the controls line up with the centered column of the conversation -->
   <div
     ref="headerRef"
     class="af-agent-header flex items-center gap-0.5 h-12 px-2 border-b border-lightNavbarBorder dark:border-darkNavbarBorder"
+    :style="agentStore.isFullScreen ? { paddingInline: `max(0.5rem, calc((100% - ${agentStore.MAX_WIDTH}rem) / 2 + 0.5rem))` } : undefined"
   >
     <Button
       variant="ghost"
