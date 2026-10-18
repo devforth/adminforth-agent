@@ -40,6 +40,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import embed from 'vega-embed';
 
 import type { IncremarkCodeTheme } from './incremarkCodeHighlight';
+import { vegaLiteConfig } from './vegaTheme';
 
 const props = withDefaults(defineProps<{
   node: Code;
@@ -205,9 +206,9 @@ async function renderHighlight() {
       const result = await embed(vegaContainer.value, spec, {
         actions: false,
         renderer: 'svg',
-        // the chart sits on the surface of the code block, so it takes the theme of the page
-        theme: codeTheme.value === 'dark' ? 'dark' : undefined,
-        config: { background: 'transparent' },
+        // read on every render, a theme switch re-renders the chart with the tokens of the new theme
+        config: vegaLiteConfig(vegaContainer.value),
+        tooltip: { theme: 'af' },
       });
 
       if (requestId !== renderRequestId) {
@@ -307,9 +308,22 @@ function clearVega() {
   overflow-x: auto;
 }
 
+/* tokens for vegaLiteConfig, the chart reads them when it renders */
 .incremark-vega {
-  padding: 12px;
   width: 100%;
+  --chart-text: theme('colors.lightInputText');
+  --chart-muted: theme('colors.lightInputIconColor');
+  --chart-grid: theme('colors.lightCardBorder');
+  --chart-baseline: theme('colors.lightInputBorder');
+  --chart-surface: theme('colors.lightCardBackground');
+}
+
+.dark .incremark-vega {
+  --chart-text: theme('colors.darkInputText');
+  --chart-muted: theme('colors.darkInputIconColor');
+  --chart-grid: theme('colors.darkCardBorder');
+  --chart-baseline: theme('colors.darkInputBorder');
+  --chart-surface: theme('colors.darkCardBackground');
 }
 
 .incremark-shiki-fallback {
@@ -349,6 +363,24 @@ function clearVega() {
 :deep(.incremark-vega .vega-embed) {
   width: 100%;
 }
+</style>
 
+<style>
+/* vega-tooltip appends its element to the body, so the "af" tooltip theme is global */
+#vg-tooltip-element.af-theme {
+  @apply rounded-default border-0 px-2 py-1.5 text-xs bg-lightDropdownOptionsBackground text-lightInputText shadow-popover dark:bg-darkDropdownOptionsBackground dark:text-darkInputText dark:shadow-darkPopover;
+  font-family: inherit;
+}
 
+#vg-tooltip-element.af-theme h2 {
+  @apply mb-1 text-xs font-semibold;
+}
+
+#vg-tooltip-element.af-theme td.key {
+  @apply pr-2 text-lightInputIconColor dark:text-darkInputIconColor;
+}
+
+#vg-tooltip-element.af-theme td.value {
+  @apply font-medium tabular-nums;
+}
 </style>

@@ -15,6 +15,10 @@ Every chart spec should include:
 - explicit axis titles when axes are used
 - tooltips for the key fields
 
+Don't set `config`, `width`, colors or fonts: the chat draws every chart in the AdminForth theme.
+
+Labels of the x axis stay horizontal and the ones which don't fit are hidden, so for more than 6 categories or long category names put the categories on `y` (horizontal bars).
+
 ### Line chart
 
 ```vega-lite
