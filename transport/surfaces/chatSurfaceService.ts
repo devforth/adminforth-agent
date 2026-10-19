@@ -303,7 +303,6 @@ export class ChatSurfaceService {
     for (const hook of hooks) {
       const result = await hook({
         adminUser,
-        response: request.response,
         adminforth,
         extra,
       });
