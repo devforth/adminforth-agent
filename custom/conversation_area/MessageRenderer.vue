@@ -14,8 +14,11 @@
       v-for="(part, index) in getMessageParts(message)"
       :key="part.type"
     >
+      <!-- a text part drops the margin of its last block, so a part that follows another one (the stream
+           splits the text at every chart and tool call) brings back the gap between markdown blocks -->
       <TextRenderer
         v-if="part.type === 'text' && !checkIfMessageSystemMessage(part.text ?? '') && shouldBeShownWhileEditing"
+        class="[&+&]:mt-2"
         :message="isBeingEditedMessage ? agentStore.userMessageInput : part.text"
         :role="props.message.role"
         :editMode="isBeingEditedMessage"
