@@ -140,23 +140,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         editingEnabled: Boolean(this.options.checkpointResource && this.options.turnResource.checkpointIdField),
       }
     });
-    if (!this.adminforth.config.customization.customHeadItems) {
-      this.adminforth.config.customization.customHeadItems = [];
-    }
-    this.adminforth.config.customization.customHeadItems.push(
-      {
-        tagName: 'script',
-        attributes: {
-          src: 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.wasm.min.js'
-        }
-      },
-      {
-        tagName: 'script',
-        attributes: {
-          src: 'https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.29/dist/bundle.min.js'
-        },
-      }
-    );
     if (!this.options.sessionResource) {
       throw new Error("sessionResource is required for AdminForthAgentPlugin");
     }

@@ -1,5 +1,5 @@
-import { MicVAD, utils } from "@ricky0123/vad-web";
-
+// @ricky0123/vad-web brings onnxruntime-web (about 170 KB gzip): it loads when the microphone starts, not with the chat
+let vad: typeof import("@ricky0123/vad-web") | null = null;
 let VADInstance: any = null;
 let recordedAudioChunks: Float32Array[] = [];
 let onVoiceStopCallback: () => void = () => {};
@@ -7,7 +7,8 @@ let onVoiceStartCallback: () => void = () => {};
 let onUpdateCallback: (amplitude: number) => void = () => {};
 
 async function createVADInstance(){
-  VADInstance = await MicVAD.new({
+  vad = await import("@ricky0123/vad-web");
+  VADInstance = await vad.MicVAD.new({
     onFrameProcessed: ({ isSpeech }) => {
       onUpdateCallback(isSpeech);
     },
@@ -55,7 +56,8 @@ export async function getRecord() {
     offset += chunk.length;
   }
 
-  const wavBuffer = utils.encodeWAV(mergedAudio, 1, 16000, 1, 16);
+  // chunks are recorded only by a started VAD, so the module is loaded here
+  const wavBuffer = vad!.utils.encodeWAV(mergedAudio, 1, 16000, 1, 16);
   const recordToReturn = new Blob([wavBuffer], { type: 'audio/wav' });
   recordedAudioChunks = [];
   return recordToReturn;
