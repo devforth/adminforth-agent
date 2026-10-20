@@ -36,7 +36,7 @@
       :class="isUserMessage ? 'self-end mr-5' : 'self-start ml-5'"
     >
       <Button
-        v-if="canCopy"
+        v-if="canCopy" 
         variant="ghost"
         size="sm"
         iconOnly
