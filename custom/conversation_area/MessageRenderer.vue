@@ -1,52 +1,5 @@
 <template>
-  <div 
-    class="relative flex flex-col w-full group/msg" 
-    @mouseenter="showEditButtonOnHover"
-    @mouseleave="hideEditButtonOnHover"
-  >
-      <div
-        v-if="showActionsBar"
-        class="absolute w-full h-[calc(100%+1.5rem)] pb-8"
-      />
-      <Transition
-        enter-active-class="transition ease-out duration-200"
-        enter-from-class="opacity-0 scale-95"
-        enter-to-class="opacity-100 scale-100"
-        leave-active-class="transition ease-in duration-150"
-        leave-from-class="opacity-100 scale-100"
-        leave-to-class="opacity-0 scale-95"
-      >
-        <div
-          v-if="showActionsBar && showEditButton"
-          class="absolute flex top-full -mt-1 p-1 z-20"
-          :class="isUserMessage ? 'right-0 self-end mr-4' : 'left-0 self-start ml-4'"
-          @mouseenter="showEditButtonOnHover"
-          @mouseleave="hideEditButtonOnHover"
-        >
-          <Button
-            v-if="canCopy"
-            variant="ghost"
-            size="sm"
-            iconOnly
-            :title="$t('Copy message')"
-            :aria-label="$t('Copy message')"
-            @click="copyMessageToClipboard"
-          >
-            <IconCopy />
-          </Button>
-          <Button
-            v-if="canEdit"
-            variant="ghost"
-            size="sm"
-            iconOnly
-            :title="$t('Edit message')"
-            :aria-label="$t('Edit message')"
-            @click="agentStore.startEditMessage(message)"
-          >
-            <IconPencil />
-          </Button>
-        </div>
-      </Transition>
+  <div class="relative flex flex-col w-full group/msg">
     <div
       v-if="message.role === 'user' && message.metadata?.steer && !isBeingEditedTurn"
       class="self-end mr-4 mb-0.5 text-xs italic text-lightInputPlaceholderText dark:text-darkInputPlaceholderText"
@@ -77,7 +30,34 @@
         :message="part.text"
       />
     </template>
-
+    <div
+      v-if="reservesActionsRow"
+      class="flex h-7 opacity-0 transition-opacity duration-200 group-hover/msg:opacity-100 group-focus-within/msg:opacity-100"
+      :class="isUserMessage ? 'self-end mr-5' : 'self-start ml-5'"
+    >
+      <Button
+        v-if="canCopy"
+        variant="ghost"
+        size="sm"
+        iconOnly
+        :title="$t('Copy message')"
+        :aria-label="$t('Copy message')"
+        @click="copyMessageToClipboard"
+      >
+        <IconCopy />
+      </Button>
+      <Button
+        v-if="canEdit"
+        variant="ghost"
+        size="sm"
+        iconOnly
+        :title="$t('Edit message')"
+        :aria-label="$t('Edit message')"
+        @click="agentStore.startEditMessage(message)"
+      >
+        <IconPencil />
+      </Button>
+    </div>
   </div>
 
 </template>
@@ -86,7 +66,7 @@
 
 
 <script setup lang="ts">
-  import { computed, ref } from 'vue';
+  import { computed } from 'vue';
   import { IconCopy, IconPencil } from '@iconify-prerendered/vue-lucide';
   import { Button } from '@/afcl';
   import TextRenderer from './TextRenderer.vue';
@@ -106,7 +86,6 @@
 
   const agentStore = useAgentStore();
   const { alert } = useAdminforth();
-  const showEditButton = ref(false);
   // A user message is editable once it carries a turnId (loaded from history or stamped
   // after its turn finished). Steer sub-messages and other roles are never editable, and
   // we hide the affordance entirely while another edit or a live turn is in flight.
@@ -137,27 +116,24 @@
   const canCopy = computed(() =>
     Boolean(copyableText.value.trim()) && !agentStore.isEditingMessage
   );
-  const showActionsBar = computed(() =>
-    canEdit.value || (!isUserMessage.value && canCopy.value)
-  );
-
   // While editing, hide only the *other* user messages of the edited turn (its steer
   // sub-messages); the edited message itself and all non-user parts stay visible.
   const shouldBeShownWhileEditing = computed(() =>
     !(isBeingEditedTurn.value && isUserMessage.value && !isBeingEditedMessage.value)
   );
 
+  // The row under the message is reserved by what the message is, not by hover or transient
+  // state (a turnId stamped after the turn, an edit in progress), so the buttons appearing
+  // never shift the chat or change its scroll height.
+  const reservesActionsRow = computed(() =>
+    shouldBeShownWhileEditing.value
+    && Boolean(copyableText.value.trim())
+    && (!isUserMessage.value || agentStore.editingEnabled)
+  );
+
   function checkIfMessageSystemMessage(message: IMessage): boolean {
     const isReserved = Object.values(RESERVED_SYSTEM_MESSAGE_CONTENT).includes(message as RESERVED_SYSTEM_MESSAGE_CONTENT);
     return isReserved;
-  }
-
-  function showEditButtonOnHover() {
-    showEditButton.value = true;
-  }
-
-  function hideEditButtonOnHover() {
-    showEditButton.value = false;
   }
 
   function copyMessageToClipboard() {
