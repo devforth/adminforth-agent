@@ -25,22 +25,27 @@
       />
     </button>
     <transition name="expand">
-      <div v-if="isInputOutputExpanded" class="max-h-72 mt-1.5 mb-1 ml-6 space-y-2 overflow-y-auto">
-        <section
-          v-for="section in toolSections"
-          :key="section.label"
-          class="overflow-hidden rounded-default border border-lightCardBorder bg-lightCardBackground dark:border-darkCardBorder dark:bg-darkCardBackground"
-        >
-          <header class="border-b border-lightCardBorder px-2.5 py-1.5 text-xs font-medium text-lightInputIconColor dark:border-darkCardBorder dark:text-darkInputIconColor">
-            {{ section.label }}
-          </header>
-          <div class="select-all grid grid-cols-[auto,1fr] gap-x-3 gap-y-0.5 px-2.5 py-2 font-mono text-xs leading-5 text-lightTableText dark:text-darkTableText">
-            <template v-for="line in section.lines" :key="`${section.label}-${line.number}`">
-              <span class="text-[0.7rem] text-lightInputPlaceholderText dark:text-darkInputPlaceholderText select-none">{{ line.number }}</span>
-              <span class="whitespace-pre-wrap break-words">{{ line.content || ' ' }}</span>
-            </template>
+      <!-- no height cap: the grid row animates between 0fr and 1fr, so the output opens to its full height -->
+      <div v-if="isInputOutputExpanded" class="grid">
+        <div class="min-h-0 overflow-hidden">
+          <div class="pt-1.5 pb-1 pl-6 space-y-2">
+            <section
+              v-for="section in toolSections"
+              :key="section.label"
+              class="overflow-hidden rounded-default border border-lightCardBorder bg-lightCardBackground dark:border-darkCardBorder dark:bg-darkCardBackground"
+            >
+              <header class="border-b border-lightCardBorder px-2.5 py-1.5 text-xs font-medium text-lightInputIconColor dark:border-darkCardBorder dark:text-darkInputIconColor">
+                {{ section.label }}
+              </header>
+              <div class="select-all grid grid-cols-[auto,1fr] gap-x-3 gap-y-0.5 px-2.5 py-2 font-mono text-xs leading-5 text-lightTableText dark:text-darkTableText">
+                <template v-for="line in section.lines" :key="`${section.label}-${line.number}`">
+                  <span class="text-[0.7rem] text-lightInputPlaceholderText dark:text-darkInputPlaceholderText select-none">{{ line.number }}</span>
+                  <span class="whitespace-pre-wrap break-words">{{ line.content || ' ' }}</span>
+                </template>
+              </div>
+            </section>
           </div>
-        </section>
+        </div>
       </div>
     </transition>
   </li>
@@ -122,19 +127,19 @@
 
 .expand-enter-active,
 .expand-leave-active {
-  transition: all 300ms ease;
+  transition: grid-template-rows 300ms ease, opacity 300ms ease;
 }
 
 .expand-enter-from,
 .expand-leave-to {
   opacity: 0;
-  max-height: 0;
+  grid-template-rows: 0fr;
 }
 
 .expand-enter-to,
 .expand-leave-from {
   opacity: 1;
-  max-height: 288px;
+  grid-template-rows: 1fr;
 }
 
 </style>
