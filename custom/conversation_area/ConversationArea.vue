@@ -181,7 +181,6 @@ onMounted(async () => {
     scheduleSpacerHeightUpdate();
   });
 
-  await import('@incremark/theme/styles.css')
   await agentStore.fetchPlaceholderMessages()
   await refreshSpacerTracking();
 });
