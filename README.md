@@ -5,8 +5,9 @@
 [![Ask AI](https://tluma.ai/badge)](https://tluma.ai/ask-ai/devforth/adminforth)
 
 Adds a native, tool-calling AI agent to your AdminForth application. The agent lives in a
-chat panel inside the admin UI, can inspect and mutate your resources through safe
-API-based tools, streams its answers token-by-token, and keeps persistent chat sessions.
+chat panel inside the admin UI, can inspect and mutate your resources through the tools of
+the [AdminForth MCP server](https://adminforth.dev/docs/tutorial/Plugins/mcp/), streams its
+answers token-by-token, and keeps persistent chat sessions.
 
 > Full tutorial: [AdminForth Agent Documentation](https://adminforth.dev/docs/tutorial/Plugins/agent/)
 
@@ -14,7 +15,8 @@ API-based tools, streams its answers token-by-token, and keeps persistent chat s
 
 - **Chat agent in the admin UI** — a streaming chat surface injected into every page.
 - **Tool calling over your resources** — the agent reads and (optionally) mutates records
-  through AdminForth's own API layer, so your access rules and validation still apply.
+  through the `@adminforth/mcp` plugin, which runs AdminForth's own API handlers as the user,
+  so your access rules, hooks and validation still apply.
 - **Progressive tool & skill disclosure** — the agent loads only the tools it needs, guided
   by Markdown *skills* you can extend.
 - **Human-in-the-loop approvals** — tools you mark as dangerous pause for explicit
@@ -35,10 +37,11 @@ Built on [LangChain / LangGraph](https://github.com/langchain-ai/langgraphjs).
 
 ## How it works
 
-For each user message the plugin creates a *turn*, builds the system prompt (including the
-list of your resources and available skills), streams the model's output back over SSE, and
-persists the prompt/response to your turn resource. Tools are executed through AdminForth's
-API endpoints; conversation memory is kept per session (`thread_id = sessionId`).
+For each user message the plugin creates a *turn*, opens an in-process connection to the
+`@adminforth/mcp` server as the user, builds the system prompt (the MCP server instructions
+with its skills, followed by the agent's own rules), streams the model's output back over SSE,
+and persists the prompt/response to your turn resource. Every tool call is an MCP `tools/call`
+on that connection; conversation memory is kept per session (`thread_id = sessionId`).
 
 ## Architecture
 
@@ -50,7 +53,7 @@ completion adapter, the checkpointer) sit behind ports and never leak into the t
 | Domain — prompt building, event vocabulary, buffers | [domain/](domain/) | adminforth types only |
 | Application — the turn use case + ports | [application/](application/) | domain |
 | LLM runtime — LangChain/LangGraph behind `LlmPort` | [llm/](llm/) | application, domain, tools |
-| Tools & skills — API tools, progressive disclosure | [tools/](tools/) | AdminForth API layer |
+| Tools — MCP connection, progressive disclosure | [tools/](tools/) | `@adminforth/mcp` |
 | Persistence — sessions, turns, checkpoints | [persistence/](persistence/) | AdminForth resources |
 | Transport — HTTP endpoints, SSE, external surfaces | [transport/](transport/) | application |
 | Frontend — Vue 3 + Pinia chat surface | [custom/](custom/) | HTTP + SSE contract |
@@ -62,9 +65,10 @@ flowchart TB
     APP["application/<br/>RunTurnUseCase + LlmPort"]
     DOM["domain/<br/>prompt building, steer buffer,<br/>events, language detection"]
     LLMS["llm/<br/>LangGraph agent, middleware chain, models"]
-    TLS["tools/<br/>API tools + skills,<br/>progressive disclosure"]
+    TLS["tools/<br/>MCP connection,<br/>progressive disclosure"]
     PRS["persistence/<br/>sessions, turns, checkpoints"]
 
+    MCPS(["@adminforth/mcp<br/>tools, skills, 2FA confirmation"])
     AF[("AdminForth core<br/>resources, API layer, auth")]
     MODEL(["Completion adapter<br/>OpenAI / Anthropic / Gemini"])
     ADPT(["Audio and chat surface adapters<br/>STT / TTS, Telegram"])
@@ -79,12 +83,15 @@ flowchart TB
     LLMS --> MODEL
     LLMS --> TLS
     LLMS -->|"checkpointer"| PRS
-    TLS --> AF
+    TLS -->|"in-process MCP"| MCPS
+    MCPS --> AF
     PRS --> AF
 ```
 
 Every arrow into `AdminForth core` goes through its ordinary resource/API layer, so your
 access rules, hooks and validation apply to the agent exactly as they do to a human admin.
+The agent has exactly the permissions of the user it runs for: the MCP `readOnly` option
+applies to MCP clients only.
 
 ### One turn, end to end
 
@@ -98,7 +105,7 @@ sequenceDiagram
     participant DB as sessions and turns
     participant LLM as LangGraphLlm + AgentRuntime
     participant M as Model (completion adapter)
-    participant T as API tool (AdminForth API layer)
+    participant T as MCP tool (@adminforth/mcp)
 
     U->>UI: type a message
     UI->>EP: message, sessionId, mode, timeZone, currentPage
@@ -115,14 +122,14 @@ sequenceDiagram
         M-->>LLM: reasoning and text deltas
         LLM-->>UI: reasoning-delta and text-delta frames
         M-->>LLM: tool call
-        alt tool has agent.requiresHumanApproval
+        alt tool has destructiveHint (agent.requiresHumanApproval)
             LLM-->>UI: data-interrupt, generation pauses
             U->>UI: approve or reject
             UI->>EP: POST /agent/approval
             EP->>UC: resume the interrupted graph
         else safe tool
-            LLM->>T: execute through the API layer
-            T-->>LLM: YAML result plus durationMs
+            LLM->>T: tools/call on the in-process MCP connection
+            T-->>LLM: YAML result
             LLM-->>UI: data-tool-call start and end
         end
     end
@@ -146,21 +153,23 @@ Two side channels run on top of that flow:
 
 ```mermaid
 flowchart LR
-    A["Turn starts"] --> B["Exposed tools:<br/>get_resource, get_user_location,<br/>navigate_user, fetch_skill, fetch_tool_schema"]
+    A["Turn starts"] --> B["Exposed tools: MCP get_resources_list,<br/>get_resource, fetch_skill, wait_for_confirmation,<br/>and get_user_location, navigate_user, fetch_tool_schema"]
     B --> C{"Needs more than<br/>reading schema?"}
     C -- no --> D["Answer with the base tools"]
-    C -- yes --> E["fetch_skill returns the SKILL.md<br/>for the matching skill"]
-    E --> F["fetch_tool_schema loads one<br/>API tool schema by name"]
-    F --> G["ApiBasedToolsMiddleware sees the<br/>status 200 tool message and adds that<br/>tool to the next model call"]
-    G --> H{"agent.requiresHumanApproval?"}
+    C -- yes --> E["MCP fetch_skill returns<br/>the matching skill"]
+    E --> F["fetch_tool_schema loads one<br/>MCP tool by name"]
+    F --> G["McpToolsMiddleware sees the<br/>status 200 tool message and adds that<br/>tool to the next model call"]
+    G --> H{"destructiveHint?"}
     H -- yes --> I["humanInTheLoopMiddleware interrupt,<br/>approve or reject in the UI"]
-    H -- no --> J["Execute through the AdminForth API layer"]
+    H -- no --> J["tools/call on the MCP server"]
     I -- approved --> J
 ```
 
 ## Requirements
 
 - An AdminForth app (`adminforth >= 3.8.2`, declared as a peer dependency).
+- The [`@adminforth/mcp`](https://adminforth.dev/docs/tutorial/Plugins/mcp/) plugin in the same
+  app: the agent calls every admin panel tool through it and fails to start without it.
 - A **completion adapter** that supports agent/tool-calling. Any of these work:
   - [`@adminforth/completion-adapter-openai-responses`](https://www.npmjs.com/package/@adminforth/completion-adapter-openai-responses)
   - [`@adminforth/completion-adapter-anthropic-messages`](https://www.npmjs.com/package/@adminforth/completion-adapter-anthropic-messages)
@@ -171,13 +180,15 @@ flowchart LR
 ## Installation
 
 ```bash
-npm install @adminforth/agent @adminforth/completion-adapter-openai-responses
+pnpm add @adminforth/agent @adminforth/mcp @adminforth/completion-adapter-openai-responses
 ```
 
 ## Setup
 
 Setup has three parts: (1) create the storage resources, (2) configure the plugin, and
-(3) register both in your AdminForth config.
+(3) register both in your AdminForth config. Set up the
+[MCP plugin](https://adminforth.dev/docs/tutorial/Plugins/mcp/) as its documentation describes
+and add it to the same `globalPlugins`.
 
 ### 1. Create the storage resources
 
@@ -203,6 +214,10 @@ const sessionsResource: AdminForthResourceInput = {
     { name: 'asker_id', type: AdminForthDataTypes.STRING },
     { name: 'created_at', type: AdminForthDataTypes.DATETIME, fillOnCreate: () => new Date().toISOString() },
   ],
+  // Agent-internal data: closed to admin users and MCP clients, the agent works with it directly.
+  options: {
+    allowedActions: { list: false, show: false, create: false, edit: false, delete: false },
+  },
 };
 
 export default sessionsResource;
@@ -233,6 +248,10 @@ const turnsResource: AdminForthResourceInput = {
     // Optional: add a `debug` TEXT column and map it via turnResource.debugField
     // to store per-turn debug traces.
   ],
+  // Agent-internal data: closed to admin users and MCP clients, the agent works with it directly.
+  options: {
+    allowedActions: { list: false, show: false, create: false, edit: false, delete: false },
+  },
 };
 
 export default turnsResource;
@@ -269,6 +288,10 @@ const checkpointsResource: AdminForthResourceInput = {
     { name: 'writes_payload', type: AdminForthDataTypes.TEXT },
     { name: 'schema_version', type: AdminForthDataTypes.INTEGER },
   ],
+  // Agent-internal data: closed to admin users and MCP clients, the agent works with it directly.
+  options: {
+    allowedActions: { list: false, show: false, create: false, edit: false, delete: false },
+  },
 };
 
 export default checkpointsResource;
@@ -400,29 +423,35 @@ plus two optional ones:
 
 ## Tools & skills
 
-The agent works through **API-based tools** generated from your AdminForth resources
-(reading records, inspecting schema, and — through skills — creating/updating/deleting
-records and running actions). Tools run via AdminForth's own API layer, so per-resource
-permissions and validation are enforced.
+The agent has no tools of its own for your data: it is an MCP client of the
+[`@adminforth/mcp`](https://adminforth.dev/docs/tutorial/Plugins/mcp/) server, connected in
+process for each turn as the user who sends the message. The MCP server runs AdminForth's API
+handlers, so per-resource permissions, hooks and validation are enforced, and it shows only the
+resources the user may list or show.
 
 To keep the model focused, tools are disclosed progressively:
 
-- Always available: `get_resource` (inspect resource structure), `get_user_location`,
-  `navigate_user`, and the two discovery tools `fetch_skill` / `fetch_tool_schema`.
-- The agent reads a **skill** (a `SKILL.md` file) to learn which tools a task needs, then
-  loads those tool schemas on demand.
+- Always available: the MCP tools `get_resources_list`, `get_resource`, `fetch_skill` and, with
+  two-factor authentication set up, `wait_for_confirmation`; and the agent's own
+  `get_user_location`, `navigate_user` and `fetch_tool_schema`.
+- Every other MCP tool is named, with the first sentence of its description, in the
+  description of `fetch_tool_schema`, the way MCP clients that load tool schemas on demand
+  list them. The agent loads a tool with `fetch_tool_schema` before its first call, and a
+  **skill** loaded with `fetch_skill` tells it which tools a task needs.
 
-Built-in skills cover fetching data, analytics/charts, and mutating data. You can add your
-own skills by placing a `SKILL.md` (with `name` and `description` frontmatter) in a
-`skills/<skill-name>/` directory under your custom components dir; plugin-provided skill
-directories are also discovered.
+Skills come from the MCP server: its built-in `fetch-data`, `analyze-data` and `mutate-data`, plus
+every `skills/<skill-name>/SKILL.md` in your custom components dir and in other plugins. The
+agent's own system prompt adds the rules of this chat and the guide for Vega-Lite charts.
+
+Datetimes in `get_resource_data` results come in the user's time zone, which the chat UI sends
+with every message.
 
 ## Human-in-the-loop approvals
 
-Tools whose endpoint sets `agent.requiresHumanApproval` (or the older `agent.isDangerous`) trigger an
-approval interrupt: generation pauses and the UI shows an approve/reject prompt. The client
-resolves it via `POST /agent/approval`, and the run resumes (or, on reject, the model is
-told the action was declined).
+Tools whose endpoint sets `agent.requiresHumanApproval`, which the MCP server marks with
+`destructiveHint`, trigger an approval interrupt: generation pauses and the UI shows an
+approve/reject prompt. The client resolves it via `POST /agent/approval`, and the run resumes
+(or, on reject, the model is told the action was declined).
 
 The prompt names the resource and columns by their labels and lists every value the tool
 would write; for `update_record` each field shows its current value next to the new one.
@@ -431,6 +460,10 @@ Values of `masked` and `backendOnly` columns are never shown.
 Where the pending approval lives depends on your setup: with `checkpointResource` configured
 the LangGraph checkpoint is authoritative, so a resume survives a restart and works across
 instances; with the in-memory fallback the state is held per process instance.
+
+Actions that need a two-factor verification run after the user confirms them on the MCP
+confirmation page of the admin panel: the agent shows the link and waits with
+`wait_for_confirmation`.
 
 ## Voice
 

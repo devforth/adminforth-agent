@@ -18,6 +18,10 @@ import { createSequenceDebugCollector } from '../llm/middleware/sequenceDebug.js
 //  3. The agent attaches no provider metadata of its own. Marking that block boundary
 //     (e.g. as an Anthropic cache breakpoint) is the adapter's job, done through the
 //     middleware its `getLangChainAgentSpec` returns.
+//
+// The static half opens with the MCP server instructions, followed by the agent's own prompt.
+
+const STATIC_BLOCK = 'MCP_RULES\n\nSTATIC_PROMPT';
 
 class RecordingModel extends BaseChatModel {
   readonly invocations: BaseMessage[][] = [];
@@ -74,15 +78,26 @@ function markerMiddleware() {
 function buildRuntime(opts: { adapterMiddleware?: boolean } = {}) {
   const model = new RecordingModel({});
   const checkpointer = new MemorySaver();
+  const connections = { opened: 0, closed: 0 };
   const runtime = new AgentRuntime({
     name: 'test-agent',
     getAdminforth: () =>
       ({ config: { auth: { usernameField: 'email' }, baseUrlSlashed: '/admin/' } }) as any,
     getCheckpointer: () => checkpointer,
     toolProvider: {
-      getApiBasedTools: () => ({}),
-      getTools: async () => [],
-    } as any,
+      open: async () => {
+        connections.opened += 1;
+        return {
+          instructions: 'MCP_RULES',
+          baseTools: [],
+          dynamicTools: {},
+          approvalToolNames: [],
+          close: async () => {
+            connections.closed += 1;
+          },
+        };
+      },
+    },
     steerBuffer: new SteerBuffer(),
   });
 
@@ -117,7 +132,7 @@ function buildRuntime(opts: { adapterMiddleware?: boolean } = {}) {
     }
   }
 
-  return { model, run };
+  return { model, run, connections };
 }
 
 const systemMessagesOf = (messages: BaseMessage[]) =>
@@ -143,10 +158,11 @@ describe('system prompt wiring', () => {
     const blocks = blocksOf(model.invocations[0]);
     expect(blocks).toHaveLength(2);
     // The static half arrives verbatim and unadorned — no provider metadata added here.
-    expect(blocks[0]).toEqual({ type: 'text', text: 'STATIC_PROMPT' });
+    expect(blocks[0]).toEqual({ type: 'text', text: STATIC_BLOCK });
     expect(blocks[1].text).toContain('admin@x.io');
     expect(blocks[1].text).toContain('Respond in Ukrainian (UK).');
     expect(blocks[1].text).toContain('Current chat surface: telegram');
+    expect(blocks[1].text).toContain('User time zone: UTC.');
     // Only the user message is in the history.
     expect(model.invocations[0].filter((m) => HumanMessage.isInstance(m)).map((m) => m.text))
       .toEqual(['hi']);
@@ -171,7 +187,7 @@ describe('system prompt wiring', () => {
       expect(blocks).toHaveLength(2);
       // One copy of the static half, unchanged, on every call — this is what makes it
       // a cacheable prefix for adapters that mark it.
-      expect(blocks[0]).toEqual({ type: 'text', text: 'STATIC_PROMPT' });
+      expect(blocks[0]).toEqual({ type: 'text', text: STATIC_BLOCK });
       expect(blocks[1].text.match(/admin@x\.io/g)).toHaveLength(1);
     }
     // The conversation itself still accumulates, as it should.
@@ -218,7 +234,7 @@ describe('system prompt wiring', () => {
       // Adapter middleware runs inside the dynamic-prompt one, so both blocks already
       // exist by the time it can mark the static one.
       expect(blocks).toHaveLength(2);
-      expect(blocks[0]).toEqual({ type: 'text', text: 'STATIC_PROMPT', marked: true });
+      expect(blocks[0]).toEqual({ type: 'text', text: STATIC_BLOCK, marked: true });
       // The volatile half must stay outside whatever the adapter marks.
       expect(blocks[1].marked).toBeUndefined();
     }
@@ -252,5 +268,20 @@ describe('system prompt wiring', () => {
       expect(systemMessagesOf(invocation)).toHaveLength(1);
       expect(systemMessagesOf(invocation)[0].text).not.toContain('STALE_PROMPT_FROM_OLD_CHECKPOINT');
     }
+  });
+
+  it('closes the MCP connection of each turn once its stream is drained', async () => {
+    const { run, connections } = buildRuntime();
+
+    for (const prompt of ['first', 'second']) {
+      await run({
+        sessionId: 's1',
+        systemPrompt: 'STATIC_PROMPT',
+        messages: [new HumanMessage(prompt)],
+        userLanguage: null,
+      });
+    }
+
+    expect(connections).toEqual({ opened: 2, closed: 2 });
   });
 });

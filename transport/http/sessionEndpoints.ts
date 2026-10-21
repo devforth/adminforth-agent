@@ -87,7 +87,7 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
         ctx.getSessionTurns(sessionId),
         // The approval prompt lives only in the browser, so a reload has to rebuild it
         // from the agent's persisted state — otherwise the user cannot answer it.
-        ctx.getPendingApprovals(sessionId),
+        ctx.getPendingApprovals(sessionId, adminUser!),
       ]);
       return {
         session: {

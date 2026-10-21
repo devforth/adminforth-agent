@@ -1,4 +1,4 @@
-import { logger, Filters, type IAdminForth } from "adminforth";
+import { logger, Filters, type AdminUser, type IAdminForth } from "adminforth";
 import { randomUUID } from "crypto";
 import { VegaLiteStreamBuffer } from "../domain/vegaLiteStreamBuffer.js";
 import { getErrorMessage, isAbortError } from "../shared/errors.js";
@@ -112,7 +112,7 @@ export type RunTurnUseCaseDeps = {
   steerBuffer: SteerBuffer;
   modes: PluginOptions["modes"];
   getAdminforth: () => IAdminForth;
-  getAgentSystemPrompt: () => Promise<string>;
+  getAgentSystemPrompt: () => string;
   /** True when a persistent checkpointer is configured (not the in-memory MemorySaver). */
   hasPersistentCheckpointer: boolean;
   /**
@@ -161,7 +161,11 @@ export class RunTurnUseCase {
    * checkpoint is authoritative (correct across instances and restarts); with the in-memory
    * MemorySaver the in-process cache is authoritative (single process, cannot be stale).
    */
-  private async resolvePendingInterrupts(sessionId: string, mode: AgentMode): Promise<PendingInterrupt[]> {
+  private async resolvePendingInterrupts(
+    sessionId: string,
+    mode: AgentMode,
+    adminUser: AdminUser,
+  ): Promise<PendingInterrupt[]> {
     if (this.deps.hasPersistentCheckpointer) {
       // The in-process cache can be stale after a cross-instance resume, so it is intentionally
       // NOT consulted here. A failure to read the checkpoint is surfaced as a real error — never
@@ -170,6 +174,7 @@ export class RunTurnUseCase {
         return await this.deps.llm.getPendingInterrupts({
           completionAdapter: mode.completionAdapter,
           sessionId,
+          adminUser,
         });
       } catch (error) {
         logger.error(
@@ -196,11 +201,15 @@ export class RunTurnUseCase {
    * page reload would otherwise leave the user with no way to answer it. Empty when
    * nothing is pending.
    */
-  public async getPendingApprovals(sessionId: string, modeName?: string | null): Promise<ApprovalDescription[]> {
+  public async getPendingApprovals(
+    sessionId: string,
+    adminUser: AdminUser,
+    modeName?: string | null,
+  ): Promise<ApprovalDescription[]> {
     // Loading a conversation must not fail because the checkpoint store is unhappy
     // (already logged by resolvePendingInterrupts). Without the prompt the user simply
     // falls back to the implicit reject in `prepareTurn`.
-    const interrupts = await this.resolvePendingInterrupts(sessionId, this.resolveMode(modeName))
+    const interrupts = await this.resolvePendingInterrupts(sessionId, this.resolveMode(modeName), adminUser)
       .catch(() => [] as PendingInterrupt[]);
 
     return this.describeApprovals(interrupts);
@@ -312,7 +321,7 @@ export class RunTurnUseCase {
     let resume: PreparedTurn["resume"];
 
     if (shouldResume) {
-      const resumeInterrupts = await this.resolvePendingInterrupts(input.sessionId, mode);
+      const resumeInterrupts = await this.resolvePendingInterrupts(input.sessionId, mode, input.adminUser);
       if (resumeInterrupts.length === 0) {
         throw new Error(`No pending approval interrupt found for session "${input.sessionId}".`);
       }
@@ -327,7 +336,7 @@ export class RunTurnUseCase {
       // pending call is rejected as part of this turn and the prompt rides along in
       // the rejection. Reached whenever the approval UI is gone — after a page
       // reload, from a second tab, or from a chat surface.
-      const pending = await this.resolvePendingInterrupts(input.sessionId, mode);
+      const pending = await this.resolvePendingInterrupts(input.sessionId, mode, input.adminUser);
       previousUserMessages = await this.deps.sessions.getPreviousUserMessages(input.sessionId);
       turnId = await this.deps.sessions.createNewTurn(input.sessionId, input.prompt);
       await this.deps.sessions.touchSession(input.sessionId);
@@ -416,7 +425,7 @@ export class RunTurnUseCase {
 
     const stream = await this.deps.llm.streamTurn({
       completionAdapter: prepared.mode.completionAdapter,
-      systemPrompt: await this.deps.getAgentSystemPrompt(),
+      systemPrompt: this.deps.getAgentSystemPrompt(),
       input: streamInput,
       context: { ...prepared.context, userLanguage },
       observability: prepared.observability,
@@ -509,6 +518,7 @@ export class RunTurnUseCase {
         checkpointId = await this.deps.llm.getLatestCheckpointId({
           completionAdapter: prepared.mode.completionAdapter,
           sessionId: prepared.sessionId,
+          adminUser: prepared.context.adminUser,
         });
       } catch (error) {
         logger.warn(`Failed to read latest checkpoint id for turn "${prepared.turnId}": ${getErrorMessage(error)}`);

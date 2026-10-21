@@ -4,12 +4,14 @@ import type {
   IHttpServer,
 } from "adminforth";
 
-import { AdminForthPlugin, logger } from "adminforth";
+import { AdminForthPlugin } from "adminforth";
+import { readFileSync } from "fs";
+import path from "path";
 
 import type { PluginOptions } from './types.js';
 import { MemorySaver, type BaseCheckpointSaver } from "@langchain/langgraph";
 import { AdminForthCheckpointSaver } from "./persistence/checkpointStore.js";
-import { appendCustomSystemPrompt, buildAgentSystemPrompt, DEFAULT_AGENT_SYSTEM_PROMPT} from "./domain/systemPrompt.js";
+import { appendCustomSystemPrompt, buildAgentSystemPrompt } from "./domain/systemPrompt.js";
 import { setupCoreEndpoints } from "./transport/http/coreEndpoints.js";
 import { setupSessionEndpoints } from "./transport/http/sessionEndpoints.js";
 import { setupChatSurfaceEndpoints } from "./transport/http/chatSurfaceEndpoints.js";
@@ -23,15 +25,18 @@ import { AgentModelFactory } from "./llm/modelFactory.js";
 import { AgentRuntime } from "./llm/agentRuntime.js";
 import { SpeechTurnService } from "./transport/surfaces/speechTurnService.js";
 import { AgentToolProvider } from "./tools/agentToolProvider.js";
+import { MCP_PLUGIN_CLASS_NAME } from "./tools/mcpConnection.js";
 import { SteerBuffer } from "./domain/steerBuffer.js";
 
 export type { AgentEvent, AgentEventEmitter } from "./domain/agentEvents.js";
 
+// Vega-Lite guidance for the chat's chart renderer, appended to the system prompt.
+const CHARTS_GUIDE_FILE = "charts.md";
+
 export default class AdminForthAgentPlugin extends AdminForthPlugin {
   options: PluginOptions;
-  agentSystemPromptPromise: Promise<string>;
   pluginsScope: "resource" | "global" = "global";
-  private agentSystemPrompt: string | null = null;
+  private agentSystemPrompt!: string;
   private checkpointer: BaseCheckpointSaver | null = null;
   private sessionStore: AgentSessionStore;
   private steerBuffer: SteerBuffer;
@@ -49,44 +54,16 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     return this.checkpointer;
   }
 
-  private getInternalAgentResourceIds() {
-    return [
-      this.options.sessionResource.resourceId,
-      this.options.turnResource.resourceId,
-      this.options.checkpointResource?.resourceId,
-    ].filter((resourceId): resourceId is string => Boolean(resourceId));
-  }
-
-  private async getAgentSystemPrompt(): Promise<string> {
-    if (!this.agentSystemPrompt) {
-      const systemPrompt = await buildAgentSystemPrompt(
-        this.adminforth,
-        this.getInternalAgentResourceIds(),
-      ).catch((err) => {
-        logger.error(
-          `Failed to build agent system prompt, falling back to default: ${err instanceof Error ? err.message : String(err)}`,
-        );
-        return DEFAULT_AGENT_SYSTEM_PROMPT;
-      });
-      this.agentSystemPrompt = appendCustomSystemPrompt(systemPrompt, this.options.systemPrompt);
-    }
-    return this.agentSystemPrompt;
-  }
-
   constructor(options: PluginOptions) {
     super(options, import.meta.url);
     this.options = options;
     this.sessionStore = new AgentSessionStore(() => this.adminforth, this.options);
     this.steerBuffer = new SteerBuffer();
-    const toolProvider = new AgentToolProvider(
-      () => this.adminforth,
-      this.getInternalAgentResourceIds.bind(this),
-    );
     const runtime = new AgentRuntime({
       name: `adminforth-agent-${this.pluginInstanceId}`,
       getAdminforth: () => this.adminforth,
       getCheckpointer: this.getCheckpointer.bind(this),
-      toolProvider,
+      toolProvider: new AgentToolProvider(() => this.adminforth),
       steerBuffer: this.steerBuffer,
     });
     const llm = new LangGraphLlm(
@@ -99,7 +76,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       steerBuffer: this.steerBuffer,
       modes: this.options.modes,
       getAdminforth: () => this.adminforth,
-      getAgentSystemPrompt: this.getAgentSystemPrompt.bind(this),
+      getAgentSystemPrompt: () => this.agentSystemPrompt,
       hasPersistentCheckpointer: Boolean(this.options.checkpointResource),
       turnCheckpointsEnabled: Boolean(this.options.turnResource.checkpointIdField),
       sessionResource: this.options.sessionResource,
@@ -114,9 +91,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       this.sessionStore,
       this.runTurnUseCase.handleTurn.bind(this.runTurnUseCase),
       this.runTurnUseCase.runAndPersistAgentResponse.bind(this.runTurnUseCase),
-    );
-    this.agentSystemPromptPromise = Promise.resolve(
-      appendCustomSystemPrompt(DEFAULT_AGENT_SYSTEM_PROMPT, this.options.systemPrompt),
     );
     this.shouldHaveSingleInstancePerWholeApp = () => false;
   }
@@ -150,15 +124,14 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     for (const chatSurfaceAdapter of this.options.chatSurfaceAdapters ?? []) {
       chatSurfaceAdapter.validate();
     }
-    this.agentSystemPromptPromise = buildAgentSystemPrompt(
-      adminforth,
-      this.getInternalAgentResourceIds(),
-    )
-      .then((systemPrompt) => {
-        const finalPrompt = appendCustomSystemPrompt(systemPrompt, this.options.systemPrompt);
-        this.agentSystemPrompt = finalPrompt;
-        return finalPrompt;
-      });
+    adminforth.getPluginByClassName(MCP_PLUGIN_CLASS_NAME);
+    this.agentSystemPrompt = appendCustomSystemPrompt(
+      buildAgentSystemPrompt(
+        adminforth.config.baseUrlSlashed,
+        readFileSync(path.join(this.customFolderPath, CHARTS_GUIDE_FILE), "utf8"),
+      ),
+      this.options.systemPrompt,
+    );
   }
 
   instanceUniqueRepresentation(pluginOptions: any) : string {
@@ -179,7 +152,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       },
       runAndPersistAgentResponse: this.runTurnUseCase.runAndPersistAgentResponse.bind(this.runTurnUseCase),
       getSessionTurns: this.sessionStore.getSessionTurns.bind(this.sessionStore),
-      getPendingApprovals: (sessionId) => this.runTurnUseCase.getPendingApprovals(sessionId),
+      getPendingApprovals: (sessionId, adminUser) => this.runTurnUseCase.getPendingApprovals(sessionId, adminUser),
       createNewTurn: this.sessionStore.createNewTurn.bind(this.sessionStore),
       createSystemTurn: this.sessionStore.createSystemTurn.bind(this.sessionStore),
       appendSteerToCurrentTurn: this.sessionStore.appendSteerToCurrentTurn.bind(this.sessionStore),

@@ -1,8 +1,6 @@
-name: charts
-description: Create Vega-Lite chart specs for AdminForth analytics responses. Always use this skill when the user asks for a chart or when a chart would help illustrate the insights from an analytics query.
----
+# Charts
 
-# Instructions
+Add a chart when the user asks for one or when it helps to illustrate the insights of an analytics answer. The chat renders Vega-Lite specs.
 
 Use Vega-Lite syntax for charts.
 

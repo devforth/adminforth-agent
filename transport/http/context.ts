@@ -1,4 +1,5 @@
 import type {
+  AdminUser,
   ChatSurfaceAdapter,
   ChatSurfaceEventSink,
   ChatSurfaceIncomingMessage,
@@ -30,7 +31,7 @@ export type AgentEndpointsContext = {
   steer(input: { sessionId: string; message: string; adminUser: any }): Promise<{ id: string; queued: number }>;
   runAndPersistAgentResponse(input: RunAndPersistAgentResponseInput): Promise<RunAndPersistAgentResponseResult>;
   getSessionTurns(sessionId: string): Promise<SessionTurn[]>;
-  getPendingApprovals(sessionId: string): Promise<ApprovalDescription[]>;
+  getPendingApprovals(sessionId: string, adminUser: AdminUser): Promise<ApprovalDescription[]>;
   createNewTurn(sessionId: string, prompt: string, response?: string): Promise<string>;
   createSystemTurn(sessionId: string, systemMessage: string): Promise<string>;
   appendSteerToCurrentTurn(sessionId: string, steerText: string): Promise<void>;

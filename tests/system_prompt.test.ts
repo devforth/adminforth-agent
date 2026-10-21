@@ -6,11 +6,10 @@ import {
 } from '../domain/systemPrompt.js';
 
 // Characterization tests for system-prompt assembly. The prompt has two halves: the
-// static one (base prompt + resource/skill catalog + custom prompt), built once and
-// bound to the agent, and the dynamic one, rebuilt from the runtime context before
-// every model call. These freeze the composed structure of each and the
-// hidden-resource filtering. How the two are joined is covered by
-// system_prompt_wiring.test.ts.
+// static one (base prompt + rules for this chat + charts guide + custom prompt), built
+// once and bound to the agent after the MCP server instructions, and the dynamic one,
+// rebuilt from the runtime context before every model call. These freeze the composed
+// structure of each. How the two are joined is covered by system_prompt_wiring.test.ts.
 
 describe('adminforth-agent system prompt', () => {
   describe('appendCustomSystemPrompt', () => {
@@ -34,6 +33,7 @@ describe('adminforth-agent system prompt', () => {
       const out = buildDynamicSystemPrompt({
         adminUser,
         usernameField: 'email',
+        userTimeZone: 'UTC',
         userLanguage: { language: 'Ukrainian', code: 'UK', ambiguous: false },
         chatSurface: undefined,
       });
@@ -46,7 +46,7 @@ describe('adminforth-agent system prompt', () => {
     it('carries no part of the static half (that one is bound to the agent)', () => {
       // Anything leaking in here would be re-sent on every model call and would break
       // the static half's byte-for-byte stability that adapters cache on.
-      const out = buildDynamicSystemPrompt({ adminUser, usernameField: 'email' });
+      const out = buildDynamicSystemPrompt({ adminUser, usernameField: 'email', userTimeZone: 'UTC' });
 
       expect(out).not.toContain(DEFAULT_AGENT_SYSTEM_PROMPT);
       expect(out).not.toContain('ADMIN_BASE_PATH');
@@ -56,25 +56,35 @@ describe('adminforth-agent system prompt', () => {
       const ambiguous = buildDynamicSystemPrompt({
         adminUser,
         usernameField: 'email',
+        userTimeZone: 'UTC',
         userLanguage: { language: 'x', code: 'x', ambiguous: true },
       });
       const none = buildDynamicSystemPrompt({
         adminUser,
         usernameField: 'email',
+        userTimeZone: 'UTC',
         userLanguage: null,
       });
       // Undefined is the HITL-resume case, where no detection ran for this call.
-      const missing = buildDynamicSystemPrompt({ adminUser, usernameField: 'email' });
+      const missing = buildDynamicSystemPrompt({ adminUser, usernameField: 'email', userTimeZone: 'UTC' });
 
       expect(ambiguous).toContain("Respond in the user's language.");
       expect(none).toContain("Respond in the user's language.");
       expect(missing).toContain("Respond in the user's language.");
     });
 
+    it('tells the user time zone and to pass datetimes in UTC', () => {
+      const out = buildDynamicSystemPrompt({ adminUser, usernameField: 'email', userTimeZone: 'Europe/Kyiv' });
+
+      expect(out).toContain('User time zone: Europe/Kyiv.');
+      expect(out).toContain('pass datetimes in tool arguments in UTC');
+    });
+
     it('adds a chat-surface note when a surface is present', () => {
       const out = buildDynamicSystemPrompt({
         adminUser,
         usernameField: 'email',
+        userTimeZone: 'UTC',
         userLanguage: null,
         chatSurface: 'telegram',
       });
@@ -84,30 +94,13 @@ describe('adminforth-agent system prompt', () => {
   });
 
   describe('buildAgentSystemPrompt', () => {
-    function fakeAdminforth() {
-      return {
-        config: {
-          customization: { customComponentsDir: '/tmp/adminforth-agent-nonexistent-skills-dir' },
-          baseUrlSlashed: '/admin/',
-          resources: [
-            { resourceId: 'cars', label: 'Cars' },
-            { resourceId: 'sessions', label: 'Sessions' },
-          ],
-        },
-        activatedPlugins: [],
-      } as any;
-    }
+    it('includes the base prompt, base path and charts guide, and puts the approval UI over chat confirmations', () => {
+      const out = buildAgentSystemPrompt('/admin/', '# Charts\n\nCHARTS_GUIDE');
 
-    it('lists visible resources, hides internal resources, and includes the base prompt + base path', async () => {
-      const out = await buildAgentSystemPrompt(fakeAdminforth(), ['sessions']);
-
-      expect(out).toContain(DEFAULT_AGENT_SYSTEM_PROMPT);
+      expect(out.startsWith(DEFAULT_AGENT_SYSTEM_PROMPT)).toBe(true);
       expect(out).toContain('ADMIN_BASE_PATH: /admin/');
-      expect(out).toContain('resourceId: cars');
-      expect(out).not.toContain('resourceId: sessions');
-      // Fixed skill-discovery guidance is always present.
-      expect(out).toContain('Before using any skill, call fetch_skill');
-      expect(out).toContain('If the user wants to fetch records, load fetch_data first');
+      expect(out).toContain('the runtime approval UI replaces a confirmation in chat');
+      expect(out.endsWith('# Charts\n\nCHARTS_GUIDE')).toBe(true);
     });
   });
 });

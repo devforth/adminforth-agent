@@ -148,7 +148,7 @@ function buildUseCase(opts: {
     steerBuffer,
     modes: [{ name: 'default', completionAdapter: {} as any }],
     getAdminforth,
-    getAgentSystemPrompt: async () => 'SYS',
+    getAgentSystemPrompt: () => 'SYS',
     hasPersistentCheckpointer: opts.hasPersistentCheckpointer ?? false,
     turnCheckpointsEnabled: opts.turnCheckpointsEnabled ?? false,
     sessionResource: SESSION_RESOURCE,

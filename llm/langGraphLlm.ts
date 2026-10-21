@@ -1,3 +1,4 @@
+import type { AdminUser } from "adminforth";
 import { Command } from "@langchain/langgraph";
 import { HumanMessage } from "langchain";
 import type { AgentRuntime } from "./agentRuntime.js";
@@ -56,18 +57,28 @@ export class LangGraphLlm implements LlmPort {
   async getPendingInterrupts(input: {
     completionAdapter: AgentModeCompletionAdapter;
     sessionId: string;
+    adminUser: AdminUser;
   }): Promise<PendingInterrupt[]> {
     const models = await this.modelFactory.create(input.completionAdapter);
-    const raw = await this.runtime.getPendingInterrupts({ models, sessionId: input.sessionId });
+    const raw = await this.runtime.getPendingInterrupts({
+      models,
+      sessionId: input.sessionId,
+      adminUser: input.adminUser,
+    });
     return normalizeInterrupts(raw);
   }
 
   async getLatestCheckpointId(input: {
     completionAdapter: AgentModeCompletionAdapter;
     sessionId: string;
+    adminUser: AdminUser;
   }): Promise<string | null> {
     const models = await this.modelFactory.create(input.completionAdapter);
-    return this.runtime.getLatestCheckpointId({ models, sessionId: input.sessionId });
+    return this.runtime.getLatestCheckpointId({
+      models,
+      sessionId: input.sessionId,
+      adminUser: input.adminUser,
+    });
   }
 
   async resetThreadCheckpoints(input: {

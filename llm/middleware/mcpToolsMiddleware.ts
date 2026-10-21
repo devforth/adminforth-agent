@@ -1,22 +1,18 @@
 import { ToolMessage } from "@langchain/core/messages";
 import { isGraphInterrupt } from "@langchain/langgraph";
+import type { ClientTool } from "@langchain/core/tools";
 import { createMiddleware } from "langchain";
-import { logger, type AdminUser, type IAdminForth } from "adminforth";
-import {
-  formatApiBasedToolCall,
-  type ApiBasedTool,
-} from "../../tools/apiBasedTools.js";
+import { logger, type IAdminForth } from "adminforth";
+import { formatToolCall } from "../../tools/toolLabels.js";
 import {
   createToolCallTracker,
   type ToolCallEventSink,
 } from "../../domain/toolCallEvents.js";
-import { ALWAYS_AVAILABLE_API_TOOL_NAMES } from "../../tools/index.js";
-import { createApiTool } from "../../tools/apiTool.js";
 import type { AgentEventEmitter } from "../../domain/agentEvents.js";
 import type { SequenceDebugCollector } from "./sequenceDebug.js";
 import { isAbortError } from "../../shared/errors.js";
 
-function getEnabledApiToolNames(messages: unknown[]) {
+function getEnabledToolNames(messages: unknown[]) {
   const enabledToolNames = new Set<string>();
 
   for (const message of messages) {
@@ -51,30 +47,26 @@ function getEnabledApiToolNames(messages: unknown[]) {
   return enabledToolNames;
 }
 
-export function createApiBasedToolsMiddleware(
-  apiBasedTools: Record<string, ApiBasedTool>,
+/**
+ * Adds the MCP tools loaded with fetch_tool_schema to the next model calls, routes their calls,
+ * and reports every tool call to the processing timeline.
+ */
+export function createMcpToolsMiddleware(
+  dynamicTools: Record<string, ClientTool>,
   adminforth: IAdminForth,
 ) {
-  const alwaysAvailableApiToolNames = new Set<string>(ALWAYS_AVAILABLE_API_TOOL_NAMES);
-  const dynamicTools = Object.fromEntries(
-    Object.entries(apiBasedTools).map(([toolName, apiBasedTool]) => [
-      toolName,
-      createApiTool(toolName, apiBasedTool),
-    ]),
-  );
+  const loadedDynamicToolNames = (messages: unknown[]) =>
+    [...getEnabledToolNames(messages)].filter((toolName) => toolName in dynamicTools);
 
   return createMiddleware({
-    name: "ApiBasedToolsMiddleware",
+    name: "McpToolsMiddleware",
     async wrapModelCall(request, handler) {
-      const enabledApiToolNames = getEnabledApiToolNames(request.state.messages);
-      const tools = [...enabledApiToolNames]
-        .filter((toolName) => !alwaysAvailableApiToolNames.has(toolName))
-        .map((toolName) => dynamicTools[toolName]);
-      const availableTools = [...request.tools, ...tools];
-
       return handler({
         ...request,
-        tools: availableTools,
+        tools: [
+          ...request.tools,
+          ...loadedDynamicToolNames(request.state.messages).map((toolName) => dynamicTools[toolName]),
+        ],
       });
     },
     async wrapToolCall(request, handler) {
@@ -84,12 +76,10 @@ export function createApiBasedToolsMiddleware(
       }
 
       const toolCallId = request.toolCall.id;
-      const { adminUser, abortSignal, emit, sequenceDebugSink, userTimeZone } = request.runtime.context as {
-        adminUser: AdminUser;
+      const { abortSignal, emit, sequenceDebugSink } = request.runtime.context as {
         abortSignal?: AbortSignal;
         emit?: AgentEventEmitter;
         sequenceDebugSink: SequenceDebugCollector;
-        userTimeZone: string;
       };
       const emitToolCall: ToolCallEventSink = (event) => {
         sequenceDebugSink.handleToolCallEvent(event);
@@ -99,34 +89,18 @@ export function createApiBasedToolsMiddleware(
         });
       };
       const toolArgs = (request.toolCall.args ?? {}) as Record<string, unknown>;
-      let toolInfo: string | undefined;
-
-      if (request.toolCall.name === "fetch_skill") {
-        toolInfo = `Load ${(toolArgs.skillName as string).split("_").join(" ")} skill`;
-      } else if (request.toolCall.name === "fetch_tool_schema") {
-        toolInfo = `Load ${(toolArgs.toolName as string).split("_").join(" ")} tool `;
-      } else {
-        toolInfo = await formatApiBasedToolCall({
-          adminforth,
-          adminUser,
-          inputs: toolArgs,
-          toolName: request.toolCall.name,
-          userTimeZone,
-        });
-      }
       const toolCallTracker = createToolCallTracker({
         emit: emitToolCall,
         toolCallId,
         toolName: request.toolCall.name,
-        toolInfo,
+        toolInfo: formatToolCall(adminforth, request.toolCall.name, toolArgs),
         input: toolArgs,
         startedAt,
       });
       toolCallTracker.start();
 
       try {
-
-        const result = getEnabledApiToolNames(request.state.messages).has(request.toolCall.name)
+        const result = loadedDynamicToolNames(request.state.messages).includes(request.toolCall.name)
           ? await handler({
               ...request,
               tool: dynamicTools[request.toolCall.name],

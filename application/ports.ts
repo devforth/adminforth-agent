@@ -1,4 +1,4 @@
-import type { CompletionAdapter } from "adminforth";
+import type { AdminUser, CompletionAdapter } from "adminforth";
 import type { DetectedLanguage, PreviousUserMessage } from "../domain/languageDetect.js";
 import type {
   AgentMessage,
@@ -67,6 +67,7 @@ export interface LlmPort {
   getPendingInterrupts(input: {
     completionAdapter: AgentModeCompletionAdapter;
     sessionId: string;
+    adminUser: AdminUser;
   }): Promise<PendingInterrupt[]>;
 
   /**
@@ -77,6 +78,7 @@ export interface LlmPort {
   getLatestCheckpointId(input: {
     completionAdapter: AgentModeCompletionAdapter;
     sessionId: string;
+    adminUser: AdminUser;
   }): Promise<string | null>;
 
   /**
