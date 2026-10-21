@@ -14,11 +14,12 @@
       />
     </button>
     <transition name="expand">
-      <IncremarkContent
+      <MarkdownContent
         v-if="isExpanded"
         v-show="isExpanded"
         class="ml-6 mb-1 text-sm text-lightInputIconColor dark:text-darkInputIconColor"
         :content="reasoningText"
+        :final="!isStreaming"
       />
     </transition>
   </li>
@@ -38,7 +39,7 @@ const props = defineProps<{
   text?: string
 }>();
 
-const IncremarkContent = defineAsyncComponent(() => import('@incremark/vue').then(module => module.IncremarkContent))
+const MarkdownContent = defineAsyncComponent(() => import('./MarkdownContent.vue'))
 
 const isExpanded = ref(true);
 const isStreaming = computed(() => props.state === 'streaming');

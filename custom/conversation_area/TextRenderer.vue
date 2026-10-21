@@ -5,20 +5,17 @@
     :class="[
       hasVegaLite && 'w-full',
       props.role === 'user'
-        ? 'self-end max-w-[82%] mr-4 px-3 py-2 rounded-xl rounded-br [&_.incremark-paragraph]:leading-5 bg-lightSecondaryDarken dark:bg-darkSecondaryLighten'
+        ? 'self-end max-w-[82%] mr-4 px-3 py-2 rounded-xl rounded-br [&_p]:leading-5 bg-lightSecondaryDarken dark:bg-darkSecondaryLighten'
         : 'self-start max-w-full px-4',
       props.editMode ? `w-full max-w-[calc(100%-2rem)] flex-col items-stretch py-3 border bg-lightInputBackground border-lightInputFocusBorder ring-[3px] ring-lightInputFocusRing
         dark:bg-darkInputBackground dark:border-darkInputFocusBorder dark:ring-darkInputFocusRing` : ''
     ]"
   >
-    <IncremarkContent
-      class="text-wrap break-words w-full max-w-full"
+    <MarkdownContent
+      class="w-full max-w-full text-lightListTableText dark:text-darkListTableText"
       v-if="content && !props.editMode"
-      :key="renderNonce"
       :content="content"
-      :is-finished="isFinished"
-      :components="incremarkComponents"
-      :incremark-options="incremarkOptions"
+      :final="isFinished"
     />
     <template v-if="props.editMode">
       <textarea
@@ -38,7 +35,7 @@
 
 <script setup lang="ts">
 
-  import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue';
+  import { computed, defineAsyncComponent, ref, watch } from 'vue';
   import { useRouter } from 'vue-router';
   import { useAgentStore } from '../composables/useAgentStore';
   import { useCoreStore } from '@/stores/core';
@@ -54,8 +51,7 @@
 
   const emit = defineEmits(['toggle-thoughts']);
 
-  const IncremarkContent = defineAsyncComponent(() => import('@incremark/vue').then(module => module.IncremarkContent))
-  const ShikiCodeBlock = defineAsyncComponent(() => import('../incremark_code_renderers/IncremarkShikiCodeBlock.vue'))
+  const MarkdownContent = defineAsyncComponent(() => import('./MarkdownContent.vue'))
 
   const agentStore = useAgentStore();
   const coreStore = useCoreStore();
@@ -66,28 +62,8 @@
   const content = computed(() => props.message)
   const isFinished = computed(() => props.state === 'done')
 
-  const renderNonce = ref(0);
-  watch(content, (newContent, oldContent) => {
-    if (isFinished.value && newContent !== oldContent) {
-      renderNonce.value++;
-    }
-  });
   const hasVegaLite = computed(() => props.message?.includes('```vega-lite'))
   const isStateStreaming = computed(() => props.state === 'streaming')
-
-  const incremarkComponents = {
-    code: ShikiCodeBlock,
-  };
-  const incremarkOptions = {
-		gfm: true,
-		math: { tex: true },
-		containers: true,
-		htmlTree: true,
-	};
-
-  onMounted(async () => {
-    void import('katex/dist/katex.min.css')
-  })
 
   watch(isStateStreaming, (newValue: boolean) => {
     if (!newValue) {
@@ -151,96 +127,3 @@
   }
 
 </script>
-
-<style lang="scss">
-// the incremark theme ships its own fonts and palette, point them to the design tokens
-.incremark {
-  --incremark-typography-font-family-base: theme('fontFamily.sans');
-  --incremark-typography-font-family-mono: theme('fontFamily.mono');
-  --incremark-color-text-primary: theme('colors.lightListTableText');
-  --incremark-color-text-secondary: theme('colors.lightInputIconColor');
-  --incremark-color-text-tertiary: theme('colors.lightInputPlaceholderText');
-  --incremark-color-border-default: theme('colors.lightCardBorder');
-  --incremark-color-border-strong: theme('colors.lightCardBorder');
-  --incremark-color-border-subtle: theme('colors.lightCardBorder');
-  --incremark-color-background-base: theme('colors.lightCardBackground');
-  --incremark-color-background-elevated: theme('colors.lightCardBackgroundHover');
-  --incremark-color-code-inline-background: theme('colors.lightSecondaryDarken');
-  --incremark-color-code-inline-text: theme('colors.lightInputText');
-  --incremark-color-brand-primary: theme('colors.lightPrimary');
-  --incremark-color-interactive-link: theme('colors.lightPrimary');
-  --incremark-color-interactive-link-hover: theme('colors.lightPrimary');
-  --incremark-color-interactive-link-visited: theme('colors.lightPrimary');
-}
-
-.dark .incremark {
-  --incremark-color-text-primary: theme('colors.darkListTableText');
-  --incremark-color-text-secondary: theme('colors.darkInputIconColor');
-  --incremark-color-text-tertiary: theme('colors.darkInputPlaceholderText');
-  --incremark-color-border-default: theme('colors.darkCardBorder');
-  --incremark-color-border-strong: theme('colors.darkCardBorder');
-  --incremark-color-border-subtle: theme('colors.darkCardBorder');
-  --incremark-color-background-base: theme('colors.darkCardBackground');
-  --incremark-color-background-elevated: theme('colors.darkCardBackgroundHover');
-  --incremark-color-code-inline-background: theme('colors.darkSecondaryLighten');
-  --incremark-color-code-inline-text: theme('colors.darkInputText');
-  --incremark-color-brand-primary: theme('colors.darkPrimary');
-  --incremark-color-interactive-link: theme('colors.darkPrimary');
-  --incremark-color-interactive-link-hover: theme('colors.darkPrimary');
-  --incremark-color-interactive-link-visited: theme('colors.darkPrimary');
-}
-
-.incremark a.incremark-link,
-.incremark a.incremark-link:visited {
-  @apply text-lightPrimary dark:text-darkPrimary;
-  display: inline-block;
-  text-decoration: underline;
-  text-underline-offset: 4px;
-  text-decoration-style: dotted;
-  word-break: break-all;
-}
-
-.incremark a.incremark-link:hover {
-  text-decoration-style: solid;
-}
-
-a.incremark-link::after {
-  content: "";
-  display: inline-block;
-  width: 16px;
-  height: 16px;
-  vertical-align: middle;
-  rotate: -45deg;
-  background-color: currentColor;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='currentColor' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M13 12H2m12 0l-4 4m4-4l-4-4'/%3E%3C/svg%3E") no-repeat center;
-  mask-size: contain;
-}
-
-.incremark-table a.incremark-link {
-  word-break: break-word;
-}
-
-// scoped under .incremark: the incremark theme is imported lazily and would win an equal selector
-.incremark .incremark-list {
-  list-style: disc;
-  margin: 0 0 8px;
-  padding-left: 18px;
-}
-
-.incremark .incremark-list-item {
-  margin: 2px 0;
-}
-
-.incremark .incremark-paragraph {
-  margin: 0 0 8px;
-}
-
-.incremark .incremark-list-item > .incremark-paragraph {
-  margin: 0;
-}
-
-// the gap between messages comes from the conversation, not from the last block of a message
-.incremark > .incremark-block:last-child > :last-child {
-  margin-bottom: 0;
-}
-</style>

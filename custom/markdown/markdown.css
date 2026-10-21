@@ -1,0 +1,263 @@
+/* markdown of the chat; the text color comes from the container, a reasoning block is muted */
+.af-md {
+  line-height: 1.6;
+  overflow-wrap: break-word;
+}
+
+.af-md > :first-child {
+  margin-top: 0;
+}
+
+.af-md > :last-child {
+  margin-bottom: 0;
+}
+
+.af-md p,
+.af-md ul,
+.af-md ol,
+.af-md blockquote,
+.af-md table,
+.af-md img {
+  margin: 0 0 8px;
+}
+
+.af-md h1,
+.af-md h2,
+.af-md h3,
+.af-md h4,
+.af-md h5,
+.af-md h6 {
+  margin: 16px 0 8px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.af-md h1 { font-size: 1.4em; }
+.af-md h2 { font-size: 1.25em; }
+.af-md h3 { font-size: 1.1em; }
+.af-md h4,
+.af-md h5,
+.af-md h6 { font-size: 1em; }
+
+.af-md ul {
+  list-style: disc;
+  padding-left: 18px;
+}
+
+.af-md ol {
+  list-style: decimal;
+  padding-left: 22px;
+}
+
+.af-md li {
+  margin: 2px 0;
+}
+
+.af-md li > p,
+.af-md li > ul,
+.af-md li > ol {
+  margin: 0;
+}
+
+.af-md li:has(> input[type="checkbox"]) {
+  list-style: none;
+  margin-left: -18px;
+}
+
+.af-md li > input[type="checkbox"] {
+  margin: 0 6px 2px 0;
+  vertical-align: middle;
+  accent-color: theme('colors.lightPrimary');
+}
+
+.af-md a {
+  @apply text-lightPrimary dark:text-darkPrimary;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-style: dotted;
+  word-break: break-word;
+}
+
+.af-md a:hover {
+  text-decoration-style: solid;
+}
+
+.af-md a::after {
+  content: "";
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  rotate: -45deg;
+  background-color: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='currentColor' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M13 12H2m12 0l-4 4m4-4l-4-4'/%3E%3C/svg%3E") no-repeat center;
+  mask-size: contain;
+}
+
+.af-md :not(pre) > code {
+  @apply rounded bg-lightSecondaryDarken text-lightInputText dark:bg-darkSecondaryLighten dark:text-darkInputText;
+  padding: 1px 4px;
+  font-family: theme('fontFamily.mono');
+  font-size: 0.9em;
+}
+
+.af-md blockquote {
+  @apply border-l-[3px] border-lightCardBorder text-lightInputIconColor dark:border-darkCardBorder dark:text-darkInputIconColor;
+  padding: 2px 0 2px 12px;
+}
+
+.af-md hr {
+  @apply border-lightCardBorder dark:border-darkCardBorder;
+  margin: 12px 0;
+}
+
+/* a wide table scrolls inside the message, not the whole chat */
+.af-md table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.af-md th,
+.af-md td {
+  @apply border border-lightCardBorder dark:border-darkCardBorder;
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.af-md th {
+  @apply bg-lightCardBackgroundHover dark:bg-darkCardBackgroundHover;
+  font-weight: 600;
+}
+
+.af-md th[align="center"],
+.af-md td[align="center"] { text-align: center; }
+
+.af-md th[align="right"],
+.af-md td[align="right"] { text-align: right; }
+
+.af-md img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+.af-md-math-block {
+  margin: 0 0 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.af-md-math-block .katex-display {
+  margin: 0;
+}
+
+/* code blocks */
+.af-md-code {
+  @apply border border-lightCardBorder bg-lightCardBackground dark:border-darkCardBorder dark:bg-darkCardBackground;
+  width: 100%;
+  margin: 0 0 8px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.af-md-code-toolbar {
+  @apply border-b border-lightCardBorder bg-lightCardBackgroundHover dark:border-darkCardBorder dark:bg-darkCardBackgroundHover;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 4px 4px 12px;
+}
+
+.af-md-code-language {
+  @apply text-xs font-medium text-lightInputIconColor dark:text-darkInputIconColor;
+}
+
+.af-md-code-copy {
+  @apply h-6 rounded-default px-2 text-xs font-medium transition-colors text-lightInputIconColor dark:text-darkInputIconColor;
+}
+
+.af-md-code-copy:hover {
+  @apply bg-lightSecondaryDarken text-lightInputText dark:bg-darkSecondaryLighten dark:text-darkInputText;
+}
+
+.af-md-code-copy:focus-visible {
+  @apply outline-none ring-[3px] ring-lightFocusRing dark:ring-darkFocusRing;
+}
+
+.af-md-code-copy[data-copied] {
+  @apply text-lightSuccess dark:text-darkSuccess;
+}
+
+.af-md-code-body {
+  overflow-x: auto;
+}
+
+.af-md-code-body pre {
+  margin: 0;
+  padding: 12px;
+  overflow-x: auto;
+  background: transparent !important;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.af-md-code-body code {
+  display: block;
+  font-family: theme('fontFamily.mono');
+  white-space: pre;
+}
+
+.af-md-code-body .line {
+  min-height: 1.65em;
+}
+
+/* shiki writes the light colors inline and the dark ones as --shiki-dark */
+.dark .af-md-code-body .shiki,
+.dark .af-md-code-body .shiki span {
+  color: var(--shiki-dark) !important;
+}
+
+/* charts; vegaLiteConfig reads the --chart-* tokens when it renders */
+.af-md-vega {
+  width: 100%;
+  margin: 0 0 8px;
+  --chart-text: theme('colors.lightInputText');
+  --chart-muted: theme('colors.lightInputIconColor');
+  --chart-grid: theme('colors.lightCardBorder');
+  --chart-baseline: theme('colors.lightInputBorder');
+  --chart-surface: theme('colors.lightCardBackground');
+}
+
+.dark .af-md-vega {
+  --chart-text: theme('colors.darkInputText');
+  --chart-muted: theme('colors.darkInputIconColor');
+  --chart-grid: theme('colors.darkCardBorder');
+  --chart-baseline: theme('colors.darkInputBorder');
+  --chart-surface: theme('colors.darkCardBackground');
+}
+
+.af-md-vega .vega-embed {
+  width: 100%;
+}
+
+/* vega-tooltip appends its element to the body, so the "af" tooltip theme is global */
+#vg-tooltip-element.af-theme {
+  @apply rounded-default border-0 px-2 py-1.5 text-xs bg-lightDropdownOptionsBackground text-lightInputText shadow-popover dark:bg-darkDropdownOptionsBackground dark:text-darkInputText dark:shadow-darkPopover;
+  font-family: inherit;
+}
+
+#vg-tooltip-element.af-theme h2 {
+  @apply mb-1 text-xs font-semibold;
+}
+
+#vg-tooltip-element.af-theme td.key {
+  @apply pr-2 text-lightInputIconColor dark:text-darkInputIconColor;
+}
+
+#vg-tooltip-element.af-theme td.value {
+  @apply font-medium tabular-nums;
+}
