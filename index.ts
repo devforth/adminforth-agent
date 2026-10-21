@@ -117,6 +117,17 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     if (!this.options.sessionResource) {
       throw new Error("sessionResource is required for AdminForthAgentPlugin");
     }
+    // Chat history and checkpoints of the agent are not data for agents to work with.
+    const internalResourceIds = [
+      this.options.sessionResource.resourceId,
+      this.options.turnResource.resourceId,
+      this.options.checkpointResource?.resourceId,
+    ];
+    for (const resource of adminforth.config.resources) {
+      if (internalResourceIds.includes(resource.resourceId)) {
+        resource.options.agent = { ...resource.options.agent, hiddenFromAgents: true };
+      }
+    }
   }
 
   validateConfigAfterDiscover(adminforth: IAdminForth, resourceConfig: AdminForthResource) {
