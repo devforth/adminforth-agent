@@ -26,7 +26,7 @@
       }"
       :style="{ 
         maxWidth: agentStore.isFullScreen ? agentStore.MAX_WIDTH+'rem' : '100%',
-        paddingBottom: showBottomSpacer ? `max(0px, 100cqh - ${lastTurnHeight}px)` : undefined,
+        paddingBottom: showBottomSpacer ? `max(${MASK_HEIGHT}px, 100cqh - ${lastTurnHeight}px)` : `${MASK_HEIGHT}px`,
         transition: `
           max-width ${agentTransitions.TRANSITION_DURATION}ms ease-in-out,
           transform ${agentTransitions.TRANSITION_DURATION}ms ease-in-out
@@ -146,6 +146,7 @@ const messagesRefs = ref<Array<HTMLElement | null>>([]);
 *
 * The spacer is the scroll element's padding-bottom, resolved in CSS (100cqh minus the last turn), so
 * it follows the container height in the same layout pass, e.g. when the prompt textarea grows.
+* It is never less than the bottom fade of the mask, so at the bottom the last message isn't faded out.
 * It is padding rather than a child element on purpose: custom-vue-scrollbar measures the viewport and
 * the content with separate debounced observers, and when both resize together it briefly computes a
 * wrong scroll range and flashes the scrollbar thumb. Padding keeps the content size unchanged.
