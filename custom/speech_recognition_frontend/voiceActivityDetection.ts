@@ -8,6 +8,14 @@ let onUpdateCallback: (amplitude: number) => void = () => {};
 
 async function createVADInstance(){
   vad = await import("@ricky0123/vad-web");
+  // the package root does not re-export ort, MicVAD runs on the one from this module
+  const { ort } = await import("@ricky0123/vad-web/dist/real-time-vad.js");
+  // vad-web fetches the ORT .mjs and .wasm, the worklet and the model by URL, so Vite does not bundle them: they are committed to
+  // custom/public/vad/<onnxruntime-web version>/ (a new version gets a new URL, assets are cached for a year).
+  // After updating onnxruntime-web or @ricky0123/vad-web in custom, replace that folder with fresh copies of
+  // onnxruntime-web/dist/ort-wasm-simd-threaded.{mjs,wasm} and @ricky0123/vad-web/dist/{vad.worklet.bundle.min.js,silero_vad_legacy.onnx}
+  // with origin: in dev Vite appends ?import to a dynamic import() of a path starting with "/", and answers a public .mjs requested so without a MIME type
+  const assetsPath = `${window.location.origin}${import.meta.env.VITE_ADMINFORTH_PUBLIC_PATH || ''}/assets/plugins/AdminForthAgentPlugin/vad/${ort.env.versions.web}/`;
   VADInstance = await vad.MicVAD.new({
     onFrameProcessed: ({ isSpeech }) => {
       onUpdateCallback(isSpeech);
@@ -19,8 +27,8 @@ async function createVADInstance(){
     onSpeechStart: () => {
       onVoiceStartCallback();
     },
-    onnxWASMBasePath: "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/",
-    baseAssetPath: "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.29/dist/",
+    onnxWASMBasePath: assetsPath,
+    baseAssetPath: assetsPath,
   })
 }
 
