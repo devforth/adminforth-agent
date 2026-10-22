@@ -1,4 +1,7 @@
 allowBuilds:
+  '@parcel/watcher': true
   adminforth: true
+  unrs-resolver: true
 minimumReleaseAgeExclude:
   - adminforth
+  - '@adminforth/mcp@3.2.0'
