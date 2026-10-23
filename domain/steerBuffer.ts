@@ -1,9 +1,12 @@
 import { randomUUID } from "crypto";
+import type { AgentAttachment } from "./attachments.js";
 
 /** A single steering instruction the user sent while a turn was already running. */
 export type SteerMessage = {
   id: string;
   text: string;
+  /** Images sent with the instruction. */
+  attachments: AgentAttachment[];
   /** Epoch ms the steer was enqueued; useful for ordering/debugging. */
   at: number;
 };
@@ -27,8 +30,8 @@ export class SteerBuffer {
   private readonly buffers = new Map<string, SteerMessage[]>();
 
   /** Enqueue a steering instruction for a session. Returns the created entry. */
-  add(sessionId: string, text: string): SteerMessage {
-    const message: SteerMessage = { id: randomUUID(), text, at: Date.now() };
+  add(sessionId: string, text: string, attachments: AgentAttachment[] = []): SteerMessage {
+    const message: SteerMessage = { id: randomUUID(), text, attachments, at: Date.now() };
     const existing = this.buffers.get(sessionId);
 
     if (existing) {

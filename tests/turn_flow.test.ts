@@ -80,8 +80,8 @@ function fakeSessions(opts: { initialResponse?: string; agentTurns?: any[] } = {
     async getPreviousUserMessages() {
       return [];
     },
-    async createNewTurn(sessionId: string, prompt: string) {
-      calls.createNewTurn.push({ sessionId, prompt });
+    async createNewTurn(sessionId: string, prompt: string, attachments: any[]) {
+      calls.createNewTurn.push({ sessionId, prompt, attachments });
       return 'turn-1';
     },
     async touchSession(sessionId: string) {
@@ -215,7 +215,7 @@ describe('RunTurnUseCase.handleTurn', () => {
 
     await useCase.handleTurn(makeInput().input as any);
 
-    expect(llm.calls[0].input.messages).toEqual([{ role: 'user', content: 'hi' }]);
+    expect(llm.calls[0].input.messages).toEqual([{ role: 'user', content: 'hi', attachments: [] }]);
     expect(llm.calls[0].systemPrompt).toBe('SYS');
     // The per-turn half travels in the context, to be rebuilt on every model call.
     expect(llm.calls[0].context.userLanguage).toEqual({
@@ -592,7 +592,7 @@ describe('RunTurnUseCase — a new message while an approval is pending', () => 
     });
     // The prompt still gets its own turn, so the conversation history stays complete.
     expect(sessions.calls.createNewTurn).toHaveLength(2);
-    expect(sessions.calls.createNewTurn[1]).toEqual({ sessionId: 's1', prompt: 'never mind, do X instead' });
+    expect(sessions.calls.createNewTurn[1]).toEqual({ sessionId: 's1', prompt: 'never mind, do X instead', attachments: [] });
     expect(sessions.calls.getResumeState).toBe(0);
   });
 
@@ -675,5 +675,55 @@ describe('RunTurnUseCase.getPendingApprovals', () => {
     // Unlike a resume, this is a read for display: the user still gets their history, and
     // the implicit reject in `prepareTurn` keeps the session recoverable.
     expect(await useCase.getPendingApprovals('s1')).toEqual([]);
+  });
+});
+
+describe('RunTurnUseCase — images attached to a message', () => {
+  const image = { key: 'agent-attachments/u1/0b6c5d5e-8f1a-4f4e-9a3b-2d3c4e5f6a7b.png', name: 'chart.png', mimeType: 'image/png' };
+
+  it('stores the images with the turn and sends them with the user message', async () => {
+    const { useCase, llm, sessions } = buildUseCase({ streamFor: () => streamOf(text('a chart')) });
+
+    await useCase.handleTurn(makeInput({ prompt: 'what is on it?', attachments: [image] }).input as any);
+
+    expect(sessions.calls.createNewTurn).toEqual([{ sessionId: 's1', prompt: 'what is on it?', attachments: [image] }]);
+    expect(llm.calls[0].input.messages).toEqual([{ role: 'user', content: 'what is on it?', attachments: [image] }]);
+  });
+
+  it('sends images to a turn paused for approval as a steer, since a rejection carries text only', async () => {
+    let buffered: any[] = [];
+    const { useCase, llm, steerBuffer } = buildUseCase({
+      streamFor: (call) => {
+        if (call === 1) {
+          return streamOf(interrupt([{ id: 'int-1', value: {} }]));
+        }
+        // The steer middleware drains the buffer once the resumed turn runs.
+        buffered = steerBuffer.drain('s1');
+        return streamOf(text('ok'));
+      },
+    });
+
+    await useCase.handleTurn(makeInput().input as any);
+    await useCase.handleTurn(makeInput({ prompt: 'compare with this', attachments: [image] }).input as any);
+
+    expect(llm.calls[1].input.resume).toEqual({
+      decisions: [{ type: 'reject', message: 'User rejected executing this tool' }],
+    });
+    expect(buffered).toMatchObject([{ text: 'compare with this', attachments: [image] }]);
+  });
+
+  it('keeps the images of an edited turn, an edit changes its text only', async () => {
+    const { useCase, llm } = buildUseCase({
+      turnCheckpointsEnabled: true,
+      agentTurns: [
+        { id: 't1', prompt: 'p1', response: 'r1', checkpointId: 'cp1', attachments: [] },
+        { id: 't2', prompt: 'p2', response: 'r2', checkpointId: 'cp2', attachments: [image] },
+      ],
+      streamFor: () => streamOf(text('New answer')),
+    });
+
+    await useCase.handleEditTurn(makeInput({ turnId: 't2', prompt: 'edited prompt' }).input as any);
+
+    expect(llm.calls[0].input.messages).toEqual([{ role: 'user', content: 'edited prompt', attachments: [image] }]);
   });
 });

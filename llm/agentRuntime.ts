@@ -9,6 +9,9 @@ import type { BaseCheckpointSaver } from "@langchain/langgraph";
 import { createMcpToolsMiddleware } from "./middleware/mcpToolsMiddleware.js";
 import { createSequenceDebugMiddleware, type SequenceDebugCollector } from "./middleware/sequenceDebug.js";
 import { createSteerMiddleware } from "./middleware/steerMiddleware.js";
+import { createAttachmentsMiddleware } from "./middleware/attachmentsMiddleware.js";
+import { countTokensWithImages } from "./attachmentMessages.js";
+import type { AttachmentStore } from "../persistence/attachmentStore.js";
 import type { SteerBuffer } from "../domain/steerBuffer.js";
 import { createAgentLlmMetricsLogger } from "./agentModels.js";
 import type { AgentToolProvider, AgentToolSet } from "../tools/agentToolProvider.js";
@@ -46,6 +49,8 @@ export type AgentRuntimeOptions = {
   getCheckpointer: () => BaseCheckpointSaver;
   toolProvider: Pick<AgentToolProvider, "open">;
   steerBuffer: SteerBuffer;
+  /** Null when image attachments are not enabled. */
+  attachmentStore: AttachmentStore | null;
 };
 
 export class AgentRuntime {
@@ -84,7 +89,9 @@ export class AgentRuntime {
           model: input.models.summaryModel,
           trigger: { tokens: 1024 * 64 },
           keep: { messages: 10 },
+          tokenCounter: countTokensWithImages,
         }),
+        ...(this.options.attachmentStore ? [createAttachmentsMiddleware(this.options.attachmentStore)] : []),
       ] as const;
 
       const agent = createAgent({

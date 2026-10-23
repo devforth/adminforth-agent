@@ -65,7 +65,7 @@ describe('adminforth-agent session store', () => {
     expect(created.session_id).toBe('s1');
   });
 
-  it('getSessionTurns maps rows to { id, prompt, response }', async () => {
+  it('getSessionTurns maps rows to { id, prompt, response, attachments }', async () => {
     const store = buildStore(() => ({
       async list() {
         return [
@@ -76,8 +76,8 @@ describe('adminforth-agent session store', () => {
     }));
 
     expect(await store.getSessionTurns('s1')).toEqual([
-      { id: '1', prompt: 'p1', response: 'r1' },
-      { id: '2', prompt: 'p2', response: 'r2' },
+      { id: '1', prompt: 'p1', response: 'r1', attachments: [] },
+      { id: '2', prompt: 'p2', response: 'r2', attachments: [] },
     ]);
   });
 
@@ -149,8 +149,8 @@ describe('adminforth-agent session store', () => {
     const store = new AgentSessionStore(() => adminforth as any, optionsWithCheckpoint);
 
     expect(await store.getAgentTurns('s1')).toEqual([
-      { id: 't1', prompt: 'hello', response: 'hi', checkpointId: 'cp1' },
-      { id: 't2', prompt: 'again', response: 'ok', checkpointId: 'cp2' },
+      { id: 't1', prompt: 'hello', response: 'hi', attachments: [], checkpointId: 'cp1' },
+      { id: 't2', prompt: 'again', response: 'ok', attachments: [], checkpointId: 'cp2' },
     ]);
   });
 
@@ -162,7 +162,7 @@ describe('adminforth-agent session store', () => {
     }));
 
     expect(await store.getAgentTurns('s1')).toEqual([
-      { id: 't1', prompt: 'hello', response: 'hi', checkpointId: null },
+      { id: 't1', prompt: 'hello', response: 'hi', attachments: [], checkpointId: null },
     ]);
   });
 

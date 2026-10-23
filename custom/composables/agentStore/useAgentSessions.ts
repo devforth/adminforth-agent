@@ -1,7 +1,14 @@
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { callAdminForthApi } from '@/utils';
 import type { Chat } from '../../chat';
-import type { IAgentSession, IApprovalDescription, ISessionsListItem, IPart } from '../../types';
+import type {
+  IAgentSession,
+  IApprovalDescription,
+  IMessageAttachment,
+  ISessionsListItem,
+  IPart,
+  IStoredAttachment,
+} from '../../types';
 import { PRE_SESSION_ID, STEER_PERSIST_PREFIX } from './constants';
 import { i18nInstance } from '@/i18n';
 
@@ -20,6 +27,7 @@ type CreateAgentSessionManagerOptions = {
   isMessageInputBlocked: ComputedRef<boolean>;
   userMessageInput: Ref<any>;
   lastMessage: Ref<string>;
+  lastAttachments: Ref<IMessageAttachment[]>;
   blockCloseOfChat: Ref<boolean>;
   adminforth: AdminforthLike;
   setCurrentChat: (sessionId: string) => void;
@@ -37,6 +45,7 @@ export function createAgentSessionManager({
   isMessageInputBlocked,
   userMessageInput,
   lastMessage,
+  lastAttachments,
   blockCloseOfChat,
   adminforth,
   setCurrentChat,
@@ -50,6 +59,14 @@ export function createAgentSessionManager({
     return i18nInstance?.global.t(key) ?? key;
   }
 
+  // A user message shows its images above its text, the AI SDK keeps them as `file` parts.
+  function toUserMessageParts(text: string, attachments: IStoredAttachment[] = []) {
+    return [
+      ...attachments.map(({ name, mimeType, url }) => ({ type: 'file', mediaType: mimeType, filename: name, url })),
+      ...(text ? [{ type: 'text', text, state: 'done' }] : []),
+    ];
+  }
+
   function saveCurrentSessionInCache() {
     if (currentSession.value) {
       currentSession.value.messages = currentChat.value?.messages.map((m: any) => {
@@ -58,7 +75,10 @@ export function createAgentSessionManager({
         if (m.role === 'user' && m.metadata?.steer) {
           return { role: 'user', text: `${STEER_PERSIST_PREFIX}${text}`, turnId };
         }
-        return { role: m.role, text, turnId };
+        const attachments = m.parts
+          .filter((p: IPart) => p.type === 'file')
+          .map((p: IPart) => ({ name: p.filename, mimeType: p.mediaType, url: p.url }));
+        return { role: m.role, text, turnId, attachments };
       }) || [];
       sessions.value[currentSession.value.sessionId] = currentSession.value;
     }
@@ -69,8 +89,8 @@ export function createAgentSessionManager({
     if (m.role === 'user' && typeof m.text === 'string' && m.text.includes(STEER_PERSIST_PREFIX)) {
       const [prompt, ...steers] = m.text.split(STEER_PERSIST_PREFIX);
       const mapped: any[] = [];
-      if (prompt) {
-        mapped.push({ id: crypto.randomUUID(), role: 'user', metadata: { turnId }, parts: [{ type: 'text', text: prompt, state: 'done' }] });
+      if (prompt || m.attachments?.length) {
+        mapped.push({ id: crypto.randomUUID(), role: 'user', metadata: { turnId }, parts: toUserMessageParts(prompt, m.attachments) });
       }
       for (const steer of steers) {
         mapped.push({
@@ -82,7 +102,10 @@ export function createAgentSessionManager({
       }
       return mapped;
     }
-    return [{ id: crypto.randomUUID(), role: m.role, metadata: { turnId }, parts: [{ type: 'text', text: m.text, state: 'done' }] }];
+    const parts = m.role === 'user'
+      ? toUserMessageParts(m.text, m.attachments)
+      : [{ type: 'text', text: m.text, state: 'done' }];
+    return [{ id: crypto.randomUUID(), role: m.role, metadata: { turnId }, parts }];
   }
 
   async function fetchSession(sessionId: string) {
@@ -158,15 +181,15 @@ export function createAgentSessionManager({
     }
   }
 
-  async function sendMessage(explicitMessage?: string) {
+  async function sendMessage(explicitMessage?: string, attachments: IMessageAttachment[] = []) {
     // `explicitMessage` is used to drain a buffered (queued) message; without it we send
     // whatever is currently typed in the input.
     const message = (explicitMessage ?? trimmedUserMessage.value).trim();
-    if (!message || isMessageInputBlocked.value) {
+    if ((!message && attachments.length === 0) || isMessageInputBlocked.value) {
       return;
     }
     if (!currentSession.value || currentSession.value.sessionId === PRE_SESSION_ID) {
-      await createNewSession(message);
+      await createNewSession(message || attachments[0].name);
     }
     currentSession.value!.timestamp = new Date().toISOString();
     sessionList.value = sortSessionsListByTimestamp(sessionList.value.map((s: ISessionsListItem) => s.sessionId === currentSession.value?.sessionId ? {
@@ -174,8 +197,11 @@ export function createAgentSessionManager({
       timestamp: currentSession.value?.timestamp || s.timestamp,
     } : s));
     lastMessage.value = message;
+    lastAttachments.value = attachments;
     currentChat.value?.sendMessage({
-      text: message,
+      // No text part for a message of images only, it would show as an empty bubble.
+      text: message || undefined,
+      files: attachments.map(({ name, mimeType, url }) => ({ type: 'file', mediaType: mimeType, filename: name, url })),
     });
     if (explicitMessage === undefined) {
       userMessageInput.value = '';

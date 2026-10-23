@@ -3,6 +3,7 @@ import type { DetectedLanguage } from "./languageDetect.js";
 import type { CurrentPageContext } from "../tools/getUserLocation.js";
 import type { AgentEventEmitter } from "./agentEvents.js";
 import type { ApprovalRequest } from "../tools/approvalFormatter.js";
+import type { AgentAttachment } from "./attachments.js";
 
 /**
  * Minimal sink the application layer uses to persist per-turn debug traces. The
@@ -26,6 +27,8 @@ export type PendingInterrupt = {
 
 export type BaseAgentTurnInput = {
   prompt: string;
+  /** Images attached to the prompt. */
+  attachments?: AgentAttachment[];
   sessionId: string;
   modeName?: string | null;
   userTimeZone?: string;
@@ -94,6 +97,7 @@ export type HandleEditTurnInput = TextAgentTurnInput & { turnId: string };
 export type AgentMessage = {
   role: "user";
   content: string;
+  attachments: AgentAttachment[];
 };
 
 /**

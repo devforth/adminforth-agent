@@ -61,6 +61,7 @@ import { useAgentStore } from './composables/useAgentStore';
 import { useAgentTransitions } from './composables/useAgentTransitions';
 import { useCoreStore } from '@/stores/core';
 import { remToPx } from './utils';
+import type { IAttachmentsConfig } from './types';
 
 const props = defineProps<{
   meta: {
@@ -72,6 +73,7 @@ const props = defineProps<{
     stickByDefault: boolean;
     hasAudioAdapter: boolean;
     editingEnabled: boolean;
+    attachments: IAttachmentsConfig | null;
   }
   adminUser: any
 }>();

@@ -3,7 +3,9 @@ import { Filters, Sorts } from "adminforth";
 import { randomUUID } from "crypto";
 import type { ChatSurfaceIncomingMessage } from "adminforth";
 import type { PreviousUserMessage } from "../domain/languageDetect.js";
+import type { AgentAttachment } from "../domain/attachments.js";
 import type { PluginOptions } from "../types.js";
+import type { AttachmentStore } from "./attachmentStore.js";
 
 export const AGENT_SYSTEM_TURN_PROMPT = "__adminforth_system_message__";
 
@@ -13,17 +15,33 @@ export class AgentSessionStore {
   constructor(
     private getAdminforth: () => IAdminForth,
     private options: PluginOptions,
+    /** Null when image attachments are not enabled. */
+    private attachmentStore: AttachmentStore | null = null,
   ) {}
 
-  async createNewTurn(sessionId: string, prompt: string, response?: string) {
+  private getAttachments(turn: Record<string, any>): AgentAttachment[] {
+    const attachmentsField = this.options.turnResource.attachmentsField;
+    return attachmentsField ? turn[attachmentsField] ?? [] : [];
+  }
+
+  /** Let the storage delete the images of turns which are deleted. */
+  private async releaseAttachments(turns: Record<string, any>[]) {
+    await this.attachmentStore?.markUnused(turns.flatMap((turn) => this.getAttachments(turn)));
+  }
+
+  async createNewTurn(sessionId: string, prompt: string, attachments: AgentAttachment[] = []) {
     const turnId = randomUUID();
-    const turnRecord = {
+    const turnRecord: Record<string, unknown> = {
       [this.options.turnResource.idField]: turnId,
       [this.options.turnResource.sessionIdField]: sessionId,
       [this.options.turnResource.promptField]: prompt,
-      [this.options.turnResource.responseField]: response ?? "not_finished",
+      [this.options.turnResource.responseField]: "not_finished",
     };
+    if (this.options.turnResource.attachmentsField) {
+      turnRecord[this.options.turnResource.attachmentsField] = attachments;
+    }
     const newTurn = await this.getAdminforth().resource(this.options.turnResource.resourceId).create(turnRecord);
+    await this.attachmentStore?.markUsed(attachments);
     return newTurn.createdRecord[this.options.turnResource.idField];
   }
 
@@ -77,6 +95,7 @@ export class AgentSessionStore {
       id: turn[this.options.turnResource.idField],
       prompt: turn[this.options.turnResource.promptField],
       response: turn[this.options.turnResource.responseField],
+      attachments: this.getAttachments(turn),
     }));
   }
 
@@ -99,6 +118,7 @@ export class AgentSessionStore {
         id: turn[this.options.turnResource.idField],
         prompt: turn[this.options.turnResource.promptField],
         response: turn[this.options.turnResource.responseField],
+        attachments: this.getAttachments(turn),
         checkpointId: checkpointIdField
           ? (turn[checkpointIdField] ? String(turn[checkpointIdField]) : null)
           : null,
@@ -135,6 +155,7 @@ export class AgentSessionStore {
     for (const turn of laterTurns) {
       await resource.delete(turn[r.idField]);
     }
+    await this.releaseAttachments(laterTurns);
 
     const updates: Record<string, unknown> = {
       [r.promptField]: input.newPrompt,
@@ -144,6 +165,14 @@ export class AgentSessionStore {
       updates[r.checkpointIdField] = null;
     }
     await resource.update(input.turnId, updates);
+  }
+
+  async deleteSessionTurns(sessionId: string) {
+    const r = this.options.turnResource;
+    const resource = this.getAdminforth().resource(r.resourceId);
+    const turns = await resource.list([Filters.EQ(r.sessionIdField, sessionId)]);
+    await Promise.all(turns.map((turn) => resource.delete(turn[r.idField])));
+    await this.releaseAttachments(turns);
   }
 
   async getPreviousUserMessages(sessionId: string) {

@@ -1,8 +1,8 @@
-import { HumanMessage } from "langchain";
 import { createMiddleware } from "langchain";
 import { z } from "zod";
 import type { AgentEventEmitter } from "../../domain/agentEvents.js";
 import type { SteerBuffer } from "../../domain/steerBuffer.js";
+import { toHumanMessage } from "../attachmentMessages.js";
 
 const steerContextSchema = z.object({
   sessionId: z.string(),
@@ -38,8 +38,9 @@ export function createSteerMiddleware(steerBuffer: SteerBuffer) {
       return {
         messages: steers.map(
           (steer) =>
-            new HumanMessage(
+            toHumanMessage(
               `[User steering — new instruction sent mid-turn, take it into account from now on]\n${steer.text}`,
+              steer.attachments,
             ),
         ),
       };

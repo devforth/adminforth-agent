@@ -2,19 +2,21 @@ import type { Ref, ShallowRef } from 'vue';
 import { ref } from 'vue';
 import { callAdminForthApi } from '@/utils';
 import type { Chat } from '../../chat';
-import type { IMessage } from '../../types';
+import type { IMessage, IMessageAttachment } from '../../types';
 import { PRE_SESSION_ID } from './constants';
 
 export type QueuedMessage = {
   id: string;
   text: string;
+  /** A message with images is sent after the turn, it is never steered into it. */
+  attachments: IMessageAttachment[];
 };
 
 type CreateAgentSteerQueueOptions = {
   activeSessionId: Ref<string | null>;
   currentChat: ShallowRef<Chat<any> | null | undefined>;
   isFinalResponseStreaming: Ref<boolean>;
-  sendMessage: (text: string) => void | Promise<void>;
+  sendMessage: (text: string, attachments: IMessageAttachment[]) => void | Promise<void>;
 };
 
 export function createAgentSteerQueue({
@@ -25,12 +27,12 @@ export function createAgentSteerQueue({
 }: CreateAgentSteerQueueOptions) {
   const queue = ref<QueuedMessage[]>([]);
 
-  function enqueue(text: string) {
+  function enqueue(text: string, attachments: IMessageAttachment[] = []) {
     const message = text.trim();
-    if (!message) {
+    if (!message && attachments.length === 0) {
       return;
     }
-    queue.value.push({ id: crypto.randomUUID(), text: message });
+    queue.value.push({ id: crypto.randomUUID(), text: message, attachments });
   }
 
   function removeQueuedMessage(id: string) {
@@ -177,7 +179,7 @@ export function createAgentSteerQueue({
     if (!next) {
       return;
     }
-    void sendMessage(next.text);
+    void sendMessage(next.text, next.attachments);
   }
 
   function clear() {

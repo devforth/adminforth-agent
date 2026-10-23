@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { IAgentSession, IApprovalDescription, ISessionsListItem } from '../types';
+import type { IAgentSession, IApprovalDescription, IMessageAttachment, ISessionsListItem } from '../types';
 import { ref, nextTick, computed, watch, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAdminforth } from '@/adminforth';
@@ -19,6 +19,7 @@ import { createAgentChatManager } from './agentStore/useAgentChat';
 import { createAgentPlaceholderController } from './agentStore/useAgentPlaceholder';
 import { createAgentSessionManager } from './agentStore/useAgentSessions';
 import { createAgentSteerQueue } from './agentStore/useAgentSteerQueue';
+import { createAgentAttachments } from './agentStore/useAgentAttachments';
 import { STEER_PERSIST_PREFIX } from './agentStore/constants';
 
 export const useAgentStore = defineStore('agent', () => {
@@ -44,6 +45,7 @@ export const useAgentStore = defineStore('agent', () => {
   const savedUserInput = ref('');
   const isEditingMessage = computed(() => editingMessageId.value !== null);
   const lastMessage = ref('');
+  const lastAttachments = ref<IMessageAttachment[]>([]);
   const isTeleportedToBody = ref(false);
   const setIsTeleportedToBody = (isTeleported: boolean) => {
     isTeleportedToBody.value = isTeleported;
@@ -67,6 +69,7 @@ export const useAgentStore = defineStore('agent', () => {
     sendEditMessage,
   } = createAgentChatManager({
     lastMessage,
+    lastAttachments,
     activeModeName,
     onOpenPage: openAgentPage,
     onToolApprovalRequest: addToolApprovalPart,
@@ -80,6 +83,11 @@ export const useAgentStore = defineStore('agent', () => {
   } = createAgentPlaceholderController({
     userMessageInput,
   });
+  const composerAttachments = createAgentAttachments({ adminforth });
+  const canSubmitMessage = computed(() => (
+    (Boolean(trimmedUserMessage.value) || composerAttachments.hasReadyAttachments.value)
+    && !composerAttachments.isUploading.value
+  ));
 
   function setLocalStorageItem(key: string, value: string) {
     window.localStorage.setItem(`${coreStore.config.brandName || 'adminforth'}-${key}`, value);
@@ -218,6 +226,7 @@ export const useAgentStore = defineStore('agent', () => {
     isMessageInputBlocked,
     userMessageInput,
     lastMessage,
+    lastAttachments,
     blockCloseOfChat,
     adminforth,
     setCurrentChat,
@@ -253,16 +262,17 @@ export const useAgentStore = defineStore('agent', () => {
   // Submitting while a turn is active buffers the message (it shows up in the steer
   // queue, where the user can steer it or let it send); otherwise it sends right away.
   function submitUserMessage() {
-    const message = trimmedUserMessage.value;
-    if (!message) {
+    if (!canSubmitMessage.value) {
       return;
     }
+    const message = trimmedUserMessage.value;
+    const attachments = composerAttachments.take();
     if (isTurnActive.value) {
-      steerBuffer.enqueue(message);
+      steerBuffer.enqueue(message, attachments);
       userMessageInput.value = '';
       return;
     }
-    return sendMessage();
+    return sendMessage(undefined, attachments);
   }
 
   // When the active turn finishes, drain the next buffered message as a normal send
@@ -660,5 +670,14 @@ export const useAgentStore = defineStore('agent', () => {
     removeQueuedMessage: steerBuffer.removeQueuedMessage,
     enqueueSteerMessage: steerBuffer.enqueue,
     //___________________________________
+    //_________-Image attachments-_____________
+    attachmentsConfig: composerAttachments.config,
+    setAttachmentsConfig: composerAttachments.setConfig,
+    composerAttachments: composerAttachments.attachments,
+    addComposerFiles: composerAttachments.addFiles,
+    removeComposerAttachment: composerAttachments.remove,
+    isUploadingAttachments: composerAttachments.isUploading,
+    canSubmitMessage,
+    //_________________________________________
   }
 })

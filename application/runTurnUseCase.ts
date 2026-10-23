@@ -6,6 +6,7 @@ import type { DetectedLanguage, PreviousUserMessage } from "../domain/languageDe
 import type { AgentSessionStore } from "../persistence/sessionStore.js";
 import type { SteerBuffer } from "../domain/steerBuffer.js";
 import type { PluginOptions } from "../types.js";
+import type { AgentAttachment } from "../domain/attachments.js";
 import type { LlmPort } from "./ports.js";
 import { formatApprovalRequest, type ApprovalDescription, type ApprovalRequest } from "../tools/approvalFormatter.js";
 import type {
@@ -25,6 +26,7 @@ type AgentMode = PluginOptions["modes"][number];
 
 type PreparedTurn = {
   prompt: string;
+  attachments: AgentAttachment[];
   sessionId: string;
   turnId: string;
   previousUserMessages: PreviousUserMessage[];
@@ -33,7 +35,8 @@ type PreparedTurn = {
   observability: AgentTurnObservability;
   /** True when this turn carries a new user prompt (as opposed to an approval resume). */
   freshPrompt: boolean;
-  resume?: { decision: "approve" | "reject"; interrupts?: PendingInterrupt[] };
+  /** `prompt` is the new instruction a rejection carries to the model. */
+  resume?: { decision: "approve" | "reject"; interrupts?: PendingInterrupt[]; prompt?: string };
   initialResponse?: string;
   branchFromCheckpointId?: string;
 };
@@ -253,6 +256,7 @@ export class RunTurnUseCase {
       throw new Error(`Turn "${editTurnId}" not found in session "${input.sessionId}".`);
     }
 
+    const target = agentTurns[targetIndex];
     const previous = agentTurns[targetIndex - 1];
     let branchFromCheckpointId: string | undefined;
     if (previous) {
@@ -290,6 +294,8 @@ export class RunTurnUseCase {
 
     return {
       prompt: input.prompt,
+      // An edit changes the text only, the images of the turn stay.
+      attachments: target.attachments,
       sessionId: input.sessionId,
       turnId: editTurnId,
       previousUserMessages,
@@ -319,6 +325,7 @@ export class RunTurnUseCase {
     let previousUserMessages: PreviousUserMessage[] = [];
     let initialResponse: string | undefined;
     let resume: PreparedTurn["resume"];
+    const attachments = input.attachments ?? [];
 
     if (shouldResume) {
       const resumeInterrupts = await this.resolvePendingInterrupts(input.sessionId, mode, input.adminUser);
@@ -338,15 +345,21 @@ export class RunTurnUseCase {
       // reload, from a second tab, or from a chat surface.
       const pending = await this.resolvePendingInterrupts(input.sessionId, mode, input.adminUser);
       previousUserMessages = await this.deps.sessions.getPreviousUserMessages(input.sessionId);
-      turnId = await this.deps.sessions.createNewTurn(input.sessionId, input.prompt);
+      turnId = await this.deps.sessions.createNewTurn(input.sessionId, input.prompt, attachments);
       await this.deps.sessions.touchSession(input.sessionId);
-      if (pending.length > 0) {
+      if (pending.length > 0 && attachments.length > 0) {
+        // A rejection carries text only, so a message with images reaches the model as a steer,
+        // right after the rejected call.
+        this.deps.steerBuffer.add(input.sessionId, input.prompt, attachments);
         resume = { decision: "reject", interrupts: pending };
+      } else if (pending.length > 0) {
+        resume = { decision: "reject", interrupts: pending, prompt: input.prompt };
       }
     }
 
     return {
       prompt: input.prompt,
+      attachments,
       sessionId: input.sessionId,
       turnId,
       previousUserMessages,
@@ -386,7 +399,7 @@ export class RunTurnUseCase {
   }
 
   private buildMessages(prepared: PreparedTurn): AgentMessage[] {
-    return [{ role: "user", content: prepared.prompt }];
+    return [{ role: "user", content: prepared.prompt, attachments: prepared.attachments }];
   }
 
   private async handleInterrupt(
@@ -418,7 +431,7 @@ export class RunTurnUseCase {
           resume: buildResumeValue({
             decision: prepared.resume.decision,
             interrupts: prepared.resume.interrupts,
-            prompt: prepared.prompt,
+            prompt: prepared.resume.prompt,
           }),
         }
       : { messages: this.buildMessages(prepared) };
@@ -550,6 +563,7 @@ export class RunTurnUseCase {
 
     const agentResponse = await this.runAndPersistAgentResponse({
       prompt: input.prompt,
+      attachments: input.attachments,
       sessionId: input.sessionId,
       modeName: input.modeName,
       userTimeZone: input.userTimeZone,

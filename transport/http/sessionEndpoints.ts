@@ -3,6 +3,7 @@ import { Filters, Sorts } from "adminforth";
 import { randomUUID } from "crypto";
 import { z } from "zod";
 import { AGENT_SYSTEM_TURN_PROMPT } from "../../persistence/sessionStore.js";
+import type { AttachmentPreview } from "../../persistence/attachmentStore.js";
 import type { SessionEndpointsContext } from "./context.js";
 
 const addSystemMessageBodySchema = z.object({
@@ -31,6 +32,15 @@ const renameSessionBodySchema = z.object({
   sessionId: z.string(),
   title: z.string().trim().min(1).max(100),
 }).strict();
+
+async function getTurnsWithAttachmentPreviews(ctx: SessionEndpointsContext, sessionId: string) {
+  const turns = await ctx.getSessionTurns(sessionId);
+  return Promise.all(turns.map(async (turn) => ({
+    ...turn,
+    // Images stay in the turns when attachments get disabled, the chat just stops showing them.
+    attachments: await ctx.attachmentStore?.toPreviews(turn.attachments) ?? [],
+  })));
+}
 
 export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHttpServer) {
   server.endpoint({
@@ -84,7 +94,7 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
         };
       }
       const [turns, pendingApprovals] = await Promise.all([
-        ctx.getSessionTurns(sessionId),
+        getTurnsWithAttachmentPreviews(ctx, sessionId),
         // The approval prompt lives only in the browser, so a reload has to rebuild it
         // from the agent's persisted state — otherwise the user cannot answer it.
         ctx.getPendingApprovals(sessionId, adminUser!),
@@ -96,7 +106,12 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
           timestamp: session[ctx.options.sessionResource.createdAtField],
           pendingApprovals,
           messages: turns.flatMap(turn => {
-            const messages: Array<{ text: string; role: 'user' | 'assistant' | 'system'; turnId: string }> = [];
+            const messages: Array<{
+              text: string;
+              role: 'user' | 'assistant' | 'system';
+              turnId: string;
+              attachments?: AttachmentPreview[];
+            }> = [];
             if (turn.prompt === AGENT_SYSTEM_TURN_PROMPT) {
               messages.push({
                 text: turn.response,
@@ -105,11 +120,12 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
               });
               return messages;
             }
-            if (turn.prompt) {
+            if (turn.prompt || turn.attachments.length > 0) {
               messages.push({
                 text: turn.prompt,
                 role: 'user',
                 turnId: turn.id,
+                attachments: turn.attachments,
               });
             }
             if (turn.response && turn.response !== "not_finished") {
@@ -180,10 +196,7 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
         };
       }
       await ctx.adminforth.resource(ctx.options.sessionResource.resourceId).delete(sessionId);
-      const turns = await ctx.adminforth.resource(ctx.options.turnResource.resourceId).list(
-        [Filters.EQ(ctx.options.turnResource.sessionIdField, sessionId)]
-      );
-      await Promise.all(turns.map(turn => ctx.adminforth.resource(ctx.options.turnResource.resourceId).delete(turn[ctx.options.turnResource.idField])));
+      await ctx.deleteSessionTurns(sessionId);
       return {
         ok: true
       };

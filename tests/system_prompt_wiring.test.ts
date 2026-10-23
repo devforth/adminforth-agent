@@ -99,6 +99,7 @@ function buildRuntime(opts: { adapterMiddleware?: boolean } = {}) {
       },
     },
     steerBuffer: new SteerBuffer(),
+    attachmentStore: null,
   });
 
   async function run(input: {

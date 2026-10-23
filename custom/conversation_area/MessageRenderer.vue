@@ -10,8 +10,13 @@
       :message="message"
       :isLastMessageInChat="isLastMessageInChat"
     />
+    <AttachmentsRenderer
+      v-if="attachmentParts.length && shouldBeShownWhileEditing"
+      class="self-end mr-4"
+      :parts="attachmentParts"
+    />
     <template
-      v-for="(part, index) in getMessageParts(message)"
+      v-for="(part, index) in contentParts"
       :key="part.type"
     >
       <!-- a text part drops the margin of its last block, so a part that follows another one (the stream
@@ -78,6 +83,7 @@
   import ProcessingTimeline from './ProcessingTimeline.vue';
   import SystemMessageRenderer from './SystemMessageRenderer.vue';
   import ToolApprovalRenderer from './ToolApprovalRenderer.vue';
+  import AttachmentsRenderer from './AttachmentsRenderer.vue';
   import { RESERVED_SYSTEM_MESSAGE_CONTENT } from '../composables/agentStore/constants';
   import { useAgentStore } from '../composables/useAgentStore';
   import { useAdminforth } from '@/adminforth';
@@ -109,6 +115,10 @@
   );
 
   const isUserMessage = computed(() => props.message.role === 'user');
+
+  // Images of a user message are shown together above its text.
+  const attachmentParts = computed(() => (props.message.parts ?? []).filter((part) => part.type === 'file'));
+  const contentParts = computed(() => getMessageParts(props.message).filter((part) => part.type !== 'file'));
 
   const copyableText = computed(() =>
     (props.message.parts ?? [])

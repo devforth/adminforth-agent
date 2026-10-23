@@ -1,15 +1,15 @@
 import type { AdminUser } from "adminforth";
 import { Command } from "@langchain/langgraph";
-import { HumanMessage } from "langchain";
 import type { AgentRuntime } from "./agentRuntime.js";
 import type { AgentModelFactory } from "./modelFactory.js";
 import { detectUserLanguage, type PreviousUserMessage } from "../domain/languageDetect.js";
 import { adaptRawStream, normalizeInterrupts } from "./streamAdapter.js";
 import type { AgentModeCompletionAdapter, LlmPort, LlmStreamInput } from "../application/ports.js";
 import type { AgentMessage, PendingInterrupt } from "../domain/turnTypes.js";
+import { toHumanMessage } from "./attachmentMessages.js";
 
 function toLangchainMessages(messages: AgentMessage[]) {
-  return messages.map((message) => new HumanMessage(message.content));
+  return messages.map((message) => toHumanMessage(message.content, message.attachments));
 }
 
 /**

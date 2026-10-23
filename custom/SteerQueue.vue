@@ -23,10 +23,20 @@
         >
           {{ item.text }}
         </span>
+        <span
+          v-if="item.attachments.length"
+          class="flex shrink-0 items-center gap-1 text-xs text-lightInputIconColor dark:text-darkInputIconColor"
+          :title="item.attachments.map((attachment) => attachment.name).join(', ')"
+        >
+          <IconImage class="w-4 h-4" />
+          {{ item.attachments.length }}
+        </span>
         <span class="shrink-0 text-xs text-lightInputPlaceholderText dark:text-darkInputPlaceholderText">
           {{ $t('queued') }}
         </span>
+        <!-- images reach the model with a new turn only, so such a message waits for the current one to end -->
         <Button
+          v-if="!item.attachments.length"
           variant="secondary"
           size="sm"
           type="button"
@@ -55,7 +65,7 @@
 </template>
 
 <script setup lang="ts">
-import { IconX } from '@iconify-prerendered/vue-lucide';
+import { IconImage, IconX } from '@iconify-prerendered/vue-lucide';
 import { Button } from '@/afcl';
 import { useAgentStore } from './composables/useAgentStore';
 

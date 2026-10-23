@@ -1,7 +1,12 @@
-import type { IHttpServer } from "adminforth";
+import type { AdminUser, IHttpServer } from "adminforth";
 import { z } from "zod";
 import { createSseEventEmitter } from "../sse/sseWriter.js";
 import type { CurrentPageContext } from "../../tools/getUserLocation.js";
+import {
+  resolveAttachmentRefs,
+  type AgentAttachment,
+  type AttachmentRef,
+} from "../../domain/attachments.js";
 import type { CoreEndpointsContext } from "./context.js";
 
 type MulterFile = {
@@ -19,8 +24,14 @@ const currentPageContextSchema = z.object({
   url: z.string(),
 }).strict() satisfies z.ZodType<CurrentPageContext>;
 
+const attachmentRefSchema = z.object({
+  key: z.string(),
+  name: z.string().max(255),
+}).strict();
+
 const agentResponseBodySchema = z.object({
   message: z.string(),
+  attachments: z.array(attachmentRefSchema).optional(),
   sessionId: z.string(),
   mode: z.string().nullish(),
   timeZone: z.string().optional(),
@@ -75,6 +86,20 @@ const agentSpeechResponseBodySchema = agentSpeechResponseShapeSchema.extend({
   }),
 });
 
+function resolveTurnAttachments(
+  ctx: CoreEndpointsContext,
+  refs: AttachmentRef[] | undefined,
+  adminUser: AdminUser,
+): { attachments: AgentAttachment[] } | { error: string } {
+  if (!refs) {
+    return { attachments: [] };
+  }
+  if (!ctx.attachmentStore) {
+    return { error: "Image attachments are not enabled for AdminForth Agent" };
+  }
+  return resolveAttachmentRefs(refs, adminUser.pk!, ctx.attachmentStore.maxFilesPerMessage);
+}
+
 export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServer) {
   server.endpoint({
     method: 'POST',
@@ -107,8 +132,13 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
       hiddenFromAgents: true,
     },
     request_schema: agentResponseBodySchema,
-    handler: async ({ body, adminUser, _raw_express_res, abortSignal }) => {
+    handler: async ({ body, adminUser, response, _raw_express_res, abortSignal }) => {
       const data = body as z.infer<typeof agentResponseBodySchema>;
+      const resolved = resolveTurnAttachments(ctx, data.attachments, adminUser!);
+      if ("error" in resolved) {
+        response.setStatus(400, resolved.error);
+        return { error: resolved.error };
+      }
       const emit = createSseEventEmitter(_raw_express_res, {
         vercelAiUiMessageStream: true,
         closeActiveBlockOnToolStart: true,
@@ -116,6 +146,7 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
 
       await ctx.handleTurn({
         prompt: data.message,
+        attachments: resolved.attachments,
         sessionId: data.sessionId,
         modeName: data.mode,
         userTimeZone: data.timeZone ?? 'UTC',

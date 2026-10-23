@@ -4,6 +4,7 @@ import {
   type HttpExtra,
   type AudioAdapter,
   type ChatSurfaceAdapter,
+  type StorageAdapter,
 } from "adminforth";
 import type { AgentModeCompletionAdapter } from "./application/ports.js";
 
@@ -30,6 +31,11 @@ interface ITurnResource {
   responseField: string;
   debugField?: string;
   checkpointIdField?: string;
+  /**
+   * JSON field with the images attached to the prompt of the turn.
+   * Required when `attachments` are enabled.
+   */
+  attachmentsField?: string;
 }
 
 interface ICheckpointResource {
@@ -78,6 +84,26 @@ export interface PluginOptions extends PluginsCommonOptions {
    * Optional external chat surfaces, such as Telegram webhooks.
    */
   chatSurfaceAdapters?: ChatSurfaceAdapter[];
+
+  /**
+   * Lets users attach images (PNG, JPEG, WebP) to their messages. The images are kept by the
+   * storage adapter and sent to the model of the mode, so the models of all modes must accept images.
+   * Requires `turnResource.attachmentsField`.
+   */
+  attachments?: {
+    /**
+     * Storage for the images. Use an adapter instance of its own, not one shared with other plugins.
+     */
+    storageAdapter: StorageAdapter;
+    /**
+     * Max size of one image in megabytes. Default is 10.
+     */
+    maxFileSizeMb?: number;
+    /**
+     * Max number of images attached to one message. Default is 5.
+     */
+    maxFilesPerMessage?: number;
+  };
 
   /**
    * Max tokens for the generation.

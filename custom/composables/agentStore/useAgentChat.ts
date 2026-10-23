@@ -2,7 +2,7 @@ import { DefaultChatTransport } from 'ai';
 import { ref, shallowRef, watch, type Ref } from 'vue';
 import { Chat } from '../../chat';
 import { getCurrentPageContext } from './pageContext';
-import type { IApprovalDescription } from '../../types';
+import type { IApprovalDescription, IMessageAttachment } from '../../types';
 // const { DefaultChatTransport } = await import('ai');
 
 type AgentImportMeta = ImportMeta & {
@@ -13,6 +13,7 @@ type AgentImportMeta = ImportMeta & {
 
 type CreateAgentChatManagerOptions = {
   lastMessage: Ref<string>;
+  lastAttachments: Ref<IMessageAttachment[]>;
   activeModeName: Ref<string | null>;
   onOpenPage: (targetPath: string) => void;
   onToolApprovalRequest: (sessionId: string, approvals: IApprovalDescription[]) => void;
@@ -20,6 +21,7 @@ type CreateAgentChatManagerOptions = {
 
 export function createAgentChatManager({
   lastMessage,
+  lastAttachments,
   activeModeName,
   onOpenPage,
   onToolApprovalRequest,
@@ -248,6 +250,10 @@ export function createAgentChatManager({
               };
             }
 
+            if (lastAttachments.value.length) {
+              body.attachments = lastAttachments.value.map(({ key, name }) => ({ key, name }));
+            }
+
             return {
               headers,
               body,
@@ -331,8 +337,12 @@ export function createAgentChatManager({
     }
     editingTurnId.value = turnId;
     lastMessage.value = text;
+    // The edit changes the text only: the images of the message stay, the backend reuses those of the turn.
+    const files = chat.messages
+      .find((message: any) => message.id === messageId)
+      .parts.filter((part: any) => part.type === 'file');
     try {
-      await chat.sendMessage({ text, messageId, metadata: { turnId } });
+      await chat.sendMessage({ text, files, messageId, metadata: { turnId } });
     } finally {
       editingTurnId.value = null;
     }

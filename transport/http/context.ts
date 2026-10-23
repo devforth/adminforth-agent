@@ -15,16 +15,21 @@ import type {
 } from "../../domain/turnTypes.js";
 import type { PluginOptions } from "../../types.js";
 import type { ApprovalDescription } from "../../tools/approvalFormatter.js";
+import type { AgentAttachment } from "../../domain/attachments.js";
+import type { AttachmentStore } from "../../persistence/attachmentStore.js";
 
 export type SessionTurn = {
   id: string;
   prompt: string;
   response: string;
+  attachments: AgentAttachment[];
 };
 
 export type AgentEndpointsContext = {
   adminforth: IAdminForth;
   options: PluginOptions;
+  /** Null when image attachments are not enabled. */
+  attachmentStore: AttachmentStore | null;
   handleTurn(input: HandleTurnInput): Promise<RunAndPersistAgentResponseResult>;
   handleEditTurn(input: HandleEditTurnInput): Promise<RunAndPersistAgentResponseResult>;
   handleSpeechTurn(input: HandleSpeechTurnInput): Promise<RunAndPersistAgentResponseResult | null>;
@@ -32,7 +37,8 @@ export type AgentEndpointsContext = {
   runAndPersistAgentResponse(input: RunAndPersistAgentResponseInput): Promise<RunAndPersistAgentResponseResult>;
   getSessionTurns(sessionId: string): Promise<SessionTurn[]>;
   getPendingApprovals(sessionId: string, adminUser: AdminUser): Promise<ApprovalDescription[]>;
-  createNewTurn(sessionId: string, prompt: string, response?: string): Promise<string>;
+  createNewTurn(sessionId: string, prompt: string, attachments?: AgentAttachment[]): Promise<string>;
+  deleteSessionTurns(sessionId: string): Promise<void>;
   createSystemTurn(sessionId: string, systemMessage: string): Promise<string>;
   appendSteerToCurrentTurn(sessionId: string, steerText: string): Promise<void>;
   handleChatSurfaceMessage(
@@ -45,14 +51,16 @@ export type AgentEndpointsContext = {
 
 export type CoreEndpointsContext = Pick<
   AgentEndpointsContext,
-  "options" | "handleTurn" | "handleEditTurn" | "handleSpeechTurn" | "steer"
+  "options" | "attachmentStore" | "handleTurn" | "handleEditTurn" | "handleSpeechTurn" | "steer"
 >;
 
 export type SessionEndpointsContext = Pick<
   AgentEndpointsContext,
-  "adminforth" | "options" | "getSessionTurns" | "getPendingApprovals" | "createNewTurn"
-  | "createSystemTurn" | "appendSteerToCurrentTurn"
+  "adminforth" | "options" | "attachmentStore" | "getSessionTurns" | "getPendingApprovals" | "createNewTurn"
+  | "deleteSessionTurns" | "createSystemTurn" | "appendSteerToCurrentTurn"
 >;
+
+export type AttachmentEndpointsContext = Pick<AgentEndpointsContext, "attachmentStore">;
 
 export type ChatSurfaceEndpointsContext = Pick<
   AgentEndpointsContext,

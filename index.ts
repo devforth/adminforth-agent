@@ -15,8 +15,10 @@ import { appendCustomSystemPrompt, buildAgentSystemPrompt } from "./domain/syste
 import { setupCoreEndpoints } from "./transport/http/coreEndpoints.js";
 import { setupSessionEndpoints } from "./transport/http/sessionEndpoints.js";
 import { setupChatSurfaceEndpoints } from "./transport/http/chatSurfaceEndpoints.js";
+import { setupAttachmentEndpoints } from "./transport/http/attachmentEndpoints.js";
 import type { AgentEndpointsContext } from "./transport/http/context.js";
 import { AgentSessionStore } from "./persistence/sessionStore.js";
+import { AttachmentStore } from "./persistence/attachmentStore.js";
 import { ChatSurfaceService } from "./transport/surfaces/chatSurfaceService.js";
 import { RunTurnUseCase } from "./application/runTurnUseCase.js";
 import { createSequenceDebugCollector } from "./llm/middleware/sequenceDebug.js";
@@ -39,6 +41,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
   private agentSystemPrompt!: string;
   private checkpointer: BaseCheckpointSaver | null = null;
   private sessionStore: AgentSessionStore;
+  private attachmentStore: AttachmentStore | null;
   private steerBuffer: SteerBuffer;
   private runTurnUseCase: RunTurnUseCase;
   private speechTurnService: SpeechTurnService;
@@ -57,7 +60,8 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
   constructor(options: PluginOptions) {
     super(options, import.meta.url);
     this.options = options;
-    this.sessionStore = new AgentSessionStore(() => this.adminforth, this.options);
+    this.attachmentStore = options.attachments ? new AttachmentStore(options.attachments) : null;
+    this.sessionStore = new AgentSessionStore(() => this.adminforth, this.options, this.attachmentStore);
     this.steerBuffer = new SteerBuffer();
     const runtime = new AgentRuntime({
       name: `adminforth-agent-${this.pluginInstanceId}`,
@@ -65,6 +69,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       getCheckpointer: this.getCheckpointer.bind(this),
       toolProvider: new AgentToolProvider(() => this.adminforth),
       steerBuffer: this.steerBuffer,
+      attachmentStore: this.attachmentStore,
     });
     const llm = new LangGraphLlm(
       runtime,
@@ -100,6 +105,12 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     if (!this.options.modes?.length) {
       throw new Error("modes is required for AdminForthAgentPlugin");
     }
+    if (this.attachmentStore) {
+      if (!this.options.turnResource.attachmentsField) {
+        throw new Error("turnResource.attachmentsField is required for AdminForthAgentPlugin when attachments are enabled");
+      }
+      this.attachmentStore.setupLifecycle(`agent-attachments-${this.pluginInstanceId}`);
+    }
     if (!this.adminforth.config.customization.globalInjections.header) {
       this.adminforth.config.customization.globalInjections.header = [];
     }
@@ -112,6 +123,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
         stickByDefault: this.options.stickByDefault ?? false,
         hasAudioAdapter: Boolean(this.options.audioAdapter),
         editingEnabled: Boolean(this.options.checkpointResource && this.options.turnResource.checkpointIdField),
+        attachments: this.attachmentStore?.frontendConfig ?? null,
       }
     });
     if (!this.options.sessionResource) {
@@ -153,6 +165,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     const endpointContext = {
       adminforth: this.adminforth,
       options: this.options,
+      attachmentStore: this.attachmentStore,
       handleTurn: this.runTurnUseCase.handleTurn.bind(this.runTurnUseCase),
       handleEditTurn: this.runTurnUseCase.handleEditTurn.bind(this.runTurnUseCase),
       handleSpeechTurn: this.speechTurnService.handle.bind(this.speechTurnService),
@@ -165,6 +178,7 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       getSessionTurns: this.sessionStore.getSessionTurns.bind(this.sessionStore),
       getPendingApprovals: (sessionId, adminUser) => this.runTurnUseCase.getPendingApprovals(sessionId, adminUser),
       createNewTurn: this.sessionStore.createNewTurn.bind(this.sessionStore),
+      deleteSessionTurns: this.sessionStore.deleteSessionTurns.bind(this.sessionStore),
       createSystemTurn: this.sessionStore.createSystemTurn.bind(this.sessionStore),
       appendSteerToCurrentTurn: this.sessionStore.appendSteerToCurrentTurn.bind(this.sessionStore),
       handleChatSurfaceMessage: this.chatSurfaceService.handleMessage.bind(this.chatSurfaceService),
@@ -173,5 +187,6 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
     setupCoreEndpoints(endpointContext, server);
     setupSessionEndpoints(endpointContext, server);
     setupChatSurfaceEndpoints(endpointContext, server);
+    setupAttachmentEndpoints(endpointContext, server);
   }
 }
