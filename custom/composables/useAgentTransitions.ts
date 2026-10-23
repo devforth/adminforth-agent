@@ -1,53 +1,29 @@
 import { defineStore } from 'pinia';
-import { ref, nextTick,onMounted } from 'vue';
 import { useAgentStore } from './useAgentStore';
+import { getLayoutElements } from '../utils';
 
 
 export const useAgentTransitions = defineStore('agentTransitions', () => {
   const TRANSITION_DURATION = 300;
 
   const agentStore = useAgentStore();
-  const appRoot = ref<HTMLElement | null>(null);
-  const header = ref<HTMLElement | null>(null);
 
-  const chatRoot = ref<HTMLElement | null>(null);
-
-  onMounted(() => {
-    appRoot.value = document.getElementById('app');
-    header.value = document.getElementById('af-header-nav');
-    chatRoot.value = document.getElementById('adminforth-agent-chat-surface');
-    if (appRoot.value && header.value) {
-      nextTick(() => {
-        setAppRootTransition(false);
-      });
-    }  
-    if (chatRoot.value) {
-      nextTick(() => {
-        setChatSurfaceTransition(false);
-      });
-    }
-  });
+  // elements are looked up on every call, the header and the chat surface are re-created after a re-login
   function setAppRootTransition(blockTransition = true) {
-    if (appRoot.value && header.value) {
-      if (blockTransition) {
-        appRoot.value.style.transition = '';
-        header.value.style.transition = '';
-      } else {
-        appRoot.value.style.transition = `padding-right ${TRANSITION_DURATION}ms ease-in-out`;
-        header.value.style.transition = `padding-right ${TRANSITION_DURATION}ms ease-in-out`;
-      }
+    const transition = blockTransition ? '' : `padding-right ${TRANSITION_DURATION}ms ease-in-out`;
+    for (const element of getLayoutElements()) {
+      element.style.transition = transition;
     }
   }
   function setChatSurfaceTransition(blockTransition = true) {
-    if (chatRoot.value) {
-      if (blockTransition) {
-        chatRoot.value.style.transition = '';
-      } else {
-        chatRoot.value.style.transition = `
-          transform ${TRANSITION_DURATION}ms ease-in-out, 
-          width ${TRANSITION_DURATION}ms ease-in-out
-        `;
-      }
+    const chatRoot = document.getElementById('adminforth-agent-chat-surface')!;
+    if (blockTransition) {
+      chatRoot.style.transition = '';
+    } else {
+      chatRoot.style.transition = `
+        transform ${TRANSITION_DURATION}ms ease-in-out,
+        width ${TRANSITION_DURATION}ms ease-in-out
+      `;
     }
   }
   return {

@@ -10,6 +10,11 @@ export function pxToRem(px: number): number {
   return px / rootFontSize;
 }
 
+// #app and the header make room for the docked chat, both exist while ChatSurface is mounted in the header
+export function getLayoutElements(): HTMLElement[] {
+  return [document.getElementById('app')!, document.getElementById('af-header-nav')!];
+}
+
 
 export function getMessageParts(message: IMessage): IPart[] {
   return message.parts?.length

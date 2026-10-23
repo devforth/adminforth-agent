@@ -49,8 +49,6 @@ export const useAgentStore = defineStore('agent', () => {
     isTeleportedToBody.value = isTeleported;
   }
   const coreStore = useCoreStore();
-  const appRoot = ref<HTMLElement | null>(null);
-  const header = ref<HTMLElement | null>(null);
   const lastSessionId = ref<string | null>(null);
   const chatWidth = ref(DEFAULT_CHAT_WIDTH);
   const availableModes = ref<AgentMode[]>([]);
@@ -336,13 +334,6 @@ export const useAgentStore = defineStore('agent', () => {
     if (coreStore.isMobile) {
       setChatWidth(window.innerWidth);
     }
-    appRoot.value = document.getElementById('app');
-    header.value = document.getElementById('af-header-nav');
-    if (appRoot.value && header.value) {
-      nextTick(() => {
-        agentTransitions.setAppRootTransition(false);
-      });
-    }  
   })
 
   const isFullScreen = ref(false);
@@ -381,17 +372,6 @@ export const useAgentStore = defineStore('agent', () => {
     chatWidth.value = pxToRem(width);
 
   }
-  watch([isTeleportedToBody, isChatOpen, chatWidth], ([newIsTeleportedToBody, newIsChatOpen, newChatWidth]: [boolean, boolean, number]) => {
-    if (appRoot.value && header.value) {
-      if (newIsTeleportedToBody && newIsChatOpen) {
-        appRoot.value.style.paddingRight = `${remToPx(chatWidth.value)}px`;
-        header.value.style.paddingRight = `${remToPx(chatWidth.value)}px`;
-      } else {
-        appRoot.value.style.paddingRight = '';
-        header.value.style.paddingRight = '';
-      }
-    }
-  })
 
   function setAvailableModes(modes: AgentMode[], defaultModeName?: string | null) {
     availableModes.value = modes;

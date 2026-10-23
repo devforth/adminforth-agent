@@ -52,7 +52,7 @@
 <script setup lang="ts">
 import { IconBot } from '@iconify-prerendered/vue-lucide';
 import { Button } from '@/afcl';
-import { useTemplateRef, onMounted, ref, onUnmounted } from 'vue';
+import { useTemplateRef, onMounted, ref, onUnmounted, onBeforeUnmount, computed, watch, nextTick } from 'vue';
 import { onClickOutside } from '@vueuse/core'
 import ConversationArea from './conversation_area/ConversationArea.vue';
 import ChatHeader from './ChatHeader.vue';
@@ -60,7 +60,7 @@ import ChatFooter from './ChatFooter.vue';
 import { useAgentStore } from './composables/useAgentStore';
 import { useAgentTransitions } from './composables/useAgentTransitions';
 import { useCoreStore } from '@/stores/core';
-import { remToPx } from './utils';
+import { remToPx, getLayoutElements } from './utils';
 
 const props = defineProps<{
   meta: {
@@ -87,6 +87,9 @@ const dvh = ref(window.visualViewport?.height || window.innerHeight);
 let startX = 0
 let startWidth = 0
 
+const layoutPaddingRight = computed(() => agentStore.isTeleportedToBody && agentStore.isChatOpen ? `${remToPx(agentStore.chatWidth)}px` : '');
+watch(layoutPaddingRight, setLayoutPaddingRight);
+
 onClickOutside(chatSurface as any, () => {if (!agentStore.isTeleportedToBody && !agentStore.isFullScreen) agentStore.setIsChatOpen(false);});
 
 onMounted(async () => {
@@ -108,8 +111,20 @@ onMounted(async () => {
       agentStore.setIsChatOpen(true);
     }
   }
+  // the header is re-created after a re-login, so the room for the chat is made on every mount
+  setLayoutPaddingRight(layoutPaddingRight.value);
+  nextTick(() => {
+    agentTransitions.setAppRootTransition(false);
+    agentTransitions.setChatSurfaceTransition(false);
+  });
   await agentStore.fetchSessionsList();
 });
+
+// on logout the header goes away with this component, but #app stays and must not keep the room for the chat
+onBeforeUnmount(() => {
+  agentTransitions.setAppRootTransition(true);
+  setLayoutPaddingRight('');
+})
 
 onUnmounted(() => {
   window.removeEventListener('resize', updateHeight)
@@ -139,16 +154,18 @@ const stopResize = () => {
   document.removeEventListener('mousemove', onResize)
   document.removeEventListener('mouseup', stopResize)
 
-  const appRoot = document.getElementById('app');
-  const header = document.getElementById('af-header-nav');
-  if (appRoot && header) {
-    agentTransitions.setAppRootTransition(false);
-    agentTransitions.setChatSurfaceTransition(false);
-  }
+  agentTransitions.setAppRootTransition(false);
+  agentTransitions.setChatSurfaceTransition(false);
 }
 
 function updateHeight() {
   dvh.value = Math.round(window.visualViewport?.height || window.innerHeight);
+}
+
+function setLayoutPaddingRight(paddingRight: string) {
+  for (const element of getLayoutElements()) {
+    element.style.paddingRight = paddingRight;
+  }
 }
 
 </script>
