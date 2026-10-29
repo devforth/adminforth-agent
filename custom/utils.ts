@@ -1,4 +1,14 @@
+import { i18nInstance } from '@/i18n';
 import { IMessage, IPart } from "./types";
+
+export function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** Translates outside of components, where `$t` is not available. */
+export function t(key: string, values: Record<string, unknown> = {}): string {
+  return i18nInstance?.global.t(key, values) ?? key;
+}
 
 export function remToPx(rem: number): number {
   const rootFontSize = parseFloat(getComputedStyle(document.documentElement).fontSize);

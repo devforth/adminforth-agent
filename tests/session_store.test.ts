@@ -27,10 +27,33 @@ const OPTIONS = {
   },
 } as any;
 
-function buildStore(resourceImpl: (resourceId: string) => any) {
-  const adminforth = { resource: (resourceId: string) => resourceImpl(resourceId) };
-  return new AgentSessionStore(() => adminforth as any, OPTIONS);
+function fakeAttachments() {
+  const calls = { markUsed: [] as string[][], markUnused: [] as string[][] };
+  return {
+    calls,
+    async markUsed(filePaths: string[]) {
+      calls.markUsed.push(filePaths);
+    },
+    async markUnused(filePaths: string[]) {
+      calls.markUnused.push(filePaths);
+    },
+    async withUrls(filePaths: string[]) {
+      return filePaths.map((filePath) => ({ filePath, url: `https://cdn/${filePath}` }));
+    },
+  };
 }
+
+function buildStore(resourceImpl: (resourceId: string) => any, options: any = OPTIONS) {
+  const adminforth = { resource: (resourceId: string) => resourceImpl(resourceId) };
+  const attachments = fakeAttachments();
+  const store = new AgentSessionStore(() => adminforth as any, options, attachments as any);
+  return Object.assign(store, { attachmentCalls: attachments.calls });
+}
+
+const OPTIONS_WITH_ATTACHMENTS = {
+  ...OPTIONS,
+  turnResource: { ...OPTIONS.turnResource, checkpointIdField: 'checkpoint_id', attachmentsField: 'attachments' },
+} as any;
 
 describe('adminforth-agent session store', () => {
   it('createNewTurn writes the field mapping and defaults response to "not_finished"', async () => {
@@ -65,7 +88,22 @@ describe('adminforth-agent session store', () => {
     expect(created.session_id).toBe('s1');
   });
 
-  it('getSessionTurns maps rows to { id, prompt, response }', async () => {
+  it('createNewTurn stores the attachment paths and marks the files as used', async () => {
+    let created: any;
+    const store = buildStore(() => ({
+      async create(record: any) {
+        created = record;
+        return { createdRecord: record };
+      },
+    }), OPTIONS_WITH_ATTACHMENTS);
+
+    await store.createNewTurn('s1', 'look', ['a.png', 'b.png']);
+
+    expect(created.attachments).toEqual(['a.png', 'b.png']);
+    expect(store.attachmentCalls.markUsed).toEqual([['a.png', 'b.png']]);
+  });
+
+  it('getSessionTurns maps rows to { id, prompt, response, attachments }', async () => {
     const store = buildStore(() => ({
       async list() {
         return [
@@ -76,8 +114,20 @@ describe('adminforth-agent session store', () => {
     }));
 
     expect(await store.getSessionTurns('s1')).toEqual([
-      { id: '1', prompt: 'p1', response: 'r1' },
-      { id: '2', prompt: 'p2', response: 'r2' },
+      { id: '1', prompt: 'p1', response: 'r1', attachments: [] },
+      { id: '2', prompt: 'p2', response: 'r2', attachments: [] },
+    ]);
+  });
+
+  it('getSessionTurns returns attachments with their urls', async () => {
+    const store = buildStore(() => ({
+      async list() {
+        return [{ id: '1', prompt: 'p1', response: 'r1', attachments: ['a.png'] }];
+      },
+    }), OPTIONS_WITH_ATTACHMENTS);
+
+    expect((await store.getSessionTurns('s1'))[0].attachments).toEqual([
+      { filePath: 'a.png', url: 'https://cdn/a.png' },
     ]);
   });
 
@@ -146,11 +196,11 @@ describe('adminforth-agent session store', () => {
         },
       }),
     };
-    const store = new AgentSessionStore(() => adminforth as any, optionsWithCheckpoint);
+    const store = new AgentSessionStore(() => adminforth as any, optionsWithCheckpoint, fakeAttachments() as any);
 
     expect(await store.getAgentTurns('s1')).toEqual([
-      { id: 't1', prompt: 'hello', response: 'hi', checkpointId: 'cp1' },
-      { id: 't2', prompt: 'again', response: 'ok', checkpointId: 'cp2' },
+      { id: 't1', prompt: 'hello', response: 'hi', attachments: [], checkpointId: 'cp1' },
+      { id: 't2', prompt: 'again', response: 'ok', attachments: [], checkpointId: 'cp2' },
     ]);
   });
 
@@ -162,7 +212,7 @@ describe('adminforth-agent session store', () => {
     }));
 
     expect(await store.getAgentTurns('s1')).toEqual([
-      { id: 't1', prompt: 'hello', response: 'hi', checkpointId: null },
+      { id: 't1', prompt: 'hello', response: 'hi', attachments: [], checkpointId: null },
     ]);
   });
 
@@ -193,9 +243,9 @@ describe('adminforth-agent session store', () => {
         },
       }),
     };
-    const store = new AgentSessionStore(() => adminforth as any, optionsWithCheckpoint);
+    const store = new AgentSessionStore(() => adminforth as any, optionsWithCheckpoint, fakeAttachments() as any);
 
-    await store.editTurnAndTruncateAfter({ sessionId: 's1', turnId: 't2', newPrompt: 'edited' });
+    await store.editTurnAndTruncateAfter({ sessionId: 's1', turnId: 't2', newPrompt: 'edited', newAttachments: [] });
 
     // t3 (later) deleted before the edited turn is updated; t1 untouched.
     expect(calls).toEqual(['delete:t3', 'update:t2']);
@@ -205,6 +255,52 @@ describe('adminforth-agent session store', () => {
       response: 'not_finished',
       checkpoint_id: null,
     });
+  });
+
+  it('editTurnAndTruncateAfter replaces the images and releases dropped and truncated files', async () => {
+    const rows: any[] = [
+      { id: 't1', prompt: 'p1', response: 'r1', attachments: ['keep.png', 'drop.png'] },
+      { id: 't2', prompt: 'p2', response: 'r2', attachments: ['later.png'] },
+    ];
+    const store = buildStore(() => ({
+      async list() {
+        return [...rows];
+      },
+      async delete(id: string) {
+        rows.splice(rows.findIndex((r) => r.id === id), 1);
+      },
+      async update(id: string, fields: any) {
+        Object.assign(rows.find((r) => r.id === id), fields);
+      },
+    }), OPTIONS_WITH_ATTACHMENTS);
+
+    await store.editTurnAndTruncateAfter({
+      sessionId: 's1',
+      turnId: 't1',
+      newPrompt: 'edited',
+      newAttachments: ['keep.png', 'new.png'],
+    });
+
+    expect(rows).toEqual([expect.objectContaining({ id: 't1', attachments: ['keep.png', 'new.png'] })]);
+    expect(store.attachmentCalls.markUsed).toEqual([['new.png']]);
+    expect(store.attachmentCalls.markUnused).toEqual([['drop.png', 'later.png']]);
+  });
+
+  it('deleteSession deletes the session with its turns and releases their files', async () => {
+    const deleted: string[] = [];
+    const store = buildStore((resourceId) => ({
+      async list() {
+        return [{ id: 't1', attachments: ['a.png'] }, { id: 't2', attachments: [] }];
+      },
+      async delete(id: string) {
+        deleted.push(`${resourceId}:${id}`);
+      },
+    }), OPTIONS_WITH_ATTACHMENTS);
+
+    await store.deleteSession('s1');
+
+    expect(deleted).toEqual(['sessions:s1', 'turns:t1', 'turns:t2']);
+    expect(store.attachmentCalls.markUnused).toEqual([['a.png']]);
   });
 
   it('editTurnAndTruncateAfter throws when the turn is not in the session', async () => {
@@ -232,7 +328,7 @@ describe('adminforth-agent session store', () => {
         },
       }),
     };
-    const store = new AgentSessionStore(() => adminforth as any, optionsWithCheckpoint);
+    const store = new AgentSessionStore(() => adminforth as any, optionsWithCheckpoint, fakeAttachments() as any);
 
     await store.saveTurnResponse({ turnId: 't1', responseText: 'done', checkpointId: 'cpX' });
     await store.saveTurnResponse({ turnId: 't2', responseText: 'partial' }); // undefined -> not written

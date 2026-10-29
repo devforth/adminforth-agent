@@ -1,8 +1,11 @@
-import type { IHttpServer } from "adminforth";
+import { logger, type IHttpServer } from "adminforth";
 import { z } from "zod";
 import { createSseEventEmitter } from "../sse/sseWriter.js";
+import type { AgentEventEmitter } from "../../domain/agentEvents.js";
+import { getErrorMessage } from "../../shared/errors.js";
 import type { CurrentPageContext } from "../../tools/getUserLocation.js";
 import type { CoreEndpointsContext } from "./context.js";
+import type { ImageAttachmentsLimits } from "../../domain/imageAttachments.js";
 
 type MulterFile = {
   buffer: Buffer;
@@ -19,12 +22,27 @@ const currentPageContextSchema = z.object({
   url: z.string(),
 }).strict() satisfies z.ZodType<CurrentPageContext>;
 
-const agentResponseBodySchema = z.object({
-  message: z.string(),
+const attachmentRefSchema = z.object({
+  filePath: z.string(),
+  token: z.string(),
+}).strict();
+
+function buildAgentResponseBodySchema({ maxPerMessage }: ImageAttachmentsLimits) {
+  return z.object({
+    message: z.string(),
+    sessionId: z.string(),
+    mode: z.string().nullish(),
+    timeZone: z.string().optional(),
+    currentPage: currentPageContextSchema.optional(),
+    attachments: z.array(attachmentRefSchema).max(maxPerMessage).optional(),
+  }).strict();
+}
+
+const attachmentUploadUrlBodySchema = z.object({
   sessionId: z.string(),
-  mode: z.string().nullish(),
-  timeZone: z.string().optional(),
-  currentPage: currentPageContextSchema.optional(),
+  filename: z.string(),
+  contentType: z.string(),
+  size: z.number().int().positive(),
 }).strict();
 
 const agentApprovalBodySchema = z.object({
@@ -38,14 +56,24 @@ const agentSteerBodySchema = z.object({
   message: z.string().min(1),
 }).strict();
 
-const agentEditBodySchema = z.object({
+const agentEditFields = {
   sessionId: z.string(),
   turnId: z.string(),
-  message: z.string().min(1),
   mode: z.string().nullish(),
   timeZone: z.string().optional(),
   currentPage: currentPageContextSchema.optional(),
-}).strict();
+};
+
+// An edited message keeps text, images or both. Written as a union, not a refine: the
+// request schema is checked as JSON Schema, which has no place for a refine.
+export function buildAgentEditBodySchema({ maxPerMessage }: ImageAttachmentsLimits) {
+  // images the edited turn keeps are sent without a token
+  const editAttachmentsSchema = z.array(attachmentRefSchema.partial({ token: true })).max(maxPerMessage);
+  return z.union([
+    z.object({ ...agentEditFields, message: z.string().min(1), attachments: editAttachmentsSchema.optional() }).strict(),
+    z.object({ ...agentEditFields, message: z.string(), attachments: editAttachmentsSchema.min(1) }).strict(),
+  ]);
+}
 
 // Sent as multipart/form-data (via multer), so every field arrives as a plain string on the wire.
 // `currentPage` is JSON.stringify'd by the client into a form field and must be parsed back into
@@ -75,7 +103,26 @@ const agentSpeechResponseBodySchema = agentSpeechResponseShapeSchema.extend({
   }),
 });
 
+/**
+ * Runs a turn on the already open event stream. A failure before the agent starts (the edited
+ * turn was deleted in another tab, no pending approval) comes as an error event: a thrown error
+ * would cut the stream, and the client would see only a network error.
+ */
+async function runOnStream(emit: AgentEventEmitter, run: () => Promise<unknown>) {
+  try {
+    await run();
+  } catch (error) {
+    const message = getErrorMessage(error);
+    logger.error(`Agent turn failed before it started: ${message}`);
+    await emit({ type: "error", error: message });
+    await emit({ type: "finish" });
+  }
+}
+
 export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServer) {
+  const agentResponseBodySchema = buildAgentResponseBodySchema(ctx.imageAttachmentsLimits);
+  const agentEditBodySchema = buildAgentEditBodySchema(ctx.imageAttachmentsLimits);
+
   server.endpoint({
     method: 'POST',
     path: `/agent/get-placeholder-messages`,
@@ -114,18 +161,19 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
         closeActiveBlockOnToolStart: true,
       });
 
-      await ctx.handleTurn({
+      await runOnStream(emit, () => ctx.handleTurn({
         prompt: data.message,
         sessionId: data.sessionId,
         modeName: data.mode,
         userTimeZone: data.timeZone ?? 'UTC',
         currentPage: data.currentPage,
+        attachments: data.attachments,
         abortSignal,
         adminUser: adminUser!,
         emit,
         failureLogMessage: "Agent response streaming failed",
         abortLogMessage: "Agent response streaming aborted by the client",
-      });
+      }));
       return null;
     }
   });
@@ -144,19 +192,20 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
         closeActiveBlockOnToolStart: true,
       });
 
-      await ctx.handleEditTurn({
+      await runOnStream(emit, () => ctx.handleEditTurn({
         prompt: data.message,
         turnId: data.turnId,
         sessionId: data.sessionId,
         modeName: data.mode,
         userTimeZone: data.timeZone ?? 'UTC',
         currentPage: data.currentPage,
+        attachments: data.attachments,
         abortSignal,
         adminUser: adminUser!,
         emit,
         failureLogMessage: "Agent message edit streaming failed",
         abortLogMessage: "Agent message edit streaming aborted by the client",
-      });
+      }));
       return null;
     }
   });
@@ -175,7 +224,7 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
         closeActiveBlockOnToolStart: true,
       });
 
-      await ctx.handleTurn({
+      await runOnStream(emit, () => ctx.handleTurn({
         prompt: "",
         sessionId: data.sessionId,
         modeName: data.mode,
@@ -185,7 +234,7 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
         emit,
         failureLogMessage: "Agent approval response streaming failed",
         abortLogMessage: "Agent approval response streaming aborted by the client",
-      });
+      }));
       return null;
     }
   });
@@ -208,6 +257,25 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
         adminUser: adminUser
       });
       return { ok: true, id, queued };
+    }
+  });
+
+  server.endpoint({
+    method: 'POST',
+    path: `/agent/attachment-upload-url`,
+    agent: {
+      hiddenFromAgents: true,
+    },
+    request_schema: attachmentUploadUrlBodySchema,
+    handler: async ({ body, adminUser, response }) => {
+      const data = body as z.infer<typeof attachmentUploadUrlBodySchema>;
+      try {
+        return await ctx.createAttachmentUploadUrl({ ...data, adminUser: adminUser! });
+      } catch (error) {
+        // A disallowed extension or a too large file is the user's input, not a server failure.
+        response.setStatus(400);
+        return { error: getErrorMessage(error) };
+      }
     }
   });
 

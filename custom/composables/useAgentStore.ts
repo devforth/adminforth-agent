@@ -1,12 +1,12 @@
 import { defineStore } from 'pinia';
-import { IAgentSession, IApprovalDescription, ISessionsListItem } from '../types';
+import { IAgentSession, IApprovalDescription, IAttachmentRef, IComposerAttachment, ISessionsListItem } from '../types';
 import { ref, nextTick, computed, watch, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAdminforth } from '@/adminforth';
 import { useCoreStore } from '@/stores/core';
 import { useAgentTransitions } from './useAgentTransitions';
 import { useWindowSize } from '@vueuse/core';
-import { remToPx, pxToRem } from '../utils';
+import { remToPx, pxToRem, getErrorMessage, t } from '../utils';
 import {
   type AgentMode,
   DEFAULT_CHAT_WIDTH,
@@ -19,6 +19,7 @@ import { createAgentChatManager } from './agentStore/useAgentChat';
 import { createAgentPlaceholderController } from './agentStore/useAgentPlaceholder';
 import { createAgentSessionManager } from './agentStore/useAgentSessions';
 import { createAgentSteerQueue } from './agentStore/useAgentSteerQueue';
+import { createAgentAttachments } from './agentStore/useAgentAttachments';
 import { STEER_PERSIST_PREFIX } from './agentStore/constants';
 
 export const useAgentStore = defineStore('agent', () => {
@@ -42,8 +43,12 @@ export const useAgentStore = defineStore('agent', () => {
   const editingMessageId = ref<string | null>(null);
   const editingMessageTurnId = ref<string | null>(null);
   const savedUserInput = ref('');
+  const savedAttachments = ref<IComposerAttachment[]>([]);
   const isEditingMessage = computed(() => editingMessageId.value !== null);
   const lastMessage = ref('');
+  const lastAttachments = ref<IAttachmentRef[]>([]);
+  const composerAttachments = createAgentAttachments({ alert: adminforth.alert });
+  const hasAttachments = computed(() => composerAttachments.attachments.value.length > 0);
   const isTeleportedToBody = ref(false);
   const setIsTeleportedToBody = (isTeleported: boolean) => {
     isTeleportedToBody.value = isTeleported;
@@ -63,8 +68,10 @@ export const useAgentStore = defineStore('agent', () => {
     abortCurrentChatRequest,
     submitToolApproval: submitToolApprovalResponse,
     sendEditMessage,
+    dropChat,
   } = createAgentChatManager({
     lastMessage,
+    lastAttachments,
     activeModeName,
     onOpenPage: openAgentPage,
     onToolApprovalRequest: addToolApprovalPart,
@@ -160,7 +167,7 @@ export const useAgentStore = defineStore('agent', () => {
     } catch (error) {
       if (approvalPart?.data) {
         approvalPart.data.status = 'pending';
-        approvalPart.data.error = error instanceof Error ? error.message : String(error);
+        approvalPart.data.error = getErrorMessage(error);
       }
       console.error('Error submitting tool approval', error);
     }
@@ -193,6 +200,8 @@ export const useAgentStore = defineStore('agent', () => {
   const blockCloseOfChat = ref(false);
   const {
     sendMessage,
+    refreshAttachmentUrls,
+    reloadSession,
     createPreSession,
     setActiveSession,
     fetchSessionsList,
@@ -216,9 +225,12 @@ export const useAgentStore = defineStore('agent', () => {
     isMessageInputBlocked,
     userMessageInput,
     lastMessage,
+    lastAttachments,
+    composerAttachments,
     blockCloseOfChat,
     adminforth,
     setCurrentChat,
+    dropChat,
     restorePendingToolApproval: addToolApprovalPart,
   });
 
@@ -250,13 +262,22 @@ export const useAgentStore = defineStore('agent', () => {
 
   // Submitting while a turn is active buffers the message (it shows up in the steer
   // queue, where the user can steer it or let it send); otherwise it sends right away.
+  // The queue keeps text only, so a message with images waits for the turn to end.
+  // images go with the text chat only, the voice chat has no composer to show them
+  const canAttachImages = computed(() => Boolean(composerAttachments.config.value) && !isAudioChatMode.value);
+
+  const canSubmitUserMessage = computed(() =>
+    Boolean(trimmedUserMessage.value || hasAttachments.value)
+    && !(isTurnActive.value && hasAttachments.value)
+    && !composerAttachments.isUploading.value
+  );
+
   function submitUserMessage() {
-    const message = trimmedUserMessage.value;
-    if (!message) {
+    if (!canSubmitUserMessage.value) {
       return;
     }
     if (isTurnActive.value) {
-      steerBuffer.enqueue(message);
+      steerBuffer.enqueue(trimmedUserMessage.value);
       userMessageInput.value = '';
       return;
     }
@@ -291,6 +312,7 @@ export const useAgentStore = defineStore('agent', () => {
   watch(activeSessionId, (newVal: string | null) => {
     // The edited message lives in the outgoing session's chat, so drop edit mode.
     if (editingMessageId.value !== null) {
+      composerAttachments.discardNewFiles();
       exitEditMode();
     }
     if (newVal) {
@@ -479,11 +501,13 @@ export const useAgentStore = defineStore('agent', () => {
     }
     if (editingMessageId.value === null) {
       savedUserInput.value = userMessageInput.value ?? '';
+      savedAttachments.value = composerAttachments.attachments.value;
     }
     const text = getCompiledMessageTextWithSteeredParts(message);
     editingMessageId.value = messageId;
     editingMessageTurnId.value = turnId;
     userMessageInput.value = text;
+    composerAttachments.setFromMessage(message.metadata?.attachments ?? []);
     nextTick(() => focusTextInput());
   }
 
@@ -491,6 +515,8 @@ export const useAgentStore = defineStore('agent', () => {
   function exitEditMode() {
     userMessageInput.value = savedUserInput.value;
     savedUserInput.value = '';
+    composerAttachments.attachments.value = savedAttachments.value;
+    savedAttachments.value = [];
     editingMessageId.value = null;
     editingMessageTurnId.value = null;
   }
@@ -499,6 +525,7 @@ export const useAgentStore = defineStore('agent', () => {
     if (editingMessageId.value === null) {
       return;
     }
+    composerAttachments.discardNewFiles();
     exitEditMode();
     nextTick(() => focusTextInput());
   }
@@ -508,19 +535,37 @@ export const useAgentStore = defineStore('agent', () => {
       return false;
     }
     const text = trimmedUserMessage.value;
-    if (!text) {
+    const attachments = composerAttachments.attachments.value;
+    if ((!text && attachments.length === 0) || composerAttachments.isUploading.value) {
       return false;
     }
     const messageId = editingMessageId.value;
     const turnId = editingMessageTurnId.value!;
+    const editedMessage = currentChat.value?.messages.find((m: any) => m.id === messageId);
+    const lastMessageText = getCompiledMessageTextWithSteeredParts(editedMessage);
+    const lastFilePaths = (editedMessage?.metadata?.attachments ?? []).map((attachment: any) => attachment.filePath);
+    const isUnchanged = lastMessageText.trim() === text
+      && attachments.length === lastFilePaths.length
+      && attachments.every((attachment, index) => attachment.filePath === lastFilePaths[index]);
+    if (isUnchanged) {
+      exitEditMode();
+      return false;
+    }
+    // Upload before leaving edit mode, so a failed upload keeps the edit to retry.
+    const uploaded = await composerAttachments.upload(activeSessionId.value!, attachments);
+    if (!uploaded) {
+      return false;
+    }
     steerBuffer.clear();
     // Restore the stashed input and leave edit mode before the regeneration streams in.
     exitEditMode();
-    const lastMessageText = getCompiledMessageTextWithSteeredParts(currentChat.value?.messages.find((m: any) => m.id === messageId));
-    if (lastMessageText.trim() === text.trim()) {
-      return false;
+    await sendEditMessage({ messageId, turnId, text, attachments: uploaded });
+    // the edit failed (e.g. the message was changed in another tab): the chat in the tab is out
+    // of date, so it is replaced with the one the server has
+    if (currentChat.value?.status === 'error') {
+      adminforth.alert({ message: t('The message could not be edited, the chat is reloaded'), variant: 'warning' });
+      await reloadSession(activeSessionId.value!);
     }
-    await sendEditMessage({ messageId, turnId, text });
     return true;
   }
 
@@ -631,7 +676,18 @@ export const useAgentStore = defineStore('agent', () => {
     openAgentPage,
     setCurrentChatStatus,
     updateLastAgentMessage,
+    //_________-Attachments-_____________
+    attachments: composerAttachments.attachments,
+    refreshAttachmentUrls: () => refreshAttachmentUrls(activeSessionId.value!),
+    attachmentsConfig: composerAttachments.config,
+    canAttachImages,
+    setAttachmentsConfig: composerAttachments.setConfig,
+    isUploadingAttachments: composerAttachments.isUploading,
+    addAttachmentFiles: composerAttachments.addFiles,
+    removeAttachment: composerAttachments.removeAttachment,
+    //___________________________________
     //_________-Steer queue-_____________
+    canSubmitUserMessage,
     submitUserMessage,
     isTurnActive,
     isFinalResponseStreaming,

@@ -80,8 +80,8 @@ function fakeSessions(opts: { initialResponse?: string; agentTurns?: any[] } = {
     async getPreviousUserMessages() {
       return [];
     },
-    async createNewTurn(sessionId: string, prompt: string) {
-      calls.createNewTurn.push({ sessionId, prompt });
+    async createNewTurn(sessionId: string, prompt: string, attachments: string[]) {
+      calls.createNewTurn.push({ sessionId, prompt, attachments });
       return 'turn-1';
     },
     async touchSession(sessionId: string) {
@@ -102,6 +102,18 @@ function fakeSessions(opts: { initialResponse?: string; agentTurns?: any[] } = {
     },
   };
 }
+
+// Accepts refs with the token "valid" and kept files of the edited turn, like TurnAttachments.verify.
+const fakeAttachments = {
+  async verify(_sessionId: string, refs: { filePath: string; token?: string }[], alreadyAttached: string[] = []) {
+    return refs.map(({ filePath, token }) => {
+      if (token !== 'valid' && !(token === undefined && alreadyAttached.includes(filePath))) {
+        throw new Error(`Attachment "${filePath}" was not uploaded to this session.`);
+      }
+      return filePath;
+    });
+  },
+};
 
 const SESSION_RESOURCE = {
   resourceId: 'sessions',
@@ -145,6 +157,7 @@ function buildUseCase(opts: {
   const useCase = new RunTurnUseCase({
     llm: llm as any,
     sessions: sessions as any,
+    attachments: fakeAttachments as any,
     steerBuffer,
     modes: [{ name: 'default', completionAdapter: {} as any }],
     getAdminforth,
@@ -215,7 +228,7 @@ describe('RunTurnUseCase.handleTurn', () => {
 
     await useCase.handleTurn(makeInput().input as any);
 
-    expect(llm.calls[0].input.messages).toEqual([{ role: 'user', content: 'hi' }]);
+    expect(llm.calls[0].input.messages).toEqual([{ role: 'user', content: 'hi', attachments: [] }]);
     expect(llm.calls[0].systemPrompt).toBe('SYS');
     // The per-turn half travels in the context, to be rebuilt on every model call.
     expect(llm.calls[0].context.userLanguage).toEqual({
@@ -442,6 +455,41 @@ describe('RunTurnUseCase.handleTurn', () => {
     expect(llm.calls).toHaveLength(1);
   });
 
+  it('stores verified attachments on the new turn and sends them with the user message', async () => {
+    const { useCase, llm, sessions } = buildUseCase({ streamFor: () => streamOf(text('ok')) });
+
+    await useCase.handleTurn(makeInput({
+      prompt: 'what is on it?',
+      attachments: [{ filePath: 'a.png', token: 'valid' }],
+    }).input as any);
+
+    expect(sessions.calls.createNewTurn[0].attachments).toEqual(['a.png']);
+    expect(llm.calls[0].input.messages).toEqual([
+      { role: 'user', content: 'what is on it?', attachments: ['a.png'] },
+    ]);
+  });
+
+  it('skips language detection for a message with images only', async () => {
+    const { useCase, llm } = buildUseCase({ streamFor: () => streamOf(text('ok')) });
+
+    await useCase.handleTurn(makeInput({
+      prompt: '',
+      attachments: [{ filePath: 'a.png', token: 'valid' }],
+    }).input as any);
+
+    expect(llm.detectLanguageCalls).toHaveLength(0);
+    expect(llm.calls[0].context.userLanguage).toBeNull();
+  });
+
+  it('rejects an attachment without a valid token before creating the turn', async () => {
+    const { useCase, sessions } = buildUseCase();
+
+    await expect(useCase.handleTurn(makeInput({
+      attachments: [{ filePath: 'someone-else.png', token: 'forged' }],
+    }).input as any)).rejects.toThrow(/not uploaded to this session/);
+    expect(sessions.calls.createNewTurn).toHaveLength(0);
+  });
+
   it('rejects (does not swallow) an approval with no pending interrupt, after emitting turn-started', async () => {
     const { useCase } = buildUseCase();
     const { input, events } = makeInput({ prompt: '', approvalDecision: 'approve' });
@@ -476,7 +524,7 @@ describe('RunTurnUseCase.handleEditTurn', () => {
     expect(llm.resetThreadCalls).toHaveLength(0);
     // Truncates + rewrites the edited turn (reusing its id, no new turn created).
     expect(sessions.calls.editTurnAndTruncateAfter).toEqual([
-      { sessionId: 's1', turnId: 't2', newPrompt: 'edited prompt' },
+      { sessionId: 's1', turnId: 't2', newPrompt: 'edited prompt', newAttachments: [] },
     ]);
     expect(sessions.calls.createNewTurn).toHaveLength(0);
     expect(result).toMatchObject({ turnId: 't2', text: 'New answer', aborted: false, failed: false });
@@ -486,6 +534,23 @@ describe('RunTurnUseCase.handleEditTurn', () => {
       responseText: 'New answer',
       checkpointId: 'cp-new',
     });
+  });
+
+  it('an edit keeps images of the edited turn without a token and adds new uploaded ones', async () => {
+    const { useCase, llm, sessions } = buildUseCase({
+      turnCheckpointsEnabled: true,
+      agentTurns: [{ id: 't1', prompt: 'p1', response: 'r1', attachments: ['old.png'], checkpointId: 'cp1' }],
+      streamFor: () => streamOf(text('ok')),
+    });
+
+    await useCase.handleEditTurn(makeInput({
+      turnId: 't1',
+      prompt: 'edited',
+      attachments: [{ filePath: 'old.png' }, { filePath: 'new.png', token: 'valid' }],
+    }).input as any);
+
+    expect(sessions.calls.editTurnAndTruncateAfter[0].newAttachments).toEqual(['old.png', 'new.png']);
+    expect(llm.calls[0].input.messages[0].attachments).toEqual(['old.png', 'new.png']);
   });
 
   it('editing the first message resets the thread instead of forking', async () => {
@@ -592,8 +657,20 @@ describe('RunTurnUseCase — a new message while an approval is pending', () => 
     });
     // The prompt still gets its own turn, so the conversation history stays complete.
     expect(sessions.calls.createNewTurn).toHaveLength(2);
-    expect(sessions.calls.createNewTurn[1]).toEqual({ sessionId: 's1', prompt: 'never mind, do X instead' });
+    expect(sessions.calls.createNewTurn[1]).toEqual({ sessionId: 's1', prompt: 'never mind, do X instead', attachments: [] });
     expect(sessions.calls.getResumeState).toBe(0);
+  });
+
+  it('refuses images while an approval is pending, they can not ride along in the rejection', async () => {
+    const { useCase, sessions } = buildUseCase({
+      hasPersistentCheckpointer: true,
+      pendingInterrupts: [{ id: 'int-1', count: 1, requests: [] }],
+    });
+
+    await expect(useCase.handleTurn(makeInput({
+      attachments: [{ filePath: 'a.png', token: 'valid' }],
+    }).input as any)).rejects.toThrow(/pending approval/);
+    expect(sessions.calls.createNewTurn).toHaveLength(0);
   });
 
   it('reads the pending call from the checkpoint (page reloaded, or another instance)', async () => {

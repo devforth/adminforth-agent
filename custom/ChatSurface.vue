@@ -16,7 +16,29 @@
       class="fixed top-0 right-0 z-40 flex h-screen border-l border-lightNavbarBorder bg-lightNavbar dark:border-darkNavbarBorder dark:bg-darkNavbar"
       :class="[agentStore.isChatOpen ? 'translate-x-0' : 'translate-x-full', !agentStore.isTeleportedToBody && !agentStore.isFullScreen ? 'shadow-popover dark:shadow-darkPopover' : '']"
       :style="{ width: agentStore.isFullScreen ? '100%' : agentStore.chatWidth + 'rem' }"
+      @dragenter="onFileDragEnter"
+      @dragover="onFileDragOver"
+      @dragleave="onFileDragLeave"
+      @drop="onFileDrop"
     > 
+      <div
+        v-if="isDraggingFiles"
+        class="af-agent-drop-overlay pointer-events-none absolute inset-0 z-50 p-2 bg-lightNavbar dark:bg-darkNavbar"
+      >
+        <div
+          class="h-full flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed text-sm
+            border-lightDropzoneBorderDragging bg-lightDropzoneBackgroundDragging text-lightDropzoneIcon
+            dark:border-darkDropzoneBorderDragging dark:bg-darkDropzoneBackgroundDragging dark:text-darkDropzoneIcon"
+        >
+          <span
+            class="flex items-center justify-center w-9 h-9 rounded-lg border
+              border-lightDropzoneBorder bg-lightDropzoneBackgroundHover dark:border-darkDropzoneBorder dark:bg-darkDropzoneBackgroundHover"
+          >
+            <IconImagePlus class="w-5 h-5" />
+          </span>
+          {{ $t('Drop images to attach them') }}
+        </div>
+      </div>
       <div 
         v-if="!(coreStore.isMobile || agentStore.isFullScreen)"
         class="w-2 cursor-ew-resize absolute left-0 h-full top-0 z-30"
@@ -50,7 +72,7 @@
 </template>
 
 <script setup lang="ts">
-import { IconBot } from '@iconify-prerendered/vue-lucide';
+import { IconBot, IconImagePlus } from '@iconify-prerendered/vue-lucide';
 import { Button } from '@/afcl';
 import { useTemplateRef, onMounted, ref, onUnmounted, onBeforeUnmount, computed, watch, nextTick } from 'vue';
 import { onClickOutside } from '@vueuse/core'
@@ -60,19 +82,11 @@ import ChatFooter from './ChatFooter.vue';
 import { useAgentStore } from './composables/useAgentStore';
 import { useAgentTransitions } from './composables/useAgentTransitions';
 import { useCoreStore } from '@/stores/core';
+import type { IChatSurfaceMeta } from './types';
 import { remToPx, getLayoutElements } from './utils';
 
 const props = defineProps<{
-  meta: {
-    pluginInstanceId: string;
-    modes: Array<{
-      name: string;
-    }>;
-    defaultModeName: string | null;
-    stickByDefault: boolean;
-    hasAudioAdapter: boolean;
-    editingEnabled: boolean;
-  }
+  meta: IChatSurfaceMeta
   adminUser: any
 }>();
 
@@ -168,4 +182,43 @@ function setLayoutPaddingRight(paddingRight: string) {
   }
 }
 
+
+// Images can be dropped anywhere on the chat. A drop target has to cancel both dragenter and
+// dragover: otherwise the browser takes the body as the target and opens the dropped file.
+// dragenter and dragleave come for every element inside the chat the drag crosses, so the drag is
+// over the chat while more of them were entered than left
+const fileDragDepth = ref(0);
+const isDraggingFiles = computed(() => fileDragDepth.value > 0);
+
+function isFileDrag(event: DragEvent) {
+  return agentStore.canAttachImages && event.dataTransfer!.types.includes('Files');
+}
+
+function onFileDragEnter(event: DragEvent) {
+  if (isFileDrag(event)) {
+    event.preventDefault();
+    fileDragDepth.value += 1;
+  }
+}
+
+function onFileDragOver(event: DragEvent) {
+  if (isFileDrag(event)) {
+    event.preventDefault();
+  }
+}
+
+function onFileDragLeave(event: DragEvent) {
+  if (isFileDrag(event)) {
+    fileDragDepth.value -= 1;
+  }
+}
+
+function onFileDrop(event: DragEvent) {
+  fileDragDepth.value = 0;
+  if (!agentStore.canAttachImages || event.dataTransfer!.files.length === 0) {
+    return;
+  }
+  event.preventDefault();
+  agentStore.addAttachmentFiles([...event.dataTransfer!.files]);
+}
 </script>

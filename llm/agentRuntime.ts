@@ -9,6 +9,9 @@ import type { BaseCheckpointSaver } from "@langchain/langgraph";
 import { createMcpToolsMiddleware } from "./middleware/mcpToolsMiddleware.js";
 import { createSequenceDebugMiddleware, type SequenceDebugCollector } from "./middleware/sequenceDebug.js";
 import { createSteerMiddleware } from "./middleware/steerMiddleware.js";
+import { createAttachmentsMiddleware } from "./middleware/attachmentsMiddleware.js";
+import { createViewImageTool } from "../tools/viewImage.js";
+import type { ImageAttachmentsLimits } from "../domain/imageAttachments.js";
 import type { SteerBuffer } from "../domain/steerBuffer.js";
 import { createAgentLlmMetricsLogger } from "./agentModels.js";
 import type { AgentToolProvider, AgentToolSet } from "../tools/agentToolProvider.js";
@@ -46,6 +49,9 @@ export type AgentRuntimeOptions = {
   getCheckpointer: () => BaseCheckpointSaver;
   toolProvider: Pick<AgentToolProvider, "open">;
   steerBuffer: SteerBuffer;
+  attachmentsEnabled: boolean;
+  imageAttachmentsLimits: ImageAttachmentsLimits;
+  loadAttachmentAsDataUrl: (filePath: string) => Promise<string>;
 };
 
 export class AgentRuntime {
@@ -85,6 +91,7 @@ export class AgentRuntime {
           trigger: { tokens: 1024 * 64 },
           keep: { messages: 10 },
         }),
+        createAttachmentsMiddleware(this.options.loadAttachmentAsDataUrl, this.options.imageAttachmentsLimits),
       ] as const;
 
       const agent = createAgent({
@@ -97,7 +104,9 @@ export class AgentRuntime {
         // come first: the agent's own rules refine them for this chat.
         systemPrompt: `${toolSet.instructions}\n\n${input.systemPrompt}`,
         checkpointer: this.options.getCheckpointer(),
-        tools: toolSet.baseTools,
+        tools: this.options.attachmentsEnabled
+          ? [...toolSet.baseTools, createViewImageTool(this.options.imageAttachmentsLimits)]
+          : toolSet.baseTools,
         contextSchema,
         middleware,
       });

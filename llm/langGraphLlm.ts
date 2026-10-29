@@ -5,11 +5,17 @@ import type { AgentRuntime } from "./agentRuntime.js";
 import type { AgentModelFactory } from "./modelFactory.js";
 import { detectUserLanguage, type PreviousUserMessage } from "../domain/languageDetect.js";
 import { adaptRawStream, normalizeInterrupts } from "./streamAdapter.js";
+import { ATTACHMENTS_KWARG, ATTACHMENTS_SENT_AT_KWARG } from "../domain/imageAttachments.js";
 import type { AgentModeCompletionAdapter, LlmPort, LlmStreamInput } from "../application/ports.js";
 import type { AgentMessage, PendingInterrupt } from "../domain/turnTypes.js";
 
 function toLangchainMessages(messages: AgentMessage[]) {
-  return messages.map((message) => new HumanMessage(message.content));
+  return messages.map((message) => new HumanMessage({
+    content: message.content,
+    additional_kwargs: message.attachments.length > 0
+      ? { [ATTACHMENTS_KWARG]: message.attachments, [ATTACHMENTS_SENT_AT_KWARG]: new Date().toISOString() }
+      : {},
+  }));
 }
 
 /**

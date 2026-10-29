@@ -15,6 +15,7 @@
         dark:border-darkInputBorder dark:bg-darkInputBackground dark:hover:border-darkInputBorderHover
         dark:focus-within:border-darkInputFocusBorder dark:focus-within:ring-darkInputFocusRing"
     >
+      <ComposerAttachments v-if="!agentStore.isAudioChatMode" />
       <textarea
         v-if="!agentStore.isAudioChatMode"
         v-model="agentStore.userMessageInput"
@@ -30,44 +31,70 @@
         :placeholder="placeholderText"
         @keydown.enter.exact.prevent="sendMessage"
         @keydown.esc="onEscape"
+        @paste="onPaste"
       />
       <!-- in audio chat mode the voice button is centered between the mode picker and an empty column -->
       <div
         class="items-center gap-1 px-2 pb-2"
         :class="agentStore.isAudioChatMode ? 'grid grid-cols-[1fr_auto_1fr] pt-2' : 'flex pt-1'"
       >
-        <DropdownMenu
-          v-if="agentStore.availableModes.length > 1"
-          v-model:open="isModeMenuOpen"
-          class="af-agent-mode-menu justify-self-start"
-          teleportToBody
-        >
-          <template #trigger="{ open }">
+        <div class="flex items-center gap-1 justify-self-start">
+          <template v-if="agentStore.canAttachImages">
             <Button
               variant="ghost"
               size="sm"
+              iconOnly
               type="button"
-              :class="open && 'bg-lightSecondaryDarken text-lightInputText dark:bg-darkSecondaryLighten dark:text-darkInputText'"
-              :aria-label="$t('Select mode')"
-              :aria-expanded="open"
-              :title="$t('Select mode')"
+              class="af-agent-attach-button"
+              :disabled="agentStore.isUploadingAttachments"
+              :title="$t('Attach image')"
+              :aria-label="$t('Attach image')"
+              @click="fileInput?.click()"
             >
-              <IconSparkles class="w-4 h-4" />
-              {{ agentStore.activeModeName }}
-              <IconChevronDown class="w-3.5 h-3.5 transition-transform duration-200" :class="open && 'rotate-180'" />
+              <IconPaperclip />
             </Button>
+            <input
+              ref="fileInput"
+              type="file"
+              class="hidden"
+              multiple
+              :accept="acceptedImageTypes"
+              @change="onFilesPicked"
+            />
           </template>
-          <DropdownMenuItem
-            v-for="mode in agentStore.availableModes"
-            :key="mode.name"
-            @click="agentStore.setActiveMode(mode.name)"
+          <DropdownMenu
+            v-if="agentStore.availableModes.length > 1"
+            v-model:open="isModeMenuOpen"
+            class="af-agent-mode-menu"
+            teleportToBody
           >
-            {{ mode.name }}
-            <template v-if="mode.name === agentStore.activeModeName" #suffix>
-              <IconCheck class="w-4 h-4 text-lightPrimary dark:text-darkPrimary" />
+            <template #trigger="{ open }">
+              <Button
+                variant="ghost"
+                size="sm"
+                type="button"
+                :class="open && 'bg-lightSecondaryDarken text-lightInputText dark:bg-darkSecondaryLighten dark:text-darkInputText'"
+                :aria-label="$t('Select mode')"
+                :aria-expanded="open"
+                :title="$t('Select mode')"
+              >
+                <IconSparkles class="w-4 h-4" />
+                {{ agentStore.activeModeName }}
+                <IconChevronDown class="w-3.5 h-3.5 transition-transform duration-200" :class="open && 'rotate-180'" />
+              </Button>
             </template>
-          </DropdownMenuItem>
-        </DropdownMenu>
+            <DropdownMenuItem
+              v-for="mode in agentStore.availableModes"
+              :key="mode.name"
+              @click="agentStore.setActiveMode(mode.name)"
+            >
+              {{ mode.name }}
+              <template v-if="mode.name === agentStore.activeModeName" #suffix>
+                <IconCheck class="w-4 h-4 text-lightPrimary dark:text-darkPrimary" />
+              </template>
+            </DropdownMenuItem>
+          </DropdownMenu>
+        </div>
         <div
           class="ml-auto flex items-center gap-1"
           :class="agentStore.isAudioChatMode ? 'col-start-2' : ''"
@@ -78,7 +105,7 @@
           <template v-if="!agentStore.isAudioChatMode">
             <EditActionButtons
               v-if="agentStore.isEditingMessage"
-              :confirm-disabled="!agentStore.trimmedUserMessage"
+              :confirm-disabled="(!agentStore.trimmedUserMessage && !agentStore.attachments.length) || agentStore.isUploadingAttachments"
               @cancel="cancelEdit"
               @confirm="sendMessage"
             />
@@ -87,7 +114,7 @@
               type="button"
               iconOnly
               class="rounded-full"
-              :disabled="!agentStore.trimmedUserMessage"
+              :disabled="!agentStore.canSubmitUserMessage"
               :title="$t('Send message')"
               :aria-label="$t('Send message')"
               @click="sendMessage"
@@ -113,7 +140,7 @@
 </template>
 
 <script setup lang="ts">
-import { IconArrowUp, IconCheck, IconChevronDown, IconSparkles } from '@iconify-prerendered/vue-lucide';
+import { IconArrowUp, IconCheck, IconChevronDown, IconPaperclip, IconSparkles } from '@iconify-prerendered/vue-lucide';
 import { useTemplateRef, onMounted, ref, watch, computed } from 'vue';
 import { Button, DropdownMenu, DropdownMenuItem } from '@/afcl';
 import { useAgentStore } from './composables/useAgentStore';
@@ -123,23 +150,17 @@ import { remToPx } from './utils';
 import MicrophoneButton from './speech_recognition_frontend/MicrophoneButon.vue';
 import SteerQueue from './SteerQueue.vue';
 import EditActionButtons from './EditActionButtons.vue';
+import ComposerAttachments from './ComposerAttachments.vue';
+import type { IChatSurfaceMeta } from './types';
 
 const props = defineProps<{
-  meta: {
-    pluginInstanceId: string;
-    modes: Array<{
-      name: string;
-    }>;
-    defaultModeName: string | null;
-    stickByDefault: boolean;
-    hasAudioAdapter: boolean;
-    editingEnabled: boolean;
-  }
+  meta: IChatSurfaceMeta
   adminUser: any
   conversationAreaRef: any
 }>();
 
 const textInput = useTemplateRef('textInput');
+const fileInput = useTemplateRef('fileInput');
 const agentStore = useAgentStore();
 const agentTransitions = useAgentTransitions();
 const coreStore = useCoreStore();
@@ -156,6 +177,7 @@ onMounted(async () => {
   agentStore.setAvailableModes(props.meta.modes, props.meta.defaultModeName);
   agentStore.setCurrentGenerationModeFromLocalStorage();
   agentStore.setEditingEnabled(props.meta.editingEnabled);
+  agentStore.setAttachmentsConfig(props.meta.attachments);
   textInput.value?.focus();
   autoResize();
 });
@@ -217,6 +239,24 @@ function onEscape(event: KeyboardEvent) {
   }
   event.preventDefault();
   cancelEdit();
+}
+
+const acceptedImageTypes = props.meta.attachments?.mimeTypes.join(',');
+
+function onPaste(event: ClipboardEvent) {
+  const files = [...event.clipboardData!.files];
+  if (!agentStore.canAttachImages || files.length === 0) {
+    return;
+  }
+  event.preventDefault();
+  agentStore.addAttachmentFiles(files);
+}
+
+function onFilesPicked(event: Event) {
+  const input = event.target as HTMLInputElement;
+  agentStore.addAttachmentFiles([...input.files!]);
+  // picking the same file again must trigger `change` again
+  input.value = '';
 }
 
 function stopCurrentRequest() {

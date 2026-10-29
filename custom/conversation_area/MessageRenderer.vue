@@ -10,6 +10,10 @@
       :message="message"
       :isLastMessageInChat="isLastMessageInChat"
     />
+    <MessageAttachments
+      v-if="shownAttachments.length && shouldBeShownWhileEditing"
+      :attachments="shownAttachments"
+    />
     <template
       v-for="(part, index) in getMessageParts(message)"
       :key="part.type"
@@ -17,7 +21,8 @@
       <!-- a text part drops the margin of its last block, so a part that follows another one (the stream
            splits the text at every chart and tool call) brings back the gap between markdown blocks -->
       <TextRenderer
-        v-if="part.type === 'text' && !checkIfMessageSystemMessage(part.text ?? '') && shouldBeShownWhileEditing"
+        v-if="part.type === 'text' && !checkIfMessageSystemMessage(part.text ?? '') && shouldBeShownWhileEditing
+          && (part.text || !isUserMessage || isBeingEditedMessage)"
         class="[&+&]:mt-2"
         :message="isBeingEditedMessage ? agentStore.userMessageInput : part.text"
         :role="props.message.role"
@@ -78,6 +83,7 @@
   import ProcessingTimeline from './ProcessingTimeline.vue';
   import SystemMessageRenderer from './SystemMessageRenderer.vue';
   import ToolApprovalRenderer from './ToolApprovalRenderer.vue';
+  import MessageAttachments from './MessageAttachments.vue';
   import { RESERVED_SYSTEM_MESSAGE_CONTENT } from '../composables/agentStore/constants';
   import { useAgentStore } from '../composables/useAgentStore';
   import { useAdminforth } from '@/adminforth';
@@ -110,6 +116,13 @@
 
   const isUserMessage = computed(() => props.message.role === 'user');
 
+  // The edited message shows the images of the composer, as its text follows the input.
+  const shownAttachments = computed<Array<{ url: string }>>(() =>
+    isBeingEditedMessage.value
+      ? agentStore.attachments
+      : props.message.metadata?.attachments ?? []
+  );
+
   const copyableText = computed(() =>
     (props.message.parts ?? [])
       .filter((part: any) => part.type === 'text' && !checkIfMessageSystemMessage(part.text ?? ''))
@@ -130,7 +143,7 @@
   // never shift the chat or change its scroll height.
   const reservesActionsRow = computed(() =>
     shouldBeShownWhileEditing.value
-    && Boolean(copyableText.value.trim())
+    && (Boolean(copyableText.value.trim()) || shownAttachments.value.length > 0)
     && (!isUserMessage.value || agentStore.editingEnabled)
   );
 

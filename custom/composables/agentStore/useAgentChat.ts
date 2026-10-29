@@ -2,7 +2,8 @@ import { DefaultChatTransport } from 'ai';
 import { ref, shallowRef, watch, type Ref } from 'vue';
 import { Chat } from '../../chat';
 import { getCurrentPageContext } from './pageContext';
-import type { IApprovalDescription } from '../../types';
+import { getErrorMessage } from '../../utils';
+import type { IApprovalDescription, IAttachmentRef, IMessageAttachment } from '../../types';
 // const { DefaultChatTransport } = await import('ai');
 
 type AgentImportMeta = ImportMeta & {
@@ -13,6 +14,7 @@ type AgentImportMeta = ImportMeta & {
 
 type CreateAgentChatManagerOptions = {
   lastMessage: Ref<string>;
+  lastAttachments: Ref<IAttachmentRef[]>;
   activeModeName: Ref<string | null>;
   onOpenPage: (targetPath: string) => void;
   onToolApprovalRequest: (sessionId: string, approvals: IApprovalDescription[]) => void;
@@ -20,6 +22,7 @@ type CreateAgentChatManagerOptions = {
 
 export function createAgentChatManager({
   lastMessage,
+  lastAttachments,
   activeModeName,
   onOpenPage,
   onToolApprovalRequest,
@@ -235,6 +238,7 @@ export function createAgentChatManager({
               timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
               mode: activeModeName.value,
               currentPage: getCurrentPageContext(),
+              attachments: lastAttachments.value,
             };
 
             // Editing an existing message branches from its turn: hit /edit, which
@@ -256,13 +260,17 @@ export function createAgentChatManager({
         }),
         onError(error: unknown) {
           console.error('Chat error:', error);
-          appendTextDelta(`Error: ${error instanceof Error ? error.message : String(error)}`);
+          appendTextDelta(`Error: ${getErrorMessage(error)}`);
         },
         onData: handleRealtimeChatData,
       });
       chats.set(sessionId, newChat);
       currentChat.value = newChat;
     }
+  }
+
+  function dropChat(sessionId: string) {
+    chats.delete(sessionId);
   }
 
   function abortCurrentChatRequest() {
@@ -313,7 +321,12 @@ export function createAgentChatManager({
   // (mirroring the server-side truncate), and `editingTurnId` routes the request
   // to /edit for the matching turn. If a turn is still generating it is stopped
   // first so the edit supersedes it.
-  async function sendEditMessage({ messageId, turnId, text }: { messageId: string; turnId: string; text: string; }) {
+  async function sendEditMessage({ messageId, turnId, text, attachments }: {
+    messageId: string;
+    turnId: string;
+    text: string;
+    attachments: { refs: IAttachmentRef[]; shown: IMessageAttachment[] };
+  }) {
     const chat = currentChat.value;
     if (!chat) {
       return;
@@ -331,8 +344,9 @@ export function createAgentChatManager({
     }
     editingTurnId.value = turnId;
     lastMessage.value = text;
+    lastAttachments.value = attachments.refs;
     try {
-      await chat.sendMessage({ text, messageId, metadata: { turnId } });
+      await chat.sendMessage({ text, messageId, metadata: { turnId, attachments: attachments.shown } });
     } finally {
       editingTurnId.value = null;
     }
@@ -367,5 +381,6 @@ export function createAgentChatManager({
     abortCurrentChatRequest,
     submitToolApproval,
     sendEditMessage,
+    dropChat,
   };
 }
