@@ -37,7 +37,7 @@
     "@modelcontextprotocol/server": "2.3.1",
     "@types/jest": "^30.0.0",
     "@types/node": "latest",
-    "adminforth": "^4.14.0",
+    "adminforth": "^4.21.0",
     "jest": "^30.3.0",
     "semantic-release": "^24.2.1",
     "semantic-release-slack-bot": "^4.0.2",
@@ -81,7 +81,7 @@
     }
   ],
   "peerDependencies": {
-    "adminforth": "^4.7.3",
+    "adminforth": "^4.21.0",
     "@adminforth/mcp": "^3.2.0"
   }
 }
