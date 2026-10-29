@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import type { ChatSurfaceIncomingMessage } from "adminforth";
 import type { PreviousUserMessage } from "../domain/languageDetect.js";
 import type { PluginOptions } from "../types.js";
+import type { TurnAttachments } from "./turnAttachments.js";
 
 export const AGENT_SYSTEM_TURN_PROMPT = "__adminforth_system_message__";
 
@@ -13,17 +14,27 @@ export class AgentSessionStore {
   constructor(
     private getAdminforth: () => IAdminForth,
     private options: PluginOptions,
+    private attachments: TurnAttachments,
   ) {}
 
-  async createNewTurn(sessionId: string, prompt: string, response?: string) {
+  private getTurnAttachments(turn: Record<string, any>): string[] {
+    const attachmentsField = this.options.turnResource.attachmentsField;
+    return attachmentsField ? turn[attachmentsField] ?? [] : [];
+  }
+
+  async createNewTurn(sessionId: string, prompt: string, attachments: string[] = []) {
     const turnId = randomUUID();
-    const turnRecord = {
+    const turnRecord: Record<string, unknown> = {
       [this.options.turnResource.idField]: turnId,
       [this.options.turnResource.sessionIdField]: sessionId,
       [this.options.turnResource.promptField]: prompt,
-      [this.options.turnResource.responseField]: response ?? "not_finished",
+      [this.options.turnResource.responseField]: "not_finished",
     };
+    if (attachments.length > 0) {
+      turnRecord[this.options.turnResource.attachmentsField!] = attachments;
+    }
     const newTurn = await this.getAdminforth().resource(this.options.turnResource.resourceId).create(turnRecord);
+    await this.attachments.markUsed(attachments);
     return newTurn.createdRecord[this.options.turnResource.idField];
   }
 
@@ -73,11 +84,12 @@ export class AgentSessionStore {
       undefined,
       [Sorts.ASC(this.options.turnResource.createdAtField), Sorts.ASC(this.options.turnResource.idField)]
     );
-    return turns.map(turn => ({
+    return Promise.all(turns.map(async turn => ({
       id: turn[this.options.turnResource.idField],
       prompt: turn[this.options.turnResource.promptField],
       response: turn[this.options.turnResource.responseField],
-    }));
+      attachments: await this.attachments.withUrls(this.getTurnAttachments(turn)),
+    })));
   }
 
   /**
@@ -99,6 +111,7 @@ export class AgentSessionStore {
         id: turn[this.options.turnResource.idField],
         prompt: turn[this.options.turnResource.promptField],
         response: turn[this.options.turnResource.responseField],
+        attachments: this.getTurnAttachments(turn),
         checkpointId: checkpointIdField
           ? (turn[checkpointIdField] ? String(turn[checkpointIdField]) : null)
           : null,
@@ -111,11 +124,13 @@ export class AgentSessionStore {
    * an interruption can only leave a consistent "truncated, edit-not-yet-applied"
    * state (recoverable by retry) — never "edited but stale later turns remain".
    * (AdminForth's resource API has no transactions, hence the deliberate ordering.)
+   * Files of the deleted turns and the images dropped by the edit are released.
    */
   async editTurnAndTruncateAfter(input: {
     sessionId: string;
     turnId: string;
     newPrompt: string;
+    newAttachments: string[];
   }): Promise<void> {
     const r = this.options.turnResource;
     const resource = this.getAdminforth().resource(r.resourceId);
@@ -131,6 +146,7 @@ export class AgentSessionStore {
       throw new Error(`Turn "${input.turnId}" not found in session "${input.sessionId}".`);
     }
 
+    const oldAttachments = this.getTurnAttachments(turns[targetIndex]);
     const laterTurns = turns.slice(targetIndex + 1);
     for (const turn of laterTurns) {
       await resource.delete(turn[r.idField]);
@@ -143,7 +159,28 @@ export class AgentSessionStore {
     if (r.checkpointIdField) {
       updates[r.checkpointIdField] = null;
     }
+    if (r.attachmentsField) {
+      updates[r.attachmentsField] = input.newAttachments;
+    }
     await resource.update(input.turnId, updates);
+
+    await Promise.all([
+      this.attachments.markUsed(input.newAttachments.filter((filePath) => !oldAttachments.includes(filePath))),
+      this.attachments.markUnused(
+        [...oldAttachments, ...laterTurns.flatMap((turn) => this.getTurnAttachments(turn))]
+          .filter((filePath) => !input.newAttachments.includes(filePath)),
+      ),
+    ]);
+  }
+
+  /** Delete the session with its turns and release their attachments. */
+  async deleteSession(sessionId: string) {
+    const r = this.options.turnResource;
+    const turnResource = this.getAdminforth().resource(r.resourceId);
+    await this.getAdminforth().resource(this.options.sessionResource.resourceId).delete(sessionId);
+    const turns = await turnResource.list([Filters.EQ(r.sessionIdField, sessionId)]);
+    await Promise.all(turns.map((turn) => turnResource.delete(turn[r.idField])));
+    await this.attachments.markUnused(turns.flatMap((turn) => this.getTurnAttachments(turn)));
   }
 
   async getPreviousUserMessages(sessionId: string) {

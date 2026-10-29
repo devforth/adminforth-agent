@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { z } from "zod";
 import { AGENT_SYSTEM_TURN_PROMPT } from "../../persistence/sessionStore.js";
 import type { SessionEndpointsContext } from "./context.js";
+import type { TurnAttachment } from "../../domain/turnTypes.js";
 
 const addSystemMessageBodySchema = z.object({
   sessionId: z.string(),
@@ -96,7 +97,12 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
           timestamp: session[ctx.options.sessionResource.createdAtField],
           pendingApprovals,
           messages: turns.flatMap(turn => {
-            const messages: Array<{ text: string; role: 'user' | 'assistant' | 'system'; turnId: string }> = [];
+            const messages: Array<{
+              text: string;
+              role: 'user' | 'assistant' | 'system';
+              turnId: string;
+              attachments?: TurnAttachment[];
+            }> = [];
             if (turn.prompt === AGENT_SYSTEM_TURN_PROMPT) {
               messages.push({
                 text: turn.response,
@@ -105,11 +111,12 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
               });
               return messages;
             }
-            if (turn.prompt) {
+            if (turn.prompt || turn.attachments.length > 0) {
               messages.push({
                 text: turn.prompt,
                 role: 'user',
                 turnId: turn.id,
+                attachments: turn.attachments,
               });
             }
             if (turn.response && turn.response !== "not_finished") {
@@ -179,11 +186,7 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
           error: 'Unauthorized'
         };
       }
-      await ctx.adminforth.resource(ctx.options.sessionResource.resourceId).delete(sessionId);
-      const turns = await ctx.adminforth.resource(ctx.options.turnResource.resourceId).list(
-        [Filters.EQ(ctx.options.turnResource.sessionIdField, sessionId)]
-      );
-      await Promise.all(turns.map(turn => ctx.adminforth.resource(ctx.options.turnResource.resourceId).delete(turn[ctx.options.turnResource.idField])));
+      await ctx.deleteSession(sessionId);
       return {
         ok: true
       };

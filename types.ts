@@ -30,6 +30,34 @@ interface ITurnResource {
   responseField: string;
   debugField?: string;
   checkpointIdField?: string;
+  /**
+   * Optional array column with image attachments of the user message. Enables pasting
+   * and attaching images in the chat. Requires UploadPlugin installed on this column
+   * with `allowedFileExtensions` limited to images (png, jpg, jpeg, webp).
+   */
+  attachmentsField?: string;
+}
+
+export interface IImageAttachmentsOptions {
+  /**
+   * How many images one message can have.
+   * Default is 5
+   */
+  maxPerMessage?: number;
+
+  /**
+   * How many minutes the model sees an image after it was sent or loaded again with the
+   * `view_image` tool. Every shown image costs tokens on every model call.
+   * Default is 30
+   */
+  visibleMinutes?: number;
+
+  /**
+   * How many images the model sees at once, the latest ones; the others become notes the
+   * model can load again with the `view_image` tool.
+   * Default is 5
+   */
+  maxVisible?: number;
 }
 
 interface ICheckpointResource {
@@ -106,6 +134,11 @@ export interface PluginOptions extends PluginsCommonOptions {
    * Resource configuration for turns.
    */
   turnResource: ITurnResource;
+
+  /**
+   * Limits of the image attachments of `turnResource.attachmentsField`, whole numbers from 1.
+   */
+  imageAttachments?: IImageAttachmentsOptions;
 
   /**
    * Makes chat sticky by default. By default this prop is false

@@ -58,6 +58,7 @@ const TOOL_LABELS: Record<string, (context: LabelContext) => string> = {
   create_record: ({ resourceLabel }) => `Create ${resourceLabel}`,
   update_record: ({ resourceLabel }) => `Update ${resourceLabel}`,
   delete_record: ({ resourceLabel }) => `Delete ${resourceLabel}`,
+  view_image: () => "Look at an earlier image",
 };
 
 /** Human-readable label of a tool call for the processing timeline; undefined for tools without one. */

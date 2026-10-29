@@ -4,6 +4,7 @@ import { VegaLiteStreamBuffer } from "../domain/vegaLiteStreamBuffer.js";
 import { getErrorMessage, isAbortError } from "../shared/errors.js";
 import type { DetectedLanguage, PreviousUserMessage } from "../domain/languageDetect.js";
 import type { AgentSessionStore } from "../persistence/sessionStore.js";
+import type { TurnAttachments } from "../persistence/turnAttachments.js";
 import type { SteerBuffer } from "../domain/steerBuffer.js";
 import type { PluginOptions } from "../types.js";
 import type { LlmPort } from "./ports.js";
@@ -25,6 +26,8 @@ type AgentMode = PluginOptions["modes"][number];
 
 type PreparedTurn = {
   prompt: string;
+  /** Storage paths of the images sent with the prompt. */
+  attachments: string[];
   sessionId: string;
   turnId: string;
   previousUserMessages: PreviousUserMessage[];
@@ -108,6 +111,7 @@ export function buildResumeValue(input: {
 export type RunTurnUseCaseDeps = {
   llm: LlmPort;
   sessions: AgentSessionStore;
+  attachments: TurnAttachments;
   /** Per-session buffer of mid-turn steering instructions; cleared when a turn ends unconsumed. */
   steerBuffer: SteerBuffer;
   modes: PluginOptions["modes"];
@@ -253,6 +257,12 @@ export class RunTurnUseCase {
       throw new Error(`Turn "${editTurnId}" not found in session "${input.sessionId}".`);
     }
 
+    const attachments = await this.deps.attachments.verify(
+      input.sessionId,
+      input.attachments ?? [],
+      agentTurns[targetIndex].attachments,
+    );
+
     const previous = agentTurns[targetIndex - 1];
     let branchFromCheckpointId: string | undefined;
     if (previous) {
@@ -285,11 +295,13 @@ export class RunTurnUseCase {
       sessionId: input.sessionId,
       turnId: editTurnId,
       newPrompt: input.prompt,
+      newAttachments: attachments,
     });
     await this.deps.sessions.touchSession(input.sessionId);
 
     return {
       prompt: input.prompt,
+      attachments,
       sessionId: input.sessionId,
       turnId: editTurnId,
       previousUserMessages,
@@ -316,6 +328,7 @@ export class RunTurnUseCase {
     }
 
     let turnId: string;
+    let attachments: string[] = [];
     let previousUserMessages: PreviousUserMessage[] = [];
     let initialResponse: string | undefined;
     let resume: PreparedTurn["resume"];
@@ -337,8 +350,13 @@ export class RunTurnUseCase {
       // the rejection. Reached whenever the approval UI is gone — after a page
       // reload, from a second tab, or from a chat surface.
       const pending = await this.resolvePendingInterrupts(input.sessionId, mode, input.adminUser);
+      // The prompt rides along in the rejection of the pending call, which has no place for images.
+      if (pending.length > 0 && input.attachments?.length) {
+        throw new Error("Answer the pending approval before sending images.");
+      }
+      attachments = await this.deps.attachments.verify(input.sessionId, input.attachments ?? []);
       previousUserMessages = await this.deps.sessions.getPreviousUserMessages(input.sessionId);
-      turnId = await this.deps.sessions.createNewTurn(input.sessionId, input.prompt);
+      turnId = await this.deps.sessions.createNewTurn(input.sessionId, input.prompt, attachments);
       await this.deps.sessions.touchSession(input.sessionId);
       if (pending.length > 0) {
         resume = { decision: "reject", interrupts: pending };
@@ -347,6 +365,7 @@ export class RunTurnUseCase {
 
     return {
       prompt: input.prompt,
+      attachments,
       sessionId: input.sessionId,
       turnId,
       previousUserMessages,
@@ -365,6 +384,10 @@ export class RunTurnUseCase {
   private async resolveUserLanguage(prepared: PreparedTurn): Promise<DetectedLanguage | null> {
     if (!prepared.freshPrompt) {
       return this.lastDetectedLanguage.get(prepared.sessionId) ?? null;
+    }
+    // an image-only message has no text to detect the language of, the default applies
+    if (!prepared.prompt) {
+      return null;
     }
 
     const detected = await this.deps.llm
@@ -386,7 +409,7 @@ export class RunTurnUseCase {
   }
 
   private buildMessages(prepared: PreparedTurn): AgentMessage[] {
-    return [{ role: "user", content: prepared.prompt }];
+    return [{ role: "user", content: prepared.prompt, attachments: prepared.attachments }];
   }
 
   private async handleInterrupt(
@@ -542,27 +565,14 @@ export class RunTurnUseCase {
     };
   }
 
-  async handleTurn(input: HandleTurnInput) {
+  /** Runs a turn on the event stream of the chat: turn-started, the turn itself, its result, finish. */
+  private async runTurnWithEvents(input: RunAndPersistAgentResponseInput & Pick<HandleTurnInput, "emit">) {
     await input.emit({
       type: "turn-started",
       messageId: randomUUID(),
     });
 
-    const agentResponse = await this.runAndPersistAgentResponse({
-      prompt: input.prompt,
-      sessionId: input.sessionId,
-      modeName: input.modeName,
-      userTimeZone: input.userTimeZone,
-      currentPage: input.currentPage,
-      chatSurface: input.chatSurface,
-      adminPublicOrigin: input.adminPublicOrigin,
-      approvalDecision: input.approvalDecision,
-      abortSignal: input.abortSignal,
-      adminUser: input.adminUser,
-      emit: input.emit,
-      failureLogMessage: input.failureLogMessage ?? "Agent response failed",
-      abortLogMessage: input.abortLogMessage ?? "Agent response aborted",
-    });
+    const agentResponse = await this.runAndPersistAgentResponse(input);
 
     if (agentResponse.failed) {
       await input.emit({
@@ -585,46 +595,20 @@ export class RunTurnUseCase {
     return agentResponse;
   }
 
-  async handleEditTurn(input: HandleEditTurnInput) {
-    await input.emit({
-      type: "turn-started",
-      messageId: randomUUID(),
+  async handleTurn(input: HandleTurnInput) {
+    return this.runTurnWithEvents({
+      ...input,
+      failureLogMessage: input.failureLogMessage ?? "Agent response failed",
+      abortLogMessage: input.abortLogMessage ?? "Agent response aborted",
     });
+  }
 
-    const agentResponse = await this.runAndPersistAgentResponse({
-      prompt: input.prompt,
-      sessionId: input.sessionId,
-      modeName: input.modeName,
-      userTimeZone: input.userTimeZone,
-      currentPage: input.currentPage,
-      chatSurface: input.chatSurface,
-      adminPublicOrigin: input.adminPublicOrigin,
-      editTurnId: input.turnId,
-      abortSignal: input.abortSignal,
-      adminUser: input.adminUser,
-      emit: input.emit,
+  async handleEditTurn({ turnId, ...input }: HandleEditTurnInput) {
+    return this.runTurnWithEvents({
+      ...input,
+      editTurnId: turnId,
       failureLogMessage: input.failureLogMessage ?? "Agent message edit failed",
       abortLogMessage: input.abortLogMessage ?? "Agent message edit aborted",
     });
-
-    if (agentResponse.failed) {
-      await input.emit({
-        type: "error",
-        error: agentResponse.text,
-      });
-    } else if (!agentResponse.aborted) {
-      await input.emit({
-        type: "response",
-        text: agentResponse.text,
-        sessionId: input.sessionId,
-        turnId: agentResponse.turnId,
-      });
-    }
-
-    await input.emit({
-      type: "finish",
-    });
-
-    return agentResponse;
   }
 }

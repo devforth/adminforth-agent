@@ -24,6 +24,21 @@ export type PendingInterrupt = {
   requests: ApprovalRequest[];
 };
 
+/**
+ * An image sent with a user message. `token` proves the file was uploaded through this
+ * session's upload URL; it may be omitted only for a file the edited turn already has.
+ */
+export type AttachmentRef = {
+  filePath: string;
+  token?: string;
+};
+
+/** An image of a stored turn: its storage path and a signed url to show it. */
+export type TurnAttachment = {
+  filePath: string;
+  url: string;
+};
+
 export type BaseAgentTurnInput = {
   prompt: string;
   sessionId: string;
@@ -32,6 +47,7 @@ export type BaseAgentTurnInput = {
   currentPage?: CurrentPageContext;
   chatSurface?: string;
   adminPublicOrigin?: string;
+  attachments?: AttachmentRef[];
   abortSignal?: AbortSignal;
   adminUser: AdminUser;
 };
@@ -94,6 +110,8 @@ export type HandleEditTurnInput = TextAgentTurnInput & { turnId: string };
 export type AgentMessage = {
   role: "user";
   content: string;
+  /** Storage paths of attached images; turned into image blocks only for the model call. */
+  attachments: string[];
 };
 
 /**

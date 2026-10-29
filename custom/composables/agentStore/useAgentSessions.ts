@@ -1,12 +1,14 @@
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { callAdminForthApi } from '@/utils';
 import type { Chat } from '../../chat';
-import type { IAgentSession, IApprovalDescription, ISessionsListItem, IPart } from '../../types';
-import { PRE_SESSION_ID, STEER_PERSIST_PREFIX } from './constants';
-import { i18nInstance } from '@/i18n';
+import type { IAgentSession, IApprovalDescription, IAttachmentRef, IMessageAttachment, ISessionsListItem, IPart } from '../../types';
+import type { createAgentAttachments } from './useAgentAttachments';
+import { ATTACHMENT_URLS_REFRESH_INTERVAL_MS, PRE_SESSION_ID, STEER_PERSIST_PREFIX } from './constants';
+import { t } from '../../utils';
 
 type AdminforthLike = {
   confirm(options: { title?: string; message?: string; yes?: string; no?: string; dangerous?: boolean }): Promise<boolean>;
+  alert(options: { message: string; variant: 'danger' }): void;
 };
 
 type CreateAgentSessionManagerOptions = {
@@ -20,9 +22,12 @@ type CreateAgentSessionManagerOptions = {
   isMessageInputBlocked: ComputedRef<boolean>;
   userMessageInput: Ref<any>;
   lastMessage: Ref<string>;
+  lastAttachments: Ref<IAttachmentRef[]>;
+  composerAttachments: ReturnType<typeof createAgentAttachments>;
   blockCloseOfChat: Ref<boolean>;
   adminforth: AdminforthLike;
   setCurrentChat: (sessionId: string) => void;
+  dropChat: (sessionId: string) => void;
   restorePendingToolApproval: (sessionId: string, approvals: IApprovalDescription[]) => void;
 };
 
@@ -37,17 +42,16 @@ export function createAgentSessionManager({
   isMessageInputBlocked,
   userMessageInput,
   lastMessage,
+  lastAttachments,
+  composerAttachments,
   blockCloseOfChat,
   adminforth,
   setCurrentChat,
+  dropChat,
   restorePendingToolApproval,
 }: CreateAgentSessionManagerOptions) {
   function sortSessionsListByTimestamp(sessionsListToSort: ISessionsListItem[]) {
     return [...sessionsListToSort].sort((a: ISessionsListItem, b: ISessionsListItem) => b.timestamp.localeCompare(a.timestamp));
-  }
-
-  function t(key: string) {
-    return i18nInstance?.global.t(key) ?? key;
   }
 
   function saveCurrentSessionInCache() {
@@ -58,7 +62,7 @@ export function createAgentSessionManager({
         if (m.role === 'user' && m.metadata?.steer) {
           return { role: 'user', text: `${STEER_PERSIST_PREFIX}${text}`, turnId };
         }
-        return { role: m.role, text, turnId };
+        return { role: m.role, text, turnId, attachments: m.metadata?.attachments };
       }) || [];
       sessions.value[currentSession.value.sessionId] = currentSession.value;
     }
@@ -66,11 +70,12 @@ export function createAgentSessionManager({
 
   function mapStoredMessage(m: any): any[] {
     const turnId = m.turnId;
+    const attachments = m.attachments;
     if (m.role === 'user' && typeof m.text === 'string' && m.text.includes(STEER_PERSIST_PREFIX)) {
       const [prompt, ...steers] = m.text.split(STEER_PERSIST_PREFIX);
       const mapped: any[] = [];
-      if (prompt) {
-        mapped.push({ id: crypto.randomUUID(), role: 'user', metadata: { turnId }, parts: [{ type: 'text', text: prompt, state: 'done' }] });
+      if (prompt || attachments?.length) {
+        mapped.push({ id: crypto.randomUUID(), role: 'user', metadata: { turnId, attachments }, parts: [{ type: 'text', text: prompt, state: 'done' }] });
       }
       for (const steer of steers) {
         mapped.push({
@@ -82,17 +87,51 @@ export function createAgentSessionManager({
       }
       return mapped;
     }
-    return [{ id: crypto.randomUUID(), role: m.role, metadata: { turnId }, parts: [{ type: 'text', text: m.text, state: 'done' }] }];
+    return [{ id: crypto.randomUUID(), role: m.role, metadata: { turnId, attachments }, parts: [{ type: 'text', text: m.text, state: 'done' }] }];
+  }
+
+  function requestSessionInfo(sessionId: string) {
+    return callAdminForthApi({
+      method: 'POST',
+      path: '/agent/get-session-info',
+      body: { sessionId },
+      silentError: true,
+    });
+  }
+
+  // Image urls of private storages are signed for a while, but a loaded session stays in the
+  // tab. A thumbnail which failed to load asks for fresh urls; not too often, so a file which is
+  // really gone does not make it ask again and again.
+  const attachmentUrlsRefreshedAt = new Map<string, number>();
+
+  async function refreshAttachmentUrls(sessionId: string) {
+    const refreshedAt = attachmentUrlsRefreshedAt.get(sessionId) ?? 0;
+    if (Date.now() - refreshedAt < ATTACHMENT_URLS_REFRESH_INTERVAL_MS) {
+      return;
+    }
+    attachmentUrlsRefreshedAt.set(sessionId, Date.now());
+    const res = await requestSessionInfo(sessionId);
+    if (res.error || activeSessionId.value !== sessionId) {
+      return;
+    }
+    const urls = new Map<string, string>(res.session.messages
+      .flatMap((m: any) => m.attachments ?? [])
+      .map((attachment: IMessageAttachment) => [attachment.filePath, attachment.url]));
+    currentChat.value!.messages = currentChat.value!.messages.map((m: any) => (m.metadata?.attachments ? {
+      ...m,
+      metadata: {
+        ...m.metadata,
+        attachments: m.metadata.attachments.map((attachment: IMessageAttachment) => ({
+          ...attachment,
+          url: urls.get(attachment.filePath) ?? attachment.url,
+        })),
+      },
+    } : m));
   }
 
   async function fetchSession(sessionId: string) {
     try {
-      const res = await callAdminForthApi({
-        method: 'POST',
-        path: '/agent/get-session-info',
-        body: { sessionId },
-        silentError: true,
-      });
+      const res = await requestSessionInfo(sessionId);
       if (res.error) {
         return;
       }
@@ -124,6 +163,15 @@ export function createAgentSessionManager({
     }
   }
 
+  /** Shows the session as the server has it, dropping what the tab keeps (e.g. after a failed edit). */
+  async function reloadSession(sessionId: string) {
+    // without the current session, switching does not save the stale chat back to the cache
+    currentSession.value = null;
+    delete sessions.value[sessionId];
+    dropChat(sessionId);
+    await setActiveSession(sessionId);
+  }
+
   async function deletePreSession() {
     sessionList.value = sessionList.value.filter((s: ISessionsListItem) => s.sessionId !== PRE_SESSION_ID);
     if (activeSessionId.value === PRE_SESSION_ID) {
@@ -143,6 +191,7 @@ export function createAgentSessionManager({
       });
       if (res.error) {
         console.error('Error creating new session:', res.error);
+        adminforth.alert({ message: res.error, variant: 'danger' });
         return;
       }
       deletePreSession();
@@ -160,13 +209,23 @@ export function createAgentSessionManager({
 
   async function sendMessage(explicitMessage?: string) {
     // `explicitMessage` is used to drain a buffered (queued) message; without it we send
-    // whatever is currently typed in the input.
+    // whatever is currently typed in the input, with the images attached in the composer.
     const message = (explicitMessage ?? trimmedUserMessage.value).trim();
-    if (!message || isMessageInputBlocked.value) {
+    const attachments = explicitMessage === undefined ? composerAttachments.attachments.value : [];
+    if ((!message && attachments.length === 0) || isMessageInputBlocked.value || composerAttachments.isUploading.value) {
       return;
     }
     if (!currentSession.value || currentSession.value.sessionId === PRE_SESSION_ID) {
-      await createNewSession(message);
+      await createNewSession(message || t('Image'));
+      // the reason is already shown, the message stays in the input to send again
+      if (!currentSession.value || currentSession.value.sessionId === PRE_SESSION_ID) {
+        return;
+      }
+    }
+    // Images are uploaded only now: the upload URL is issued for an existing session.
+    const uploaded = await composerAttachments.upload(currentSession.value!.sessionId, attachments);
+    if (!uploaded) {
+      return;
     }
     currentSession.value!.timestamp = new Date().toISOString();
     sessionList.value = sortSessionsListByTimestamp(sessionList.value.map((s: ISessionsListItem) => s.sessionId === currentSession.value?.sessionId ? {
@@ -174,11 +233,14 @@ export function createAgentSessionManager({
       timestamp: currentSession.value?.timestamp || s.timestamp,
     } : s));
     lastMessage.value = message;
+    lastAttachments.value = uploaded.refs;
     currentChat.value?.sendMessage({
       text: message,
+      metadata: { attachments: uploaded.shown },
     });
     if (explicitMessage === undefined) {
       userMessageInput.value = '';
+      composerAttachments.attachments.value = [];
     }
   }
 
@@ -387,6 +449,8 @@ export function createAgentSessionManager({
 
   return {
     sendMessage,
+    refreshAttachmentUrls,
+    reloadSession,
     createPreSession,
     setActiveSession,
     fetchSessionsList,
