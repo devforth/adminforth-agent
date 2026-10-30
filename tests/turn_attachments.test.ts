@@ -139,14 +139,18 @@ describe('attachments turned off', () => {
 
 describe('imageAttachments options', () => {
   it('takes the defaults for the limits not set', () => {
-    expect(resolveImageAttachmentsLimits()).toEqual({ maxPerMessage: 5, visibleMinutes: 30, maxVisible: 5 });
-    expect(resolveImageAttachmentsLimits({ visibleMinutes: 10 })).toEqual({ maxPerMessage: 5, visibleMinutes: 10, maxVisible: 5 });
+    expect(resolveImageAttachmentsLimits()).toEqual({ maxPerMessage: 5, visibleMinutes: 30, maxVisible: 5, maxViewedPerTurn: 10 });
+    expect(resolveImageAttachmentsLimits({ visibleMinutes: 10 })).toEqual({ maxPerMessage: 5, visibleMinutes: 10, maxVisible: 5, maxViewedPerTurn: 10 });
   });
 
   it('accepts whole numbers from 1 only', () => {
     expect(() => resolveImageAttachmentsLimits({ maxPerMessage: 0 })).toThrow('imageAttachments.maxPerMessage must be a whole number from 1, got 0');
     expect(() => resolveImageAttachmentsLimits({ visibleMinutes: 2.5 })).toThrow(/visibleMinutes .* got 2.5/);
     expect(() => resolveImageAttachmentsLimits({ maxVisible: -1 })).toThrow(/maxVisible/);
+  });
+
+  it('needs a whole message to fit into the images one answer loads', () => {
+    expect(() => resolveImageAttachmentsLimits({ maxPerMessage: 11 })).toThrow('imageAttachments.maxPerMessage (11) must not exceed maxViewedPerTurn (10)');
   });
 });
 
@@ -179,11 +183,18 @@ const withImages = (filePaths: string[], sentMinutesAgo?: number) => new HumanMe
   },
 });
 
-const viewed = (filePaths: string[], viewedMinutesAgo: number) => new ToolMessage({
+// the turn the middleware runs in; a view_image of another turn is an earlier one
+const TURN_ID = 'turn-now';
+
+const viewed = (
+  filePaths: string[],
+  viewedMinutesAgo: number,
+  { keptFilePaths = filePaths, turnId = 'turn-earlier' }: { keptFilePaths?: string[]; turnId?: string } = {},
+) => new ToolMessage({
   name: VIEW_IMAGE_TOOL_NAME,
   tool_call_id: `call-${filePaths.join()}`,
-  content: JSON.stringify({ shown: filePaths, notFound: [] }),
-  artifact: { filePaths, viewedAt: minutesAgo(viewedMinutesAgo) },
+  content: JSON.stringify({ shown: filePaths, kept: keptFilePaths, notFound: [] }),
+  artifact: { filePaths, keptFilePaths, turnId, viewedAt: minutesAgo(viewedMinutesAgo) },
 });
 
 function buildMiddleware(missing: string[] = [], limits = DEFAULT_IMAGE_ATTACHMENTS_LIMITS) {
@@ -197,7 +208,7 @@ function buildMiddleware(missing: string[] = [], limits = DEFAULT_IMAGE_ATTACHME
   }, limits) as any;
   const send = async (messages: any[]) => {
     let sent: any[] = [];
-    await middleware.wrapModelCall({ messages }, async (request: any) => {
+    await middleware.wrapModelCall({ messages, runtime: { context: { turnId: TURN_ID } } }, async (request: any) => {
       sent = request.messages;
       return {};
     });
@@ -207,13 +218,14 @@ function buildMiddleware(missing: string[] = [], limits = DEFAULT_IMAGE_ATTACHME
 }
 
 const image = (filePath: string) => ({ type: 'image_url', image_url: { url: `data:image/png;base64,${filePath}` } });
-const viewedBelow = (filePath: string) => ({
+const ids = (filePaths: string[]) => filePaths.map((filePath) => `"${filePath}"`).join(', ');
+const viewedBelow = (...filePaths: string[]) => ({
   type: 'text',
-  text: `[Image with id "${filePath}" is shown further below, loaded again with view_image.]`,
+  text: `[Images of this message shown further below: ${ids(filePaths)}.]`,
 });
-const hidden = (filePath: string) => ({
+const hidden = (...filePaths: string[]) => ({
   type: 'text',
-  text: `[Image with id "${filePath}" is not shown any more. Call view_image with this whole id to see it again.]`,
+  text: `[Images of this message not shown now: ${ids(filePaths)}. To answer about what they show, call view_image with these ids first.]`,
 });
 
 describe('attachments middleware', () => {
@@ -257,14 +269,14 @@ describe('attachments middleware', () => {
     ]);
 
     // old.png and older.png are shown after the tool results, their own message points there
-    expect(sent[0].content.slice(1)).toEqual([viewedBelow('old.png'), viewedBelow('older.png'), hidden('stale.png')]);
+    expect(sent[0].content.slice(1)).toEqual([viewedBelow('old.png', 'older.png'), hidden('stale.png')]);
     // a user message between tool results of one step is refused by providers
     expect(sent[1]).toBe(viewOld);
     expect(sent[2]).toBe(otherTool);
     expect(sent[3].content).toEqual([
-      { type: 'text', text: '[Image with id "old.png", loaded with view_image]' },
+      { type: 'text', text: '[Image "old.png"]' },
       image('old.png'),
-      { type: 'text', text: '[Image with id "older.png", loaded with view_image]' },
+      { type: 'text', text: '[Image "older.png"]' },
       image('older.png'),
     ]);
     expect(sent.slice(4)).toHaveLength(2);
@@ -307,13 +319,90 @@ describe('attachments middleware', () => {
   });
 
   it('follows the visibleMinutes and maxVisible options', async () => {
-    const { send } = buildMiddleware([], { maxPerMessage: 5, visibleMinutes: 10, maxVisible: 1 });
+    const { send } = buildMiddleware([], { ...DEFAULT_IMAGE_ATTACHMENTS_LIMITS, visibleMinutes: 10, maxVisible: 1 });
 
     const sent = await send([withImages(['old.png'], 11), withImages(['earlier.png'], 5), withImages(['latest.png'], 1)]);
 
     expect(sent[0].content[1]).toEqual(hidden('old.png'));
     expect(sent[1].content[1]).toEqual(hidden('earlier.png'));
     expect(sent[2].content[1]).toEqual(image('latest.png'));
+  });
+
+  it('shows all the images viewed in this turn over maxVisible, the kept ones in the next turns', async () => {
+    const tenImages = Array.from({ length: 10 }, (_, index) => `${index}.png`);
+    const keptFilePaths = ['2.png', '7.png'];
+    const history = [withImages(tenImages.slice(0, 5), 120), withImages(tenImages.slice(5), 120)];
+
+    const thisTurn = await buildMiddleware().send([...history, viewed(tenImages, 0, { keptFilePaths, turnId: TURN_ID })]);
+    const nextTurn = await buildMiddleware().send([...history, viewed(tenImages, 1, { keptFilePaths })]);
+
+    expect(thisTurn[3].content.filter((block: any) => block.type === 'image_url')).toHaveLength(10);
+    expect(nextTurn[3].content.filter((block: any) => block.type === 'image_url')).toEqual([image('2.png'), image('7.png')]);
+  });
+
+  it('keeps all the images of a view_image result of agent 3.4.0, which has no kept list', async () => {
+    const { send } = buildMiddleware();
+    const legacy = new ToolMessage({
+      name: VIEW_IMAGE_TOOL_NAME,
+      tool_call_id: 'call-legacy',
+      content: '{}',
+      artifact: { filePaths: ['old.png'], viewedAt: minutesAgo(1) },
+    });
+
+    const sent = await send([withImages(['old.png'], 120), legacy]);
+
+    expect(sent[2].content[1]).toEqual(image('old.png'));
+  });
+
+  it('an image of the buffer viewed in this turn keeps its place, no older image takes it', async () => {
+    const { send } = buildMiddleware();
+    const buffer = ['a.png', 'b.png', 'c.png', 'd.png', 'e.png'];
+
+    const sent = await send([
+      withImages(['old.png'], 20),
+      withImages(buffer, 10),
+      viewed(['a.png'], 0, { keptFilePaths: [], turnId: TURN_ID }),
+    ]);
+
+    expect(sent[0].content[1]).toEqual(hidden('old.png'));
+    expect(sent[1].content.slice(1)).toEqual([...buffer.slice(1).map(image), viewedBelow('a.png')]);
+    expect(sent[3].content).toEqual([{ type: 'text', text: '[Image "a.png"]' }, image('a.png')]);
+  });
+
+  it('shows an image viewed twice in this turn once, after the latest view', async () => {
+    const { send } = buildMiddleware();
+    const firstView = viewed(['a.png'], 0, { keptFilePaths: [], turnId: TURN_ID });
+    const latestView = viewed(['a.png', 'b.png'], 0, { keptFilePaths: [], turnId: TURN_ID });
+
+    const sent = await send([withImages(['a.png', 'b.png'], 120), firstView, latestView]);
+
+    expect(sent).toHaveLength(4);
+    expect(sent[1]).toBe(firstView);
+    expect(sent[3].content.filter((block: any) => block.type === 'image_url')).toEqual([image('a.png'), image('b.png')]);
+  });
+
+  it('hides in the next turns the images a view kept none of', async () => {
+    const { send } = buildMiddleware();
+
+    const sent = await send([withImages(['a.png'], 120), viewed(['a.png'], 1, { keptFilePaths: [] })]);
+
+    expect(sent[0].content[1]).toEqual(hidden('a.png'));
+    expect(sent).toHaveLength(2);
+  });
+
+  it('a view which kept more than maxVisible widens the buffer until the next images', async () => {
+    const eight = Array.from({ length: 8 }, (_, index) => `${index}.png`);
+    const history = [withImages(eight, 120), viewed(eight, 2)];
+    const countShown = (sent: any[]) => sent
+      .flatMap((message: any) => (Array.isArray(message.content) ? message.content : []))
+      .filter((block: any) => block.type === 'image_url').length;
+
+    const widened = await buildMiddleware().send(history);
+    const afterNewImage = await buildMiddleware().send([...history, withImages(['new.png'], 1)]);
+
+    expect(countShown(widened)).toBe(8);
+    // the newest image and the 4 latest kept ones
+    expect(countShown(afterNewImage)).toBe(5);
   });
 
   it('replaces an image which can not be read with a note instead of failing the call', async () => {
@@ -331,23 +420,77 @@ describe('attachments middleware', () => {
 
 describe('view_image tool', () => {
   const viewImage = createViewImageTool(DEFAULT_IMAGE_ATTACHMENTS_LIMITS) as any;
-  const view = async (imageIds: string[], filePaths: string[]) => viewImage.invoke(
-    { name: VIEW_IMAGE_TOOL_NAME, args: { imageIds }, id: 'call-1', type: 'tool_call' },
-    { state: { messages: [withImages(filePaths, 120)] } },
+  // imagesByMessage: the images of each user message of the history
+  const view = async (
+    imageIds: string[],
+    imagesByMessage: string[][],
+    keepImageIds: string[] = [],
+    earlierMessages: any[] = [],
+  ) => viewImage.invoke(
+    { name: VIEW_IMAGE_TOOL_NAME, args: { imageIds, keepImageIds }, id: 'call-1', type: 'tool_call' },
+    {
+      state: { messages: [...imagesByMessage.map((filePaths) => withImages(filePaths, 120)), ...earlierMessages] },
+      context: { turnId: TURN_ID },
+    },
   );
+  const numbered = (from: number, count: number) => Array.from({ length: count }, (_, index) => `${from + index}.png`);
 
-  it('loads the images of this conversation and names the unknown ids', async () => {
-    const result = await view(['old.png', 'other.png'], ['old.png']);
+  it('loads all images of the messages of the ids, keeps the picked ones and names the unknown ids', async () => {
+    const result = await view(['a2.png', 'other.png', 'b.png'], [['a1.png', 'a2.png'], ['b.png'], ['c.png']], ['b.png', 'other.png']);
 
-    expect(JSON.parse(result.content)).toEqual({ shown: ['old.png'], notFound: ['other.png'] });
-    expect(result.artifact.filePaths).toEqual(['old.png']);
+    expect(JSON.parse(result.content)).toEqual({
+      shown: ['a1.png', 'a2.png', 'b.png'],
+      kept: ['b.png'],
+      notFound: ['other.png'],
+      overLimit: [],
+    });
+    expect(result.artifact).toMatchObject({ filePaths: ['a1.png', 'a2.png', 'b.png'], keptFilePaths: ['b.png'], turnId: TURN_ID });
     expect(Date.now() - Date.parse(result.artifact.viewedAt)).toBeLessThan(MINUTE);
   });
 
-  it('accepts the file name of the id, with or without the extension, when it is unique', async () => {
-    const filePaths = ['agent_attachments/54eb.png', 'agent_attachments/same.png', 'other/same.png'];
+  it('loads the messages in the order of the ids while they fit into maxViewedPerTurn', async () => {
+    const [first, second, third] = [numbered(0, 5), numbered(5, 5), numbered(10, 5)];
 
-    expect((await view(['54eb', '54eb.png'], filePaths)).artifact.filePaths).toEqual(['agent_attachments/54eb.png']);
-    expect(JSON.parse((await view(['same'], filePaths)).content).notFound).toEqual(['same']);
+    const result = await view([third[0], first[0], second[0]], [first, second, third]);
+
+    expect(result.artifact.filePaths).toEqual([...third, ...first]);
+    expect(JSON.parse(result.content).overLimit).toEqual(second);
+  });
+
+  it('loads and keeps up to maxViewedPerTurn images in one call', async () => {
+    const [first, second] = [numbered(0, 5), numbered(5, 5)];
+    const all = [...first, ...second];
+
+    const result = await view([first[0], second[0]], [first, second], all);
+    expect(result.artifact.filePaths).toHaveLength(10);
+    expect(result.artifact.keptFilePaths).toHaveLength(10);
+    await expect(view(numbered(0, 11), [numbered(0, 11)])).rejects.toThrow();
+    await expect(view([first[0]], [first, second], numbered(0, 11))).rejects.toThrow();
+  });
+
+  it('loads images once per answer, so the model picks all the likely messages at once', async () => {
+    const [first, second] = [numbered(0, 5), numbered(5, 3)];
+    const viewedThisTurn = viewed(first, 0, { keptFilePaths: [], turnId: TURN_ID });
+    const viewedEarlier = viewed(first, 5);
+
+    const refused = await view([second[0]], [first, second], [], [viewedThisTurn]);
+    const nextTurn = await view([second[0]], [first, second], [], [viewedEarlier]);
+
+    expect(JSON.parse(refused.content)).toMatchObject({ error: 'ALREADY_VIEWED' });
+    expect(refused.artifact.filePaths).toEqual([]);
+    expect(nextTurn.artifact.filePaths).toEqual(second);
+  });
+
+  it('keeps only ids which are also viewed', async () => {
+    const result = await view(['a.png'], [['a.png'], ['b.png']], ['a.png', 'b.png']);
+
+    expect(result.artifact.keptFilePaths).toEqual(['a.png']);
+  });
+
+  it('accepts the file name of the id, with or without the extension, when it is unique', async () => {
+    const imagesByMessage = [['agent_attachments/54eb.png'], ['agent_attachments/same.png'], ['other/same.png']];
+
+    expect((await view(['54eb', '54eb.png'], imagesByMessage)).artifact.filePaths).toEqual(['agent_attachments/54eb.png']);
+    expect(JSON.parse((await view(['same'], imagesByMessage)).content).notFound).toEqual(['same']);
   });
 });

@@ -40,7 +40,8 @@ interface ITurnResource {
 
 export interface IImageAttachmentsOptions {
   /**
-   * How many images one message can have.
+   * How many images one message can have, at most `maxViewedPerTurn`: the `view_image` tool
+   * loads all images of a message at once.
    * Default is 5
    */
   maxPerMessage?: number;
@@ -53,11 +54,20 @@ export interface IImageAttachmentsOptions {
   visibleMinutes?: number;
 
   /**
-   * How many images the model sees at once, the latest ones; the others become notes the
-   * model can load again with the `view_image` tool.
+   * How many images the model keeps seeing, the latest ones; the others become notes the
+   * model can load again with the `view_image` tool. A `view_image` can keep more of the images
+   * it loaded, up to `maxViewedPerTurn`, until the next images are sent or loaded.
    * Default is 5
    */
   maxVisible?: number;
+
+  /**
+   * How many images the model can load again with the `view_image` tool during one answer: one
+   * call, whole messages, the most likely first. It sees all of them for that answer and keeps the
+   * ones it picks for the next messages; past the limit it asks the user which images matter.
+   * Default is 10
+   */
+  maxViewedPerTurn?: number;
 }
 
 interface ICheckpointResource {
