@@ -45,6 +45,7 @@ export const DEFAULT_IMAGE_ATTACHMENTS_LIMITS: ImageAttachmentsLimits = {
   maxPerMessage: 5,
   visibleMinutes: 30,
   maxVisible: 5,
+  maxViewedPerTurn: 10,
 };
 
 /** The `imageAttachments` options with the defaults for the ones not set; each is a whole number from 1. */
@@ -53,11 +54,16 @@ export function resolveImageAttachmentsLimits(options: IImageAttachmentsOptions 
     maxPerMessage: options.maxPerMessage ?? DEFAULT_IMAGE_ATTACHMENTS_LIMITS.maxPerMessage,
     visibleMinutes: options.visibleMinutes ?? DEFAULT_IMAGE_ATTACHMENTS_LIMITS.visibleMinutes,
     maxVisible: options.maxVisible ?? DEFAULT_IMAGE_ATTACHMENTS_LIMITS.maxVisible,
+    maxViewedPerTurn: options.maxViewedPerTurn ?? DEFAULT_IMAGE_ATTACHMENTS_LIMITS.maxViewedPerTurn,
   };
   for (const [name, value] of Object.entries(limits)) {
     if (!Number.isInteger(value) || value < 1) {
       throw new Error(`imageAttachments.${name} must be a whole number from 1, got ${value}`);
     }
+  }
+  // view_image loads all images of a message, so a whole message has to fit into one answer
+  if (limits.maxPerMessage > limits.maxViewedPerTurn) {
+    throw new Error(`imageAttachments.maxPerMessage (${limits.maxPerMessage}) must not exceed maxViewedPerTurn (${limits.maxViewedPerTurn})`);
   }
   return limits;
 }
@@ -73,21 +79,28 @@ export function getAttachmentsFrontendConfig(limits: ImageAttachmentsLimits) {
 // notes the model gets in place of images which are not shown
 export const MISSING_IMAGE_TEXT = "[An image of this message is no longer available]";
 
-export const hiddenImageText = (filePath: string) =>
-  `[Image with id "${filePath}" is not shown any more. Call ${VIEW_IMAGE_TOOL_NAME} with this whole id to see it again.]`;
+// one note for all such images of a message: the model takes them as one group
+const imageIdsText = (filePaths: string[]) => filePaths.map((filePath) => `"${filePath}"`).join(", ");
 
-export const viewedBelowImageText = (filePath: string) =>
-  `[Image with id "${filePath}" is shown further below, loaded again with ${VIEW_IMAGE_TOOL_NAME}.]`;
+export const hiddenImagesText = (filePaths: string[]) =>
+  `[Images of this message not shown now: ${imageIdsText(filePaths)}. To answer about what they show, call ${VIEW_IMAGE_TOOL_NAME} with these ids first.]`;
 
-export const viewedImageLabel = (filePath: string) =>
-  `[Image with id "${filePath}", loaded with ${VIEW_IMAGE_TOOL_NAME}]`;
+export const viewedBelowImagesText = (filePaths: string[]) =>
+  `[Images of this message shown further below: ${imageIdsText(filePaths)}.]`;
+
+export const viewedImageLabel = (filePath: string) => `[Image "${filePath}"]`;
 
 /**
  * What view_image loaded, kept as the artifact of its tool result: the attachments middleware
  * reads it there, the text the model gets is separate.
  */
 export type ViewImageArtifact = {
+  // all the loaded images, shown for the answer of the turn which loaded them
   filePaths: string[];
+  // the ones the model keeps seeing in the next turns; the results of agent 3.4.0 have neither
+  // this nor turnId and keep all the loaded images
+  keptFilePaths?: string[];
+  turnId?: string;
   viewedAt: string;
 };
 

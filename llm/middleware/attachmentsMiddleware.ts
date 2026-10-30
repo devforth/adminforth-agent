@@ -1,56 +1,69 @@
 import { logger } from "adminforth";
 import { HumanMessage, ToolMessage, createMiddleware, type BaseMessage } from "langchain";
+import { getViewedImages } from "../../tools/viewImage.js";
 import { getErrorMessage } from "../../shared/errors.js";
 import {
   ATTACHMENTS_SENT_AT_KWARG,
   MISSING_IMAGE_TEXT,
-  VIEW_IMAGE_TOOL_NAME,
   getAttachmentPaths,
-  hiddenImageText,
-  viewedBelowImageText,
+  hiddenImagesText,
+  viewedBelowImagesText,
   viewedImageLabel,
   type ImageAttachmentsLimits,
   type ViewImageArtifact,
 } from "../../domain/imageAttachments.js";
 
-/** What a view_image result loaded; a failed call (bad arguments, tool off) has no artifact. */
-function getViewedImages(message: BaseMessage) {
-  return ToolMessage.isInstance(message) && message.name === VIEW_IMAGE_TOOL_NAME
-    ? (message.artifact as ViewImageArtifact | undefined) ?? null
-    : null;
-}
-
 /**
- * The images to show now, by the message they are shown in: the message they were sent with,
- * or the view_image result which loaded them again. Shown for `visibleMinutes` after that, the
- * latest `maxVisible` only.
+ * The images to show now, by the message they are shown in. All the images view_image loaded in
+ * this turn, once each, after its latest result that has them. Besides them the kept ones: sent in
+ * a message or kept by an earlier view_image for `visibleMinutes`, the latest `maxVisible` only
+ * (more when the last images were a view_image which kept more); one loaded in this turn keeps its
+ * place among them but is shown after the view_image result.
  */
-function getShownImages(messages: BaseMessage[], now: number, { visibleMinutes, maxVisible }: ImageAttachmentsLimits) {
-  const visibleMs = visibleMinutes * 60_000;
-  const latestByFilePath = new Map<string, { message: BaseMessage; at: number }>();
-  const show = (filePath: string, message: BaseMessage, at: number) => {
-    if (now - at < visibleMs && at > (latestByFilePath.get(filePath)?.at ?? 0)) {
-      latestByFilePath.set(filePath, { message, at });
-    }
-  };
-
+function getShownImages(
+  messages: BaseMessage[],
+  now: number,
+  turnId: string,
+  { visibleMinutes, maxVisible }: ImageAttachmentsLimits,
+) {
+  const viewedNow = new Map<string, BaseMessage>();
+  const kept: Array<{ filePath: string; message: BaseMessage; at: number }> = [];
+  // a view_image which kept more than maxVisible widens the buffer until the next images
+  let bufferSize = maxVisible;
   for (const message of messages) {
     const filePaths = getAttachmentPaths(message);
     const sentAt = message.additional_kwargs?.[ATTACHMENTS_SENT_AT_KWARG] as string | undefined;
     if (filePaths && sentAt) {
-      filePaths.forEach((filePath) => show(filePath, message, Date.parse(sentAt)));
+      kept.push(...filePaths.map((filePath) => ({ filePath, message, at: Date.parse(sentAt) })));
+      bufferSize = maxVisible;
     }
     const viewed = getViewedImages(message);
-    if (viewed) {
-      viewed.filePaths.forEach((filePath) => show(filePath, message, Date.parse(viewed.viewedAt)));
+    if (viewed?.turnId === turnId) {
+      viewed.filePaths.forEach((filePath) => viewedNow.set(filePath, message));
+      bufferSize = maxVisible;
+    } else if (viewed) {
+      const keptFilePaths = viewed.keptFilePaths ?? viewed.filePaths;
+      kept.push(...keptFilePaths.map((filePath) => ({ filePath, message, at: Date.parse(viewed.viewedAt) })));
+      bufferSize = Math.max(maxVisible, keptFilePaths.length);
+    }
+  }
+
+  const visibleMs = visibleMinutes * 60_000;
+  const latestByFilePath = new Map<string, { message: BaseMessage; at: number }>();
+  for (const { filePath, message, at } of kept) {
+    if (now - at < visibleMs && at > (latestByFilePath.get(filePath)?.at ?? 0)) {
+      latestByFilePath.set(filePath, { message, at });
     }
   }
 
   const shown = new Map<BaseMessage, string[]>();
+  const show = (filePath: string, message: BaseMessage) => shown.set(message, [...(shown.get(message) ?? []), filePath]);
   [...latestByFilePath]
     .sort(([, a], [, b]) => b.at - a.at)
-    .slice(0, maxVisible)
-    .forEach(([filePath, { message }]) => shown.set(message, [...(shown.get(message) ?? []), filePath]));
+    .slice(0, bufferSize)
+    .filter(([filePath]) => !viewedNow.has(filePath))
+    .forEach(([filePath, { message }]) => show(filePath, message));
+  viewedNow.forEach((message, filePath) => show(filePath, message));
   return shown;
 }
 
@@ -60,9 +73,10 @@ function getShownImages(messages: BaseMessage[], now: number, { visibleMinutes, 
  * not the debug trace or the summarization of other middleware. Created per turn, so an
  * image is loaded from the storage once for all model calls of the turn.
  *
- * An image is shown for `visibleMinutes` after its message is sent, at most `maxVisible` at once; any other image becomes a note with its id and is not
- * read at all. Images the model loads again with view_image follow the tool results of that step
- * as one user message: a user message between tool results is refused by providers, and provider
+ * An image is shown for `visibleMinutes` after its message is sent or a view_image keeps it, at most
+ * `maxVisible` at once; the other images of a message become one note with their ids and are not
+ * read at all. Images the model loads again with view_image are all shown for the answer of that
+ * turn and follow the tool results of that step as one user message: a user message between tool results is refused by providers, and provider
  * adapters may send only the messages after their previous response (OpenAI previous_response_id),
  * so a change in an earlier message would not reach the model. An image which can not be read
  * (deleted from the storage, the storage changed) becomes a note too, so one broken file does not
@@ -96,7 +110,7 @@ export function createAttachmentsMiddleware(
         return handler(request);
       }
 
-      const shownImages = getShownImages(request.messages, Date.now(), limits);
+      const shownImages = getShownImages(request.messages, Date.now(), (request.runtime.context as { turnId: string }).turnId, limits);
       // images loaded again are shown after the tool results, their own message only points there
       const viewedImages = new Set([...shownImages]
         .filter(([message]) => getViewedImages(message))
@@ -107,17 +121,16 @@ export function createAttachmentsMiddleware(
         const shown = shownImages.get(message) ?? [];
         const filePaths = getAttachmentPaths(message);
         if (filePaths) {
-          const images = await Promise.all(filePaths.map((filePath) => {
-            if (shown.includes(filePath)) {
-              return imageBlock(filePath);
-            }
-            const text = viewedImages.has(filePath) ? viewedBelowImageText(filePath) : hiddenImageText(filePath);
-            return { type: "text" as const, text };
-          }));
+          const images = await Promise.all(filePaths.filter((filePath) => shown.includes(filePath)).map(imageBlock));
+          const notShown = filePaths.filter((filePath) => !shown.includes(filePath));
+          const viewedBelow = notShown.filter((filePath) => viewedImages.has(filePath));
+          const hidden = notShown.filter((filePath) => !viewedImages.has(filePath));
           messages.push(new HumanMessage({
             content: [
               ...(message.content ? [{ type: "text" as const, text: message.content as string }] : []),
               ...images,
+              ...(viewedBelow.length ? [{ type: "text" as const, text: viewedBelowImagesText(viewedBelow) }] : []),
+              ...(hidden.length ? [{ type: "text" as const, text: hiddenImagesText(hidden) }] : []),
             ],
           }));
           continue;
