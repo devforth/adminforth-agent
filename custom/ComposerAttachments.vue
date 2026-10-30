@@ -5,10 +5,10 @@
       :key="attachment.id"
       class="af-agent-composer-attachment relative"
     >
-      <img
+      <!-- natural proportions: a cropped square would be zoomed cropped too -->
+      <ZoomableImage
         :src="attachment.url"
-        alt=""
-        class="w-14 h-14 object-cover rounded-default border border-lightInputBorder dark:border-darkInputBorder"
+        class="block max-h-14 max-w-28 rounded-default border border-lightInputBorder dark:border-darkInputBorder"
       />
       <Button
         variant="secondary"
@@ -29,7 +29,7 @@
 
 <script setup lang="ts">
 import { IconX } from '@iconify-prerendered/vue-lucide';
-import { Button } from '@/afcl';
+import { Button, ZoomableImage } from '@/afcl';
 import { useAgentStore } from './composables/useAgentStore';
 
 const agentStore = useAgentStore();
