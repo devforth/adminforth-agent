@@ -1,5 +1,5 @@
 <template>
-  <div class="af-agent-message-attachments self-end flex flex-wrap justify-end gap-2 mr-4 mb-1">
+  <div class="af-agent-message-attachments self-end flex flex-wrap items-end justify-end gap-2 mr-4 mb-1">
     <ZoomableImage
       v-for="attachment in attachments"
       :key="attachment.url"
