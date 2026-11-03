@@ -46,7 +46,8 @@ export type BaseAgentTurnInput = {
   userTimeZone?: string;
   currentPage?: CurrentPageContext;
   chatSurface?: string;
-  adminPublicOrigin?: string;
+  /** Public origin the request reached the admin panel on, e.g. https://example.com: links of the turn point to it. */
+  adminPublicOrigin: string;
   attachments?: AttachmentRef[];
   abortSignal?: AbortSignal;
   adminUser: AdminUser;
@@ -79,7 +80,7 @@ export type AgentTurnContext = {
   abortSignal?: AbortSignal;
   currentPage?: CurrentPageContext;
   chatSurface?: string;
-  adminPublicOrigin?: string;
+  adminPublicOrigin: string;
   userLanguage?: DetectedLanguage | null;
 };
 

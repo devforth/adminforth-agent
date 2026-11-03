@@ -16,6 +16,8 @@ type McpSession = {
   readOnly: boolean;
   headers: Record<string, string>;
   requestUrl: string;
+  /** Links to admin panel pages, such as 2FA confirmations, are built from it. */
+  adminPanelOrigin: string;
   timeZone?: string;
 };
 
@@ -28,6 +30,7 @@ export type McpConnectionInput = {
   adminUser: AdminUser;
   sessionId: string;
   userTimeZone?: string;
+  adminPublicOrigin: string;
   requestUrl: string;
 };
 
@@ -50,6 +53,7 @@ export async function connectMcp(mcp: McpPlugin, input: McpConnectionInput): Pro
     readOnly: false,
     headers: {},
     requestUrl: input.requestUrl,
+    adminPanelOrigin: input.adminPublicOrigin,
     timeZone: input.userTimeZone,
   }));
   const { tools } = await client.listTools();

@@ -64,12 +64,14 @@ export class LangGraphLlm implements LlmPort {
     completionAdapter: AgentModeCompletionAdapter;
     sessionId: string;
     adminUser: AdminUser;
+    adminPublicOrigin: string;
   }): Promise<PendingInterrupt[]> {
     const models = await this.modelFactory.create(input.completionAdapter);
     const raw = await this.runtime.getPendingInterrupts({
       models,
       sessionId: input.sessionId,
       adminUser: input.adminUser,
+      adminPublicOrigin: input.adminPublicOrigin,
     });
     return normalizeInterrupts(raw);
   }
@@ -78,12 +80,14 @@ export class LangGraphLlm implements LlmPort {
     completionAdapter: AgentModeCompletionAdapter;
     sessionId: string;
     adminUser: AdminUser;
+    adminPublicOrigin: string;
   }): Promise<string | null> {
     const models = await this.modelFactory.create(input.completionAdapter);
     return this.runtime.getLatestCheckpointId({
       models,
       sessionId: input.sessionId,
       adminUser: input.adminUser,
+      adminPublicOrigin: input.adminPublicOrigin,
     });
   }
 

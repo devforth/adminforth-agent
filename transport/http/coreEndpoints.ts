@@ -6,6 +6,7 @@ import { getErrorMessage } from "../../shared/errors.js";
 import type { CurrentPageContext } from "../../tools/getUserLocation.js";
 import type { CoreEndpointsContext } from "./context.js";
 import type { ImageAttachmentsLimits } from "../../domain/imageAttachments.js";
+import { getRequestOrigin } from "./requestOrigin.js";
 
 type MulterFile = {
   buffer: Buffer;
@@ -154,7 +155,7 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
       hiddenFromAgents: true,
     },
     request_schema: agentResponseBodySchema,
-    handler: async ({ body, adminUser, _raw_express_res, abortSignal }) => {
+    handler: async ({ body, headers, adminUser, _raw_express_res, abortSignal }) => {
       const data = body as z.infer<typeof agentResponseBodySchema>;
       const emit = createSseEventEmitter(_raw_express_res, {
         vercelAiUiMessageStream: true,
@@ -168,6 +169,7 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
         userTimeZone: data.timeZone ?? 'UTC',
         currentPage: data.currentPage,
         attachments: data.attachments,
+        adminPublicOrigin: getRequestOrigin(headers),
         abortSignal,
         adminUser: adminUser!,
         emit,
@@ -185,7 +187,7 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
       hiddenFromAgents: true,
     },
     request_schema: agentEditBodySchema,
-    handler: async ({ body, adminUser, _raw_express_res, abortSignal }) => {
+    handler: async ({ body, headers, adminUser, _raw_express_res, abortSignal }) => {
       const data = body as z.infer<typeof agentEditBodySchema>;
       const emit = createSseEventEmitter(_raw_express_res, {
         vercelAiUiMessageStream: true,
@@ -200,6 +202,7 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
         userTimeZone: data.timeZone ?? 'UTC',
         currentPage: data.currentPage,
         attachments: data.attachments,
+        adminPublicOrigin: getRequestOrigin(headers),
         abortSignal,
         adminUser: adminUser!,
         emit,
@@ -217,7 +220,7 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
       hiddenFromAgents: true,
     },
     request_schema: agentApprovalBodySchema,
-    handler: async ({ body, adminUser, _raw_express_res, abortSignal }) => {
+    handler: async ({ body, headers, adminUser, _raw_express_res, abortSignal }) => {
       const data = body as z.infer<typeof agentApprovalBodySchema>;
       const emit = createSseEventEmitter(_raw_express_res, {
         vercelAiUiMessageStream: true,
@@ -229,6 +232,7 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
         sessionId: data.sessionId,
         modeName: data.mode,
         approvalDecision: data.decision,
+        adminPublicOrigin: getRequestOrigin(headers),
         abortSignal,
         adminUser: adminUser!,
         emit,
@@ -287,7 +291,7 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
     },
     target: 'upload',
     request_schema: agentSpeechResponseShapeSchema,
-    handler: async ({ body, adminUser, response, _raw_express_req, _raw_express_res, abortSignal }) => {
+    handler: async ({ body, headers, adminUser, response, _raw_express_req, _raw_express_res, abortSignal }) => {
       const req = _raw_express_req as ExpressMulterRequest;
       const audioAdapter = ctx.options.audioAdapter;
       if (!audioAdapter) {
@@ -317,6 +321,7 @@ export function setupCoreEndpoints(ctx: CoreEndpointsContext, server: IHttpServe
         modeName: data.mode,
         userTimeZone: data.timeZone ?? 'UTC',
         currentPage: data.currentPage,
+        adminPublicOrigin: getRequestOrigin(headers),
         abortSignal,
         adminUser: adminUser!,
         emit,

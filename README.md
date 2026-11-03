@@ -186,9 +186,11 @@ pnpm add @adminforth/agent @adminforth/mcp @adminforth/completion-adapter-openai
 ## Setup
 
 Setup has three parts: (1) create the storage resources, (2) configure the plugin, and
-(3) register both in your AdminForth config. Set up the
-[MCP plugin](https://adminforth.dev/docs/tutorial/Plugins/mcp/) as its documentation describes
-and add it to the same `globalPlugins`.
+(3) register both in your AdminForth config. Add the
+[MCP plugin](https://adminforth.dev/docs/tutorial/Plugins/mcp/) to the same `globalPlugins`.
+If only the agent uses it, `new AdminForthMcpPlugin({ internalOnly: true })` needs no auth
+secret table and no `adminPanelOrigin`; to connect other MCP clients too, set it up as its
+documentation describes.
 
 ### 1. Create the storage resources
 

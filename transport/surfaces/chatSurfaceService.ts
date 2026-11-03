@@ -188,9 +188,8 @@ export class ChatSurfaceService {
     options?: { emitDone?: boolean },
   ) {
     const emitDone = options?.emitDone ?? true;
-    const adminPublicOrigin = typeof incoming.metadata?.adminPublicOrigin === "string"
-      ? incoming.metadata.adminPublicOrigin
-      : undefined;
+    // Set by the webhook endpoint for every incoming message.
+    const adminPublicOrigin = incoming.metadata!.adminPublicOrigin as string;
     const sessionId = await this.sessionStore.getOrCreateChatSurfaceSession(
       { ...incoming, prompt },
       adminUser,

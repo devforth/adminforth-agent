@@ -121,6 +121,7 @@ function buildRuntime(opts: { adapterMiddleware?: boolean } = {}) {
         userTimeZone: 'UTC',
         sessionId: input.sessionId,
         turnId: 't1',
+        adminPublicOrigin: 'https://admin.example',
         userLanguage: input.userLanguage as any,
         chatSurface: input.chatSurface,
       },

@@ -32,6 +32,7 @@ const INCOMING = {
   externalUserId: 'telegram-user-1',
   externalConversationId: 'telegram-chat-1',
   prompt: 'hello',
+  metadata: { adminPublicOrigin: 'https://admin.example' },
 } as any;
 
 function buildRequest() {
@@ -134,6 +135,7 @@ describe('adminforth-agent chat surface authorization', () => {
     expect(handleTurn).toHaveBeenCalledWith(expect.objectContaining({
       sessionId: 'session-1',
       chatSurface: 'telegram',
+      adminPublicOrigin: 'https://admin.example',
       adminUser: expect.objectContaining({ pk: 'user-1' }),
     }));
   });

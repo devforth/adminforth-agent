@@ -183,7 +183,8 @@ export default class AdminForthAgentPlugin extends AdminForthPlugin {
       },
       runAndPersistAgentResponse: this.runTurnUseCase.runAndPersistAgentResponse.bind(this.runTurnUseCase),
       getSessionTurns: this.sessionStore.getSessionTurns.bind(this.sessionStore),
-      getPendingApprovals: (sessionId, adminUser) => this.runTurnUseCase.getPendingApprovals(sessionId, adminUser),
+      getPendingApprovals: (sessionId, adminUser, adminPublicOrigin) =>
+        this.runTurnUseCase.getPendingApprovals(sessionId, adminUser, adminPublicOrigin),
       createNewTurn: this.sessionStore.createNewTurn.bind(this.sessionStore),
       deleteSession: this.sessionStore.deleteSession.bind(this.sessionStore),
       createSystemTurn: this.sessionStore.createSystemTurn.bind(this.sessionStore),

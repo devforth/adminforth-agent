@@ -62,6 +62,7 @@ export class AgentRuntime {
       adminUser: input.context.adminUser,
       sessionId: input.context.sessionId,
       userTimeZone: input.context.userTimeZone,
+      adminPublicOrigin: input.context.adminPublicOrigin,
     });
 
     try {
@@ -144,10 +145,12 @@ export class AgentRuntime {
     models: AgentTurnModels;
     sessionId: string;
     adminUser: AdminUser;
+    adminPublicOrigin: string;
   }): Promise<any> {
     const toolSet = await this.options.toolProvider.open({
       adminUser: input.adminUser,
       sessionId: input.sessionId,
+      adminPublicOrigin: input.adminPublicOrigin,
     });
 
     try {
@@ -176,6 +179,7 @@ export class AgentRuntime {
     models: AgentTurnModels;
     sessionId: string;
     adminUser: AdminUser;
+    adminPublicOrigin: string;
   }): Promise<unknown[]> {
     const state = await this.getThreadState(input);
     const tasks = Array.isArray(state?.tasks) ? state.tasks : [];
@@ -191,6 +195,7 @@ export class AgentRuntime {
     models: AgentTurnModels;
     sessionId: string;
     adminUser: AdminUser;
+    adminPublicOrigin: string;
   }): Promise<string | null> {
     const state = await this.getThreadState(input);
     const checkpointId = state?.config?.configurable?.checkpoint_id;

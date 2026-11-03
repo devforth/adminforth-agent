@@ -3,10 +3,11 @@ import { isAbortError, getErrorMessage } from '../shared/errors.js';
 import { sanitizeSpeechText } from '../shared/sanitizeSpeechText.js';
 import { detectUserLanguage } from '../domain/languageDetect.js';
 import { createToolCallTracker } from '../domain/toolCallEvents.js';
+import { getRequestOrigin } from '../transport/http/requestOrigin.js';
 
 // Characterization tests for the small, deterministic building blocks used across the
 // main flows: the vega-lite streaming buffer, error helpers, speech-text sanitizer,
-// mode resolver, language detection, and the tool-call event tracker.
+// mode resolver, language detection, the tool-call event tracker and the request origin.
 
 describe('VegaLiteStreamBuffer', () => {
   function collector() {
@@ -147,5 +148,20 @@ describe('createToolCallTracker', () => {
 
     expect(events[1]).toMatchObject({ phase: 'end', output: null });
     expect(events[1].error).toContain('bad tool');
+  });
+});
+
+describe('getRequestOrigin', () => {
+  it('takes the first proxy forwarded host and protocol over the Host header', () => {
+    expect(getRequestOrigin({
+      host: 'app:3000',
+      'x-forwarded-host': 'admin.example, proxy.internal',
+      'x-forwarded-proto': 'https, http',
+    })).toBe('https://admin.example');
+  });
+
+  it('assumes http on localhost and https elsewhere without a forwarded protocol', () => {
+    expect(getRequestOrigin({ host: 'localhost:3500' })).toBe('http://localhost:3500');
+    expect(getRequestOrigin({ host: 'admin.example' })).toBe('https://admin.example');
   });
 });

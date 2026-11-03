@@ -155,8 +155,7 @@ export class RunTurnUseCase {
       currentPage: input.currentPage,
       chatSurface: input.chatSurface,
       userTimeZone: input.userTimeZone ?? "UTC",
-      adminPublicOrigin:
-        input.adminPublicOrigin ?? this.deps.getAdminforth().config.baseUrlSlashed,
+      adminPublicOrigin: input.adminPublicOrigin,
     };
   }
 
@@ -169,6 +168,7 @@ export class RunTurnUseCase {
     sessionId: string,
     mode: AgentMode,
     adminUser: AdminUser,
+    adminPublicOrigin: string,
   ): Promise<PendingInterrupt[]> {
     if (this.deps.hasPersistentCheckpointer) {
       // The in-process cache can be stale after a cross-instance resume, so it is intentionally
@@ -179,6 +179,7 @@ export class RunTurnUseCase {
           completionAdapter: mode.completionAdapter,
           sessionId,
           adminUser,
+          adminPublicOrigin,
         });
       } catch (error) {
         logger.error(
@@ -208,12 +209,13 @@ export class RunTurnUseCase {
   public async getPendingApprovals(
     sessionId: string,
     adminUser: AdminUser,
+    adminPublicOrigin: string,
     modeName?: string | null,
   ): Promise<ApprovalDescription[]> {
     // Loading a conversation must not fail because the checkpoint store is unhappy
     // (already logged by resolvePendingInterrupts). Without the prompt the user simply
     // falls back to the implicit reject in `prepareTurn`.
-    const interrupts = await this.resolvePendingInterrupts(sessionId, this.resolveMode(modeName), adminUser)
+    const interrupts = await this.resolvePendingInterrupts(sessionId, this.resolveMode(modeName), adminUser, adminPublicOrigin)
       .catch(() => [] as PendingInterrupt[]);
 
     return this.describeApprovals(interrupts);
@@ -334,7 +336,12 @@ export class RunTurnUseCase {
     let resume: PreparedTurn["resume"];
 
     if (shouldResume) {
-      const resumeInterrupts = await this.resolvePendingInterrupts(input.sessionId, mode, input.adminUser);
+      const resumeInterrupts = await this.resolvePendingInterrupts(
+        input.sessionId,
+        mode,
+        input.adminUser,
+        input.adminPublicOrigin,
+      );
       if (resumeInterrupts.length === 0) {
         throw new Error(`No pending approval interrupt found for session "${input.sessionId}".`);
       }
@@ -349,7 +356,7 @@ export class RunTurnUseCase {
       // pending call is rejected as part of this turn and the prompt rides along in
       // the rejection. Reached whenever the approval UI is gone — after a page
       // reload, from a second tab, or from a chat surface.
-      const pending = await this.resolvePendingInterrupts(input.sessionId, mode, input.adminUser);
+      const pending = await this.resolvePendingInterrupts(input.sessionId, mode, input.adminUser, input.adminPublicOrigin);
       // The prompt rides along in the rejection of the pending call, which has no place for images.
       if (pending.length > 0 && input.attachments?.length) {
         throw new Error("Answer the pending approval before sending images.");
@@ -542,6 +549,7 @@ export class RunTurnUseCase {
           completionAdapter: prepared.mode.completionAdapter,
           sessionId: prepared.sessionId,
           adminUser: prepared.context.adminUser,
+          adminPublicOrigin: prepared.context.adminPublicOrigin,
         });
       } catch (error) {
         logger.warn(`Failed to read latest checkpoint id for turn "${prepared.turnId}": ${getErrorMessage(error)}`);

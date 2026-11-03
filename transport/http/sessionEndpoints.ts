@@ -3,6 +3,7 @@ import { Filters, Sorts } from "adminforth";
 import { randomUUID } from "crypto";
 import { z } from "zod";
 import { AGENT_SYSTEM_TURN_PROMPT } from "../../persistence/sessionStore.js";
+import { getRequestOrigin } from "./requestOrigin.js";
 import type { SessionEndpointsContext } from "./context.js";
 import type { TurnAttachment } from "../../domain/turnTypes.js";
 
@@ -65,7 +66,7 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
       hiddenFromAgents: true,
     },
     request_schema: sessionIdBodySchema,
-    handler: async ({body, adminUser, response }) => {
+    handler: async ({body, headers, adminUser, response }) => {
       const data = body as z.infer<typeof sessionIdBodySchema>;
       const userId = adminUser!.pk;
       const sessionId = data.sessionId;
@@ -88,7 +89,7 @@ export function setupSessionEndpoints(ctx: SessionEndpointsContext, server: IHtt
         ctx.getSessionTurns(sessionId),
         // The approval prompt lives only in the browser, so a reload has to rebuild it
         // from the agent's persisted state — otherwise the user cannot answer it.
-        ctx.getPendingApprovals(sessionId, adminUser!),
+        ctx.getPendingApprovals(sessionId, adminUser!, getRequestOrigin(headers)),
       ]);
       return {
         session: {

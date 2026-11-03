@@ -66,7 +66,12 @@ const adminUser = { pk: 'u1', dbUser: { email: 'admin@x.io' } } as any;
 describe('MCP tools of the agent', () => {
   it('connects as the turn user with the agent identity and full user permissions', async () => {
     const mcp = fakeMcpPlugin();
-    const toolSet = await createProvider(mcp).open({ adminUser, sessionId: 's1', userTimeZone: 'Europe/Kyiv' });
+    const toolSet = await createProvider(mcp).open({
+      adminUser,
+      sessionId: 's1',
+      userTimeZone: 'Europe/Kyiv',
+      adminPublicOrigin: 'https://admin.example',
+    });
 
     expect(mcp.sessions).toEqual([{
       adminUser: { ...adminUser, executedBy: 'af-agent' },
@@ -74,6 +79,7 @@ describe('MCP tools of the agent', () => {
       readOnly: false,
       headers: {},
       requestUrl: '/admin/',
+      adminPanelOrigin: 'https://admin.example',
       timeZone: 'Europe/Kyiv',
     }]);
     expect(toolSet.instructions).toBe('MCP_RULES');
@@ -81,7 +87,7 @@ describe('MCP tools of the agent', () => {
   });
 
   it('exposes base MCP tools at once and the others on demand, with approval for destructive ones', async () => {
-    const toolSet = await createProvider(fakeMcpPlugin()).open({ adminUser, sessionId: 's1' });
+    const toolSet = await createProvider(fakeMcpPlugin()).open({ adminUser, sessionId: 's1', adminPublicOrigin: 'https://admin.example' });
 
     expect(toolSet.baseTools.map((tool) => tool.name)).toEqual([
       'fetch_skill',
@@ -96,7 +102,7 @@ describe('MCP tools of the agent', () => {
   });
 
   it('loads tool schemas only for tools the MCP server has', async () => {
-    const toolSet = await createProvider(fakeMcpPlugin()).open({ adminUser, sessionId: 's1' });
+    const toolSet = await createProvider(fakeMcpPlugin()).open({ adminUser, sessionId: 's1', adminPublicOrigin: 'https://admin.example' });
     const fetchToolSchema = toolSet.baseTools.find((tool) => tool.name === 'fetch_tool_schema')!;
 
     expect(JSON.parse(await fetchToolSchema.invoke({ toolName: 'delete_record' }) as string))
@@ -107,7 +113,7 @@ describe('MCP tools of the agent', () => {
   });
 
   it('names every tool it can load in the fetch_tool_schema description, like on-demand MCP clients', async () => {
-    const toolSet = await createProvider(fakeMcpPlugin()).open({ adminUser, sessionId: 's1' });
+    const toolSet = await createProvider(fakeMcpPlugin()).open({ adminUser, sessionId: 's1', adminPublicOrigin: 'https://admin.example' });
     const { description } = toolSet.baseTools.find((tool) => tool.name === 'fetch_tool_schema')!;
 
     expect(description).toContain('Tools you can load:\n- get_resource_data: Gets records.\n- delete_record: Deletes a record.');
@@ -118,7 +124,7 @@ describe('MCP tools of the agent', () => {
 
   it('calls an MCP tool and returns its text output', async () => {
     const mcp = fakeMcpPlugin();
-    const connection = await connectMcp(mcp, { adminUser, sessionId: 's1', requestUrl: '/admin/' });
+    const connection = await connectMcp(mcp, { adminUser, sessionId: 's1', adminPublicOrigin: 'https://admin.example', requestUrl: '/admin/' });
 
     expect(await connection.callTool('get_resource', { resourceId: 'cars' })).toBe('called: get_resource');
     expect(mcp.calls.map(({ name, arguments: args }) => ({ name, args })))
@@ -130,7 +136,7 @@ describe('MCP tools of the agent', () => {
     const mcp = fakeMcpPlugin(({ signal }) => new Promise((resolve) => {
       signal.addEventListener('abort', () => resolve('aborted'));
     }));
-    const connection = await connectMcp(mcp, { adminUser, sessionId: 's1', requestUrl: '/admin/' });
+    const connection = await connectMcp(mcp, { adminUser, sessionId: 's1', adminPublicOrigin: 'https://admin.example', requestUrl: '/admin/' });
     const controller = new AbortController();
 
     const call = connection.callTool('get_resource', { resourceId: 'cars' }, controller.signal);

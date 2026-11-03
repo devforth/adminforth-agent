@@ -49,7 +49,7 @@ export type AgentEndpointsContext = {
   }>;
   runAndPersistAgentResponse(input: RunAndPersistAgentResponseInput): Promise<RunAndPersistAgentResponseResult>;
   getSessionTurns(sessionId: string): Promise<SessionTurn[]>;
-  getPendingApprovals(sessionId: string, adminUser: AdminUser): Promise<ApprovalDescription[]>;
+  getPendingApprovals(sessionId: string, adminUser: AdminUser, adminPublicOrigin: string): Promise<ApprovalDescription[]>;
   createNewTurn(sessionId: string, prompt: string, attachments?: string[]): Promise<string>;
   deleteSession(sessionId: string): Promise<void>;
   createSystemTurn(sessionId: string, systemMessage: string): Promise<string>;

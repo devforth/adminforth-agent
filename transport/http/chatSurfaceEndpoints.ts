@@ -3,31 +3,7 @@ import type {
   IHttpServer,
 } from "adminforth";
 import type { ChatSurfaceEndpointsContext } from "./context.js";
-
-function getHeaderValue(headers: Record<string, unknown>, name: string) {
-  const value = headers[name] ?? headers[name.toLowerCase()];
-
-  if (Array.isArray(value)) {
-    return value[0];
-  }
-
-  return typeof value === "string" ? value : undefined;
-}
-
-function getRequestOrigin(input: IAdminForthEndpointHandlerInput) {
-  const forwardedProto = getHeaderValue(input.headers, "x-forwarded-proto")?.split(",")[0]?.trim();
-  const forwardedHost = getHeaderValue(input.headers, "x-forwarded-host")?.split(",")[0]?.trim();
-  const host = forwardedHost ?? getHeaderValue(input.headers, "host");
-
-  if (!host) {
-    return undefined;
-  }
-
-  const proto = forwardedProto
-    ?? (host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http" : "https");
-
-  return `${proto}://${host}`;
-}
+import { getRequestOrigin } from "./requestOrigin.js";
 
 export function setupChatSurfaceEndpoints(ctx: ChatSurfaceEndpointsContext, server: IHttpServer) {
   for (const adapter of ctx.options.chatSurfaceAdapters ?? []) {
@@ -51,7 +27,7 @@ export function setupChatSurfaceEndpoints(ctx: ChatSurfaceEndpointsContext, serv
         if (!incoming) return { ok: true };
         incoming.metadata = {
           ...incoming.metadata,
-          adminPublicOrigin: getRequestOrigin(endpointInput),
+          adminPublicOrigin: getRequestOrigin(endpointInput.headers),
         };
 
         const sink = await adapter.createEventSink(surfaceContext, incoming);

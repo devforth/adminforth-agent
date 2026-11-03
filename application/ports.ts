@@ -68,6 +68,7 @@ export interface LlmPort {
     completionAdapter: AgentModeCompletionAdapter;
     sessionId: string;
     adminUser: AdminUser;
+    adminPublicOrigin: string;
   }): Promise<PendingInterrupt[]>;
 
   /**
@@ -79,6 +80,7 @@ export interface LlmPort {
     completionAdapter: AgentModeCompletionAdapter;
     sessionId: string;
     adminUser: AdminUser;
+    adminPublicOrigin: string;
   }): Promise<string | null>;
 
   /**

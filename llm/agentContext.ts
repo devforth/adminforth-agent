@@ -15,7 +15,7 @@ export const contextSchema = z.object({
   currentPage: z.custom<CurrentPageContext>().optional(),
   chatSurface: z.string().optional(),
   adminBaseUrl: z.string().optional(),
-  adminPublicOrigin: z.string().optional(),
+  adminPublicOrigin: z.string(),
   userLanguage: z.custom<DetectedLanguage | null>().optional(),
   emit: z.custom<AgentEventEmitter>().optional(),
   sequenceDebugSink: z.custom<SequenceDebugCollector>(),
