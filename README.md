@@ -319,8 +319,8 @@ export const globalPlugins = [
   new AdminForthAgent({
     // The first mode is the default. Users can switch modes in the chat UI.
     modes: [
-      { name: 'Balanced', completionAdapter: createCompletionAdapter('gpt-5.4-mini', 'medium') },
-      { name: 'Fast', completionAdapter: createCompletionAdapter('gpt-5.4-mini', 'low') },
+      { name: 'Balanced', completionAdapter: createCompletionAdapter('gpt-6-luna', 'medium') },
+      { name: 'Fast', completionAdapter: createCompletionAdapter('gpt-6-luna', 'low') },
       { name: 'Smart Thinking', completionAdapter: createCompletionAdapter('gpt-5.4', 'high') },
     ],
     maxTokens: 10000,
