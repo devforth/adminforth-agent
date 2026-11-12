@@ -3,6 +3,8 @@ const MARKDOWN_LINK_RE = /\[([^\]]+)]\(([^)]+)\)/g;
 const MARKDOWN_IMAGE_RE = /!\[([^\]]*)]\(([^)]+)\)/g;
 const HTML_TAG_RE = /<[^>]+>/g;
 const CODE_FENCE_RE = /```[\s\S]*?```/g;
+// a markdown table row: a whole line between pipes
+const MD_TABLE_ROW_RE = /^\s*\|.*\|\s*$/gm;
 const INLINE_CODE_RE = /`[^`]*`/g;
 const BRACKETED_META_RE = /\[(?:ref|link|url|source|sources?|debug|meta|data):[^\]]*]/gi;
 const MD_HEADING_LINE_RE = /^\s{0,3}#{1,6}\s+/gm;
@@ -15,6 +17,8 @@ const MD_ITALIC_RE = /(^|[^\\])(?:\*|_)([^\s].*?)(?:\*|_)/g;
 export function sanitizeSpeechText(input: string): string {
   return input
     .replace(CODE_FENCE_RE, " ")
+    // tables stay in the chat, reading them cell by cell is long and costs audio tokens
+    .replace(MD_TABLE_ROW_RE, " ")
     .replace(MARKDOWN_IMAGE_RE, "$1")
     .replace(MARKDOWN_LINK_RE, "$1")
     .replace(URL_RE, " ")
