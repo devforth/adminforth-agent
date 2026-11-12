@@ -89,6 +89,11 @@ describe('sanitizeSpeechText', () => {
     expect(out).toContain('after');
     expect(out).not.toContain('code()');
   });
+
+  it('removes markdown tables and keeps the text around them', () => {
+    const out = sanitizeSpeechText('Found 2 cars:\n\n| Model | Price |\n| --- | --- |\n| Corolla | 8500 |\n| Civic | 9200 |\n\nWant more?');
+    expect(out).toBe('Found 2 cars: Want more?');
+  });
 });
 
 describe('detectUserLanguage', () => {
